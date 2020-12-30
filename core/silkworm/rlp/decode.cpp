@@ -16,7 +16,6 @@
 
 #include "decode.hpp"
 
-#include <boost/endian/conversion.hpp>
 #include <cassert>
 #include <silkworm/common/util.hpp>
 
@@ -43,9 +42,10 @@ uint64_t read_uint64(ByteView be, bool allow_leading_zeros) {
     auto* p{reinterpret_cast<uint8_t*>(&buf)};
     std::memcpy(p + (kMaxBytes - be.length()), &be[0], be.length());
 
-    static_assert(boost::endian::order::native == boost::endian::order::little,
-                  "We assume a little-endian architecture like amd64");
-    return intx::bswap(buf);
+    // We assume a little-endian architecture like amd64
+    // TODO[C++20] static_assert(std::endian::order::native == std::endian::order::little);
+    buf = intx::bswap(buf);
+    return {buf, DecodingError::kOk};
 }
 
 intx::uint256 read_uint256(ByteView be, bool allow_leading_zeros) {
@@ -69,8 +69,9 @@ intx::uint256 read_uint256(ByteView be, bool allow_leading_zeros) {
     uint8_t* p{as_bytes(buf)};
     std::memcpy(p + (kMaxBytes - be.length()), &be[0], be.length());
 
-    static_assert(boost::endian::order::native == boost::endian::order::little);
-    return intx::bswap(buf);
+    // TODO[C++20] static_assert(std::endian::order::native == std::endian::order::little);
+    buf = intx::bswap(buf);
+    return {buf, DecodingError::kOk};
 }
 
 Header decode_header(ByteView& from) {
