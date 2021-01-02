@@ -16,14 +16,15 @@
 
 #include "temp_dir.hpp"
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 namespace silkworm {
 
 TemporaryDirectory::TemporaryDirectory() {
-    fs::path p{fs::temp_directory_path() / fs::unique_path()};
+    //TODO Optionally pass an initial root
+    fs::path p{std::tmpnam(nullptr)};
     fs::create_directories(p);
     path_ = p.string();
 }
