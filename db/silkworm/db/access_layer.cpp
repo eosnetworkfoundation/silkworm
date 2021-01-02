@@ -16,7 +16,7 @@
 
 #include "access_layer.hpp"
 
-#include <boost/endian/conversion.hpp>
+#include <silkworm/common/endian.hpp>
 #include <cassert>
 
 #include "history_index.hpp"
@@ -54,7 +54,7 @@ static std::vector<Transaction> read_transactions(lmdb::Transaction& txn, uint64
     auto table{txn.open(table::kEthTx)};
 
     Bytes txn_key(8, '\0');
-    boost::endian::store_big_u64(txn_key.data(), base_id);
+    endian::store_big_u64(txn_key.data(), base_id);
     MDB_val key_mdb{to_mdb_val(txn_key)};
     MDB_val data_mdb;
 
@@ -249,7 +249,7 @@ std::optional<uint64_t> read_previous_incarnation(lmdb::Transaction& txn, const 
             return {};
         }
         assert(val->length() == 8);
-        return boost::endian::load_big_u64(val->data());
+        return endian::load_big_u64(val->data());
     }
 
     auto history_table{txn.open(table::kAccountHistory)};
@@ -327,7 +327,7 @@ StorageChanges read_storage_changes(lmdb::Transaction& txn, uint64_t block_num) 
         evmc::address address;
         std::memcpy(address.bytes, key.data(), kAddressLength);
         key.remove_prefix(kAddressLength);
-        uint64_t incarnation{boost::endian::load_big_u64(key.data())};
+        uint64_t incarnation{endian::load_big_u64(key.data())};
 
         ByteView data{from_mdb_val(data_mdb)};
         assert(data.length() >= kHashLength);

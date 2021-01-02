@@ -109,6 +109,16 @@ std::string to_hex(ByteView bytes) {
     return out;
 }
 
+void to_lower(std::string& value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return std::tolower(c); });
+}
+
+std::string to_lower_copy(const std::string& value) {
+    std::string x{value};
+    to_lower(x);
+    return x;
+}
+
 static std::optional<unsigned> decode_hex_digit(char ch) noexcept {
     if (ch >= '0' && ch <= '9') {
         return ch - '0';
@@ -119,6 +129,7 @@ static std::optional<unsigned> decode_hex_digit(char ch) noexcept {
     }
     return std::nullopt;
 }
+
 
 std::optional<Bytes> from_hex(std::string_view hex) noexcept {
     if (hex.length() >= 2 && hex[0] == '0' && (hex[1] == 'x' || hex[1] == 'X')) {

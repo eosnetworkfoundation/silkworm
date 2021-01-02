@@ -16,11 +16,14 @@
 
 #include "chaindb.hpp"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/interprocess/mapped_region.hpp>
+#include <filesystem>
+
+//#include <boost/algorithm/string.hpp>
+//#include <boost/interprocess/mapped_region.hpp>
 
 namespace silkworm::lmdb {
+
+    namespace fs = std::filesystem;
 
 void DatabaseConfig::set_readonly(bool value) {
     if (value) {
@@ -43,24 +46,27 @@ Environment::Environment(const DatabaseConfig& config) {
     // LMDB to truncate data file thus losing data
     size_t data_file_size{0};
     size_t data_map_size{0};
-    boost::filesystem::path data_path{config.path};
+    fs::path data_path{config.path};
     bool nosubdir{(config.flags & MDB_NOSUBDIR) == MDB_NOSUBDIR};
     if (!nosubdir) {
-        data_path /= boost::filesystem::path{"data.mdb"};
+        data_path /= fs::path{"data.mdb"};
     }
-    if (boost::filesystem::exists(data_path)) {
-        if (!boost::filesystem::is_regular_file(data_path)) {
+    if (fs::exists(data_path)) {
+        if (!fs::is_regular_file(data_path)) {
             throw std::runtime_error(data_path.string() + " is not a regular file");
         }
-        data_file_size = boost::filesystem::file_size(data_path);
+        data_file_size = fs::file_size(data_path);
     }
+
+    // If datafile exists (has size) then ensure mapsize is at least
+    // equal to file size otherwise we might truncate data
     data_map_size = std::max(data_file_size, config.map_size);
 
-    // Ensure map_size is multiple of host page_size
-    if (data_map_size) {
-        size_t host_page_size{boost::interprocess::mapped_region::get_page_size()};
-        data_map_size = ((data_map_size + host_page_size - 1) / host_page_size) * host_page_size;
-    }
+    // TODO Ensure map_size is multiple of host page_size
+    //if (data_map_size) {
+    //    size_t host_page_size{boost::interprocess::mapped_region::get_page_size()};
+    //    data_map_size = ((data_map_size + host_page_size - 1) / host_page_size) * host_page_size;
+    //}
 
     err_handler(mdb_env_create(&handle_));
     err_handler(mdb_env_set_mapsize(handle_, data_map_size));
@@ -115,11 +121,11 @@ int Environment::get_filesize(size_t* size) {
     uint32_t flags{0};
     int rc{get_flags(&flags)};
     if (rc) return rc;
-    boost::filesystem::path data_path{path_};
+    fs::path data_path{path_};
     bool nosubdir{(flags & MDB_NOSUBDIR) == MDB_NOSUBDIR};
-    if (!nosubdir) data_path /= boost::filesystem::path{"data.mdb"};
-    if (boost::filesystem::exists(data_path) && boost::filesystem::is_regular_file(data_path)) {
-        *size = boost::filesystem::file_size(data_path);
+    if (!nosubdir) data_path /= fs::path{"data.mdb"};
+    if (fs::exists(data_path) && fs::is_regular_file(data_path)) {
+        *size = fs::file_size(data_path);
         return MDB_SUCCESS;
     }
     return ENOENT;
@@ -142,20 +148,11 @@ int Environment::set_mapsize(size_t size) {
     /*
      * A size == 0 means LMDB will auto adjust to
      * actual data file size.
-     * In all other cases prevent setting map_size
-     * to a lower value as it may truncate data file
-     * (observed on Windows)
+     * In all other cases as the data file is
+     * already opened the check for minsize and
+     * rounding to a multiple of mapsize is already
+     * performed in mdb.c
      */
-    if (size) {
-        size_t actual_map_size{0};
-        int rc{get_mapsize(&actual_map_size)};
-        if (rc) return rc;
-        if (size < actual_map_size) {
-            throw std::runtime_error("Can't set a map_size lower than data file size.");
-        }
-        size_t host_page_size{boost::interprocess::mapped_region::get_page_size()};
-        size = ((size + host_page_size - 1) / host_page_size) * host_page_size;
-    }
     return mdb_env_set_mapsize(handle_, size);
 }
 
@@ -519,7 +516,7 @@ std::shared_ptr<Environment> get_env(DatabaseConfig config) {
     // There's a 1:1 relation among env and the opened
     // database file. Build a hash of the path.
     // Note that windows is case insensitive
-    std::string pathstr{boost::algorithm::to_lower_copy(config.path)};
+    std::string pathstr{to_lower_copy(config.path)};
     std::hash<std::string> pathhash;
     size_t envkey{pathhash(pathstr)};
 

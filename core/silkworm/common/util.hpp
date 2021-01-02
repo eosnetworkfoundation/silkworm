@@ -74,6 +74,12 @@ std::string to_hex(const evmc::address& address);
 std::string to_hex(const evmc::bytes32& hash);
 std::string to_hex(ByteView bytes);
 
+// Transforms a string to lowercase
+void to_lower(std::string& value);
+
+// Returns the lowercase version of a string
+std::string to_lower_copy(const std::string& value);
+
 std::optional<Bytes> from_hex(std::string_view hex) noexcept;
 
 // Parses a string input value representing a size in

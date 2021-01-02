@@ -20,7 +20,7 @@
 #include <absl/flags/usage.h>
 #include <absl/time/time.h>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <iostream>
 #include <silkworm/db/access_layer.hpp>
 #include <silkworm/db/buffer.hpp>
@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     absl::SetProgramUsageMessage("Executes Ethereum blocks and scans txs for errored txs.");
     absl::ParseCommandLine(argc, argv);
 
-    namespace fs = boost::filesystem;
+    namespace fs = std::filesystem;
     using namespace silkworm;
 
     fs::path db_path(absl::GetFlag(FLAGS_datadir));

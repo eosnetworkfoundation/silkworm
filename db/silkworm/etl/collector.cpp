@@ -16,12 +16,12 @@
 
 #include "collector.hpp"
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <queue>
 
 namespace silkworm::etl {
 
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 Collector::~Collector() {
     if (work_path_.empty()) {
@@ -122,7 +122,7 @@ std::string Collector::set_work_path(const char* provided_work_path) {
     // No path provided so we need to get a unique temporary directory
     // to prevent different instances of collector to clash each other
     // with same filenames
-    fs::path p{fs::temp_directory_path() / fs::unique_path()};
+    fs::path p{std::tmpnam(nullptr)};
     fs::create_directories(p);
     return p.string();
 }

@@ -16,12 +16,12 @@
 
 #include "util.hpp"
 
-#include <boost/endian/conversion.hpp>
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <intx/int128.hpp>
 #include <silkworm/common/util.hpp>
+#include <silkworm/common/endian.hpp>
 #include <silkworm/rlp/decode.hpp>
 #include <silkworm/rlp/encode.hpp>
 
@@ -30,42 +30,42 @@ namespace silkworm::db {
 Bytes storage_prefix(const evmc::address& address, uint64_t incarnation) {
     Bytes res(kStoragePrefixLength, '\0');
     std::memcpy(&res[0], address.bytes, kAddressLength);
-    boost::endian::store_big_u64(&res[kAddressLength], incarnation);
+    endian::store_big_u64(&res[kAddressLength], incarnation);
     return res;
 }
 
 Bytes header_hash_key(uint64_t block_number) {
     Bytes key(8 + 1, '\0');
-    boost::endian::store_big_u64(&key[0], block_number);
+    endian::store_big_u64(&key[0], block_number);
     key[8] = 'n';
     return key;
 }
 
 Bytes block_key(uint64_t block_number) {
     Bytes key(8, '\0');
-    boost::endian::store_big_u64(&key[0], block_number);
+    endian::store_big_u64(&key[0], block_number);
     return key;
 }
 
 Bytes block_key(uint64_t block_number, const uint8_t (&hash)[kHashLength]) {
     Bytes key(8 + kHashLength, '\0');
-    boost::endian::store_big_u64(&key[0], block_number);
+    endian::store_big_u64(&key[0], block_number);
     std::memcpy(&key[8], hash, kHashLength);
     return key;
 }
 
 Bytes storage_change_key(uint64_t block_number, const evmc::address& address, uint64_t incarnation) {
     Bytes res(8 + kStoragePrefixLength, '\0');
-    boost::endian::store_big_u64(&res[0], block_number);
+    endian::store_big_u64(&res[0], block_number);
     std::memcpy(&res[8], address.bytes, kAddressLength);
-    boost::endian::store_big_u64(&res[8 + kAddressLength], incarnation);
+    endian::store_big_u64(&res[8 + kAddressLength], incarnation);
     return res;
 }
 
 Bytes account_history_key(const evmc::address& address, uint64_t block_number) {
     Bytes res(kAddressLength + 8, '\0');
     std::memcpy(&res[0], address.bytes, kAddressLength);
-    boost::endian::store_big_u64(&res[kAddressLength], block_number);
+    endian::store_big_u64(&res[kAddressLength], block_number);
     return res;
 }
 
@@ -73,14 +73,14 @@ Bytes storage_history_key(const evmc::address& address, const evmc::bytes32& loc
     Bytes res(kAddressLength + kHashLength + 8, '\0');
     std::memcpy(&res[0], address.bytes, kAddressLength);
     std::memcpy(&res[kAddressLength], location.bytes, kHashLength);
-    boost::endian::store_big_u64(&res[kAddressLength + kHashLength], block_number);
+    endian::store_big_u64(&res[kAddressLength + kHashLength], block_number);
     return res;
 }
 
 Bytes log_key(uint64_t block_number, uint32_t transaction_id) {
     Bytes key(8 + 4, '\0');
-    boost::endian::store_big_u64(&key[0], block_number);
-    boost::endian::store_big_u32(&key[8], transaction_id);
+    endian::store_big_u64(&key[0], block_number);
+    endian::store_big_u32(&key[8], transaction_id);
     return key;
 }
 

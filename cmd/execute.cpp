@@ -15,9 +15,9 @@
 */
 
 #include <CLI/CLI.hpp>
-#include <boost/endian/conversion.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <limits>
+#include <silkworm/common/endian.hpp>
 #include <silkworm/common/log.hpp>
 #include <silkworm/db/access_layer.hpp>
 #include <silkworm/db/tables.hpp>
@@ -33,7 +33,7 @@ static uint64_t already_executed_block(lmdb::Transaction& txn) {
     auto tbl{txn.open(db::table::kSyncStageProgress)};
     std::optional<ByteView> data{tbl->get(byte_view_of_c_str(kExecutionStageKey))};
     if (data) {
-        return boost::endian::load_big_u64(data->data());
+        return endian::load_big_u64(data->data());
     } else {
         return 0;
     }
@@ -42,7 +42,7 @@ static uint64_t already_executed_block(lmdb::Transaction& txn) {
 static void save_progress(lmdb::Transaction& txn, uint64_t block_number) {
     auto tbl{txn.open(db::table::kSyncStageProgress)};
     Bytes val(8, '\0');
-    boost::endian::store_big_u64(&val[0], block_number);
+    endian::store_big_u64(&val[0], block_number);
     tbl->put(byte_view_of_c_str(kExecutionStageKey), val);
 }
 
@@ -67,8 +67,8 @@ int main(int argc, char* argv[]) {
     Logger::default_logger().set_local_timezone(true);  // for compatibility with TG logging
 
     // Check data.mdb exists in provided directory
-    boost::filesystem::path db_file{boost::filesystem::path(db_path) / boost::filesystem::path("data.mdb")};
-    if (!boost::filesystem::exists(db_file)) {
+    std::filesystem::path db_file{std::filesystem::path(db_path) / std::filesystem::path("data.mdb")};
+    if (!std::filesystem::exists(db_file)) {
         SILKWORM_LOG(LogError) << "Can't find a valid TG data file in " << db_path << std::endl;
         return -1;
     }

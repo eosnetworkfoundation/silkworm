@@ -19,8 +19,8 @@
 #include <absl/container/btree_set.h>
 
 #include <algorithm>
-#include <boost/endian/conversion.hpp>
 #include <silkworm/common/util.hpp>
+#include <silkworm/common/endian.hpp>
 #include <silkworm/types/log_cbor.hpp>
 #include <silkworm/types/receipt_cbor.hpp>
 
@@ -167,7 +167,7 @@ void Buffer::write_to_db() {
     auto incarnation_table{txn_->open(table::kIncarnationMap)};
     Bytes data(kIncarnationLength, '\0');
     for (const auto& entry : incarnations_) {
-        boost::endian::store_big_u64(&data[0], entry.second);
+        endian::store_big_u64(&data[0], entry.second);
         incarnation_table->put(full_view(entry.first), data);
     }
 

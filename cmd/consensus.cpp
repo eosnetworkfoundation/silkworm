@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -36,7 +36,7 @@
 
 using namespace silkworm;
 
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 static const fs::path kRootDir{SILKWORM_CONSENSUS_TEST_DIR};
 

@@ -14,11 +14,10 @@
    limitations under the License.
 */
 
-#include <CLI/CLI.hpp>
 #include <atomic>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/endian/conversion.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
+
+#include <CLI/CLI.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 #include <boost/signals2.hpp>
 #include <condition_variable>
@@ -28,6 +27,7 @@
 #include <queue>
 #include <silkworm/chain/config.hpp>
 #include <silkworm/common/worker.hpp>
+#include <silkworm/common/endian.hpp>
 #include <silkworm/crypto/ecdsa.hpp>
 #include <silkworm/db/access_layer.hpp>
 #include <silkworm/db/chaindb.hpp>
@@ -37,7 +37,7 @@
 #include <string>
 #include <thread>
 
-namespace bfs = boost::filesystem;
+namespace fs = std::filesystem;
 using namespace silkworm;
 
 std::atomic_bool should_stop_{false};           // Request for stop from user or OS
@@ -286,7 +286,7 @@ std::optional<uint64_t> get_highest_canonical_header(std::unique_ptr<lmdb::Table
             headers->get_prev(&key, &data);
             continue;
         }
-        return {boost::endian::load_big_u64(&v[0])};
+        return {endian::load_big_u64(&v[0])};
     }
     return std::nullopt;
 }
@@ -298,7 +298,7 @@ uint64_t load_canonical_headers(std::unique_ptr<lmdb::Table>& headers, uint64_t 
     // and navigate headers
     MDB_val key, data;
     Bytes header_key(9, 'n');
-    boost::endian::store_big_u64(&header_key[0], from);
+    endian::store_big_u64(&header_key[0], from);
     key.mv_data = (void*)&header_key[0];
     key.mv_size = header_key.length();
 
@@ -315,7 +315,7 @@ uint64_t load_canonical_headers(std::unique_ptr<lmdb::Table>& headers, uint64_t 
         if (key.mv_size == header_key.length()) {
             ByteView v{static_cast<uint8_t*>(key.mv_data), key.mv_size};
             if (v[8] == 'n') {
-                uint64_t header_block = boost::endian::load_big_u64(&v[0]);
+                uint64_t header_block = endian::load_big_u64(&v[0]);
                 if (header_block > to) {
                     eof = true;
                 } else {
@@ -362,7 +362,7 @@ size_t write_results(std::queue<std::pair<uint32_t, uint32_t>>& batches, std::mu
         Bytes senders_key(40, '\0');
         MDB_val key{40, (void*)&senders_key[0]};
         for (auto& result : results) {
-            boost::endian::store_big_u64(&senders_key[0], result.first);
+            endian::store_big_u64(&senders_key[0], result.first);
             memcpy((void*)&senders_key[8], (void*)&headers[result.first - initial_block], kHashLength);
             lmdb::err_handler(senders->put_append(&key, &result.second));
             ret += (key.mv_size + result.second.mv_size);
@@ -484,7 +484,7 @@ int do_recover(app_options_t& options) {
             MDB_val key, data;
             lmdb::err_handler(lmdb_senders->get_last(&key, &data));
             ByteView v{static_cast<uint8_t*>(key.mv_data), key.mv_size};
-            auto mostrecent_sender = boost::endian::load_big_u64(&v[0]);
+            auto mostrecent_sender = endian::load_big_u64(&v[0]);
             if (options.block_from <= mostrecent_sender) {
                 if (options.replay) {
                     if (options.block_from == 1u) {
@@ -497,7 +497,7 @@ int do_recover(app_options_t& options) {
                         std::cout << format_time() << " Deleting senders table from block " << options.block_from
                                   << " ..." << std::endl;
                         Bytes senders_key(40, '\0');
-                        boost::endian::store_big_u64(&senders_key[0], options.block_from);
+                        endian::store_big_u64(&senders_key[0], options.block_from);
                         key.mv_data = (void*)&senders_key[0];
                         key.mv_size = senders_key.length();
                         int rc{lmdb_senders->seek(&key, &data)};
@@ -567,7 +567,7 @@ int do_recover(app_options_t& options) {
             size_t header_index{0};
 
             Bytes block_key(40, '\0');
-            boost::endian::store_big_u64(&block_key[0], current_block);
+            endian::store_big_u64(&block_key[0], current_block);
             memcpy((void*)&block_key[8], (void*)&canonical_headers[0], kHashLength);
             key.mv_data = (void*)&block_key[0];
             key.mv_size = block_key.length();
@@ -578,7 +578,7 @@ int do_recover(app_options_t& options) {
 
             while (!should_stop_) {
                 ByteView v{static_cast<uint8_t*>(key.mv_data), key.mv_size};
-                detected_block = boost::endian::load_big_u64(&v[0]);
+                detected_block = endian::load_big_u64(&v[0]);
                 if (detected_block > current_block) {
                     // We assume keys in block bodies are properly sorted
                     throw std::runtime_error("Bad block body sequence. Expected " + std::to_string(current_block) +
@@ -770,7 +770,7 @@ int do_verify(app_options_t& options) {
         MDB_val key, data;
         lmdb::err_handler(lmdb_senders->get_last(&key, &data));
         ByteView v{static_cast<uint8_t*>(key.mv_data), key.mv_size};
-        uint64_t most_recent_sender{boost::endian::load_big_u64(&v[0])};
+        uint64_t most_recent_sender{endian::load_big_u64(&v[0])};
         if (options.block_from > most_recent_sender) {
             throw std::logic_error("Selected block beyond collected senders");
         }
@@ -867,14 +867,14 @@ int main(int argc, char* argv[]) {
 
     // If database path is provided (and has passed CLI::ExistingDirectory validator
     // check whether it is empty
-    bfs::path db_path = bfs::path(options.datadir);
-    if (!bfs::exists(db_path) || !bfs::is_directory(db_path) || bfs::is_empty(db_path)) {
+    fs::path db_path{options.datadir};
+    if (!fs::exists(db_path) || !fs::is_directory(db_path) || fs::is_empty(db_path)) {
         std::cerr << "Invalid or empty --datadir \"" << options.datadir << "\"" << std::endl
                   << "Try --help for help" << std::endl;
         return -1;
     } else {
-        bfs::path db_file = bfs::path(db_path / bfs::path("data.mdb"));
-        if (!bfs::exists(db_file) || !bfs::file_size(db_file)) {
+        fs::path db_file = fs::path(db_path / fs::path("data.mdb"));
+        if (!fs::exists(db_file) || !fs::file_size(db_file)) {
             std::cerr << "Invalid or empty data file \"" << db_file.string() << "\"" << std::endl
                       << "Try --help for help" << std::endl;
             return -1;

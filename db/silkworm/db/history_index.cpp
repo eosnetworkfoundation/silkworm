@@ -15,11 +15,10 @@
 */
 
 #include "history_index.hpp"
-
-#include <boost/endian/conversion.hpp>
-#include <boost/iterator/counting_iterator.hpp>
+#include <silkworm/common/endian.hpp>
 #include <silkworm/common/util.hpp>
 #include <stdexcept>
+#include <numeric>
 
 namespace silkworm::db::history_index {
 
@@ -34,7 +33,7 @@ static uint64_t elem(ByteView elements, uint64_t min_element, uint32_t i) {
 };
 
 static SearchResult search_result(ByteView hi, uint32_t i) {
-    uint64_t min_element{boost::endian::load_big_u64(hi.data())};
+    uint64_t min_element{endian::load_big_u64(hi.data())};
     ByteView elements{hi.substr(8)};
     return {
         elem(elements, min_element, i),       // change_block
@@ -54,11 +53,14 @@ static size_t number_of_elements(ByteView hi) {
 
 static uint32_t lower_bound_index(ByteView hi, uint64_t v) {
     size_t n{number_of_elements(hi)};
-    uint64_t min_element{boost::endian::load_big_u64(hi.data())};
+    uint64_t min_element{endian::load_big_u64(hi.data())};
     ByteView elements{hi.substr(8)};
 
+    // TODO [C++20] : use std::ranges
+    std::vector<int> range(n + 1);
+    std::iota(range.begin(), range.end(), 0);
     return *std::lower_bound(
-        boost::counting_iterator<uint32_t>(0), boost::counting_iterator<uint32_t>(n), v,
+        range.begin(), range.end(), v,
         [elements, min_element](uint32_t i, uint64_t v) { return elem(elements, min_element, i) < v; });
 }
 
