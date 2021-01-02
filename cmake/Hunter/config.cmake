@@ -15,3 +15,6 @@
 ]]
 
 # No Hunter package customization currently.
+
+hunter_config(Boost VERSION 1.72.0-p1)
+hunter_config(abseil VERSION 20200923.2)
