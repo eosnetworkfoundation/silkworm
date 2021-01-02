@@ -14,6 +14,9 @@
    limitations under the License.
 */
 
+#ifndef SILKWORM_COMMON_ENDIAN_H_
+#define SILKWORM_COMMON_ENDIAN_H_
+
 #include <stdint.h>
 #include <cstring>
 
@@ -75,3 +78,5 @@ uint64_t load_big_u64(uint8_t const* bytes) noexcept {
 #endif
 
 }  // namespace silkworm::endian
+
+#endif // !SILKWORM_COMMON_ENDIAN_H_
