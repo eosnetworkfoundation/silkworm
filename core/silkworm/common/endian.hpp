@@ -61,6 +61,16 @@ uint64_t load_big_u64(uint8_t const* bytes) noexcept {
     return bswap64(x);
 }
 
+void store_big_u32(uint8_t* dst, uint32_t value) noexcept {
+    uint32_t x{bswap32(value)};
+    std::memcpy(dst, &x, sizeof(x));
+}
+
+void store_big_u64(uint8_t* dst, uint64_t value) noexcept {
+    uint64_t x{bswap64(value)};
+    std::memcpy(dst, &x, sizeof(x));
+}
+
 #else
 
 uint32_t load_big_u32(uint8_t const* bytes) noexcept {
@@ -73,6 +83,14 @@ uint64_t load_big_u64(uint8_t const* bytes) noexcept {
     uint64_t x;
     std::memcpy(&x, bytes, sizeof(x));
     return x;
+}
+
+void store_big_u32(uint8_t* dst, uint32_t value) noexcept {
+    std::memcpy(dst, &value, sizeof(value));
+}
+
+void store_big_u64(uint8_t* dst, uint64_t value) noexcept {
+    std::memcpy(dst, &value, sizeof(value));
 }
 
 #endif
