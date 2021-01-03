@@ -46,7 +46,7 @@ if(NOT SILKWORM_CORE_ONLY)
   find_package(CLI11 CONFIG REQUIRED)
 
   add_executable(check_senders check_senders.cpp)
-  target_link_libraries(check_senders PRIVATE silkworm_db CLI11::CLI11)
+  target_link_libraries(check_senders PRIVATE silkworm_db CLI11::CLI11 absl::time)
 
   add_executable(dbtool dbtool.cpp)
   target_link_libraries(dbtool PRIVATE silkworm_db CLI11::CLI11)

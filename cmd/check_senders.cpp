@@ -17,8 +17,8 @@
 #include <atomic>
 #include <filesystem>
 
+#include <absl/time/clock.h>
 #include <CLI/CLI.hpp>
-#include <boost/interprocess/mapped_region.hpp>
 #include <boost/signals2.hpp>
 #include <condition_variable>
 #include <csignal>
@@ -67,20 +67,9 @@ unsigned get_host_cpus() {
     return n ? n : 2;
 }
 
-std::string format_time(boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time()) {
-    char buf[40];
-    // Get the time offset in current day
-    const boost::posix_time::time_duration td = now.time_of_day();
-    const int32_t month = static_cast<int32_t>(now.date().month());
-    const int32_t day = static_cast<int32_t>(now.date().day());
-    const int32_t hours = static_cast<int32_t>(td.hours());
-    const int32_t minutes = static_cast<int32_t>(td.minutes());
-    const int32_t seconds = static_cast<int32_t>(td.seconds());
-    const int32_t milliseconds = static_cast<int32_t>(
-        td.total_milliseconds() -
-        ((static_cast<int64_t>(hours) * 3600 + static_cast<int64_t>(minutes) * 60 + seconds) * 1000));
-    sprintf(buf, "[%02d-%02d %02d:%02d:%02d.%03d]", month, day, hours, minutes, seconds, milliseconds);
-    return std::string{buf};
+std::string format_time() {
+
+    return absl::FormatTime("%m-%d|%H:%M:%E3S", absl::Now(), absl::LocalTimeZone());
 }
 
 class Recoverer : public silkworm::Worker {
@@ -854,11 +843,6 @@ int main(int argc, char* argv[]) {
     if (!lmdb_mapSize) {
         std::cerr << "Provided --lmdb.mapSize \"" << mapSizeStr << "\" is invalid" << std::endl;
         return -1;
-    }
-    if (*lmdb_mapSize) {
-        // Adjust mapSize to a multiple of page_size
-        size_t host_page_size{boost::interprocess::mapped_region::get_page_size()};
-        options.mapsize = ((*lmdb_mapSize + host_page_size - 1) / host_page_size) * host_page_size;
     }
     if (!options.block_from) options.block_from = 1u;  // Block 0 (genesis) has no transactions
 
