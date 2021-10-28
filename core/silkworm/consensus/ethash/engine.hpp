@@ -28,6 +28,13 @@ class ConsensusEngineEthash : public ConsensusEngineBase {
   public:
     explicit ConsensusEngineEthash(const ChainConfig& chain_config) : base(chain_config){};
 
+    //! \brief See [YP] Section 4.3.4 "Block Header Validity".
+    //! \param [in] header: header to validate.
+    //! \param [in] with_future_timestamp_check : whether to check header timestamp is in the future wrt host current
+    //! time \see https://github.com/torquem-ch/silkworm/issues/448
+    //! \note Shouldn't be used for genesis block.
+    ValidationResult validate_block_header(const BlockHeader& header, State& state, bool with_future_timestamp_check) override;
+
     //! \brief Validates the seal of the header
     ValidationResult validate_seal(const BlockHeader& header) override;
 

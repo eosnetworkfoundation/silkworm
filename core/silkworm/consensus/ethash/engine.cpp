@@ -18,10 +18,43 @@
 
 #include <ethash/ethash.hpp>
 
+#include <silkworm/chain/difficulty.hpp>
 #include <silkworm/chain/protocol_param.hpp>
 #include <silkworm/common/endian.hpp>
 
 namespace silkworm::consensus {
+
+ValidationResult ConsensusEngineEthash::validate_block_header(const BlockHeader& header, State& state,
+                                                              bool with_future_timestamp_check) {
+    auto err{base::validate_block_header(header, state, with_future_timestamp_check)};
+    if (err != ValidationResult::kOk) {
+        return err;
+    }
+
+    const std::optional<BlockHeader> parent{get_parent_header(state, header)};
+    const bool parent_has_uncles{parent->ommers_hash != kEmptyListHash};
+    const intx::uint256 expected_difficulty{canonical_difficulty(header.number, header.timestamp, parent->difficulty,
+                                                                 parent->timestamp, parent_has_uncles, chain_config_)};
+    if (expected_difficulty != header.difficulty) {
+        return ValidationResult::kWrongDifficulty;
+    }
+}
+
+ValidationResult ConsensusEngineEthash::validate_seal(const BlockHeader& header) {
+    // Ethash ProofOfWork verification
+    auto epoch_number{header.number / ethash::epoch_length};
+    auto epoch_context{ethash::create_epoch_context(static_cast<int>(epoch_number))};
+
+    auto boundary256{header.boundary()};
+    auto seal_hash(header.hash(/*for_sealing =*/true));
+    ethash::hash256 sealh256{*reinterpret_cast<ethash::hash256*>(seal_hash.bytes)};
+    ethash::hash256 mixh256{};
+    std::memcpy(mixh256.bytes, header.mix_hash.bytes, 32);
+
+    uint64_t nonce{endian::load_big_u64(header.nonce.data())};
+    return ethash::verify(*epoch_context, sealh256, mixh256, nonce, boundary256) ? ValidationResult::kOk
+                                                                                 : ValidationResult::kInvalidSeal;
+}
 
 void ConsensusEngineEthash::finalize(IntraBlockState& state, const Block& block, const evmc_revision& revision) {
     intx::uint256 block_reward;
@@ -44,19 +77,4 @@ void ConsensusEngineEthash::finalize(IntraBlockState& state, const Block& block,
     state.add_to_balance(block.header.beneficiary, miner_reward);
 }
 
-ValidationResult ConsensusEngineEthash::validate_seal(const BlockHeader& header) {
-    // Ethash ProofOfWork verification
-    auto epoch_number{header.number / ethash::epoch_length};
-    auto epoch_context{ethash::create_epoch_context(static_cast<int>(epoch_number))};
-
-    auto boundary256{header.boundary()};
-    auto seal_hash(header.hash(/*for_sealing =*/true));
-    ethash::hash256 sealh256{*reinterpret_cast<ethash::hash256*>(seal_hash.bytes)};
-    ethash::hash256 mixh256{};
-    std::memcpy(mixh256.bytes, header.mix_hash.bytes, 32);
-
-    uint64_t nonce{endian::load_big_u64(header.nonce.data())};
-    return ethash::verify(*epoch_context, sealh256, mixh256, nonce, boundary256) ? ValidationResult::kOk
-                                                                                 : ValidationResult::kInvalidSeal;
-}
 }  // namespace silkworm::consensus

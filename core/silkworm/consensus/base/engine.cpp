@@ -16,7 +16,6 @@
 
 #include "engine.hpp"
 
-#include <silkworm/chain/difficulty.hpp>
 #include <silkworm/chain/protocol_param.hpp>
 #include <silkworm/crypto/ecdsa.hpp>
 #include <silkworm/trie/vector_root.hpp>
@@ -128,13 +127,6 @@ ValidationResult ConsensusEngineBase::validate_block_header(const BlockHeader& h
                                                                  : parent_gas_limit - header.gas_limit};
     if (gas_delta >= parent_gas_limit / 1024) {
         return ValidationResult::kInvalidGasLimit;
-    }
-
-    const bool parent_has_uncles{parent->ommers_hash != kEmptyListHash};
-    const intx::uint256 difficulty{canonical_difficulty(header.number, header.timestamp, parent->difficulty,
-                                                        parent->timestamp, parent_has_uncles, chain_config_)};
-    if (difficulty != header.difficulty) {
-        return ValidationResult::kWrongDifficulty;
     }
 
     // https://eips.ethereum.org/EIPS/eip-779
