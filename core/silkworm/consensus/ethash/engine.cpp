@@ -31,6 +31,10 @@ ValidationResult ConsensusEngineEthash::validate_block_header(const BlockHeader&
         return err;
     }
 
+    if (header.extra_data.length() > 32) {
+        return ValidationResult::kExtraDataTooLong;
+    }
+
     const std::optional<BlockHeader> parent{get_parent_header(state, header)};
     const bool parent_has_uncles{parent->ommers_hash != kEmptyListHash};
     const intx::uint256 expected_difficulty{canonical_difficulty(header.number, header.timestamp, parent->difficulty,

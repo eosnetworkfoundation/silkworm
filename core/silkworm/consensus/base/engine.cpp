@@ -105,10 +105,6 @@ ValidationResult ConsensusEngineBase::validate_block_header(const BlockHeader& h
         return ValidationResult::kInvalidGasLimit;
     }
 
-    if (header.extra_data.length() > 32) {
-        return ValidationResult::kExtraDataTooLong;
-    }
-
     const std::optional<BlockHeader> parent{get_parent_header(state, header)};
     if (!parent.has_value()) {
         return ValidationResult::kUnknownParent;

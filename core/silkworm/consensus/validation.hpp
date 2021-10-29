@@ -69,12 +69,17 @@ enum class [[nodiscard]] ValidationResult{
     kWrongBlockGas,  // BHg ≠ l(BR)u
 
     // Clique (EIP-225)
-    kUnauthorizedSigner,  // Handling an unauthorized voting signer
-    kMissingSigner,       // Missing Signer in extra_data
-    kRecentlySigned,      // Signer has already recently signed
-    kInvalidVote,         // Non-Existing vote option
-    kInvalidCheckpointBeneficiary,
-    kMissingVanity,  // ‖Hx‖ < 32+65
+    kUnauthorizedSigner,            // Handling an unauthorized voting signer
+    kMissingSigner,                 // Missing Signer in extra_data
+    kRecentlySigned,                // Signer has already recently signed
+    kInvalidVote,                   // Non-Existing vote option
+    kInvalidCheckPointVote,         // Invalid vote on checkpoint
+    kInvalidCheckPointBeneficiary,  // Invalid beneficiary on checkpoint
+    kInvalidCheckPointSigners,      // Invalid list of signers on checkpoint
+    kInvalidExtraSigners,           // Invalid list of signers on NON checkpoint
+    kMissingVanity,                 // ‖Hx‖ < 32
+    kMissingSeal,                   // ‖Hx‖ < 32 + 65
+    kInvalidDifficulty              // Difficulty MUST be [1 .. 2]
 };
 
 }  // namespace silkworm

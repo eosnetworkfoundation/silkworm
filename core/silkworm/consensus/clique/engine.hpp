@@ -28,12 +28,18 @@ class ConsensusEngineClique : public ConsensusEngineBase {
   public:
     explicit ConsensusEngineClique(const ChainConfig& chain_config) : base(chain_config){};
 
+    static constexpr const uint64_t kEpochLength{30000};  // Checkpoint interval
+    static constexpr const uint64_t kPeriodLength{15};    // Minimum block interval (in seconds)
+    static constexpr const size_t kExtraVanityLen{32};    // Len for vanity data in extradata
+    static constexpr const size_t kExtraSealLen{65};      // Len for seal data in extradata
+
     //! \brief See [YP] Section 4.3.4 "Block Header Validity".
     //! \param [in] header: header to validate.
     //! \param [in] with_future_timestamp_check : whether to check header timestamp is in the future wrt host current
     //! time \see https://github.com/torquem-ch/silkworm/issues/448
     //! \note Shouldn't be used for genesis block.
-    ValidationResult validate_block_header(const BlockHeader& header, State& state, bool with_future_timestamp_check) override;
+    ValidationResult validate_block_header(const BlockHeader& header, State& state,
+                                           bool with_future_timestamp_check) override;
 
     //! \brief Validates the seal of the header
     ValidationResult validate_seal(const BlockHeader& header) override;
@@ -43,7 +49,6 @@ class ConsensusEngineClique : public ConsensusEngineBase {
     //! \param [in] block: current block to apply rewards for.
     //! \param [in] revision: EVM fork.
     void finalize(IntraBlockState& state, const Block& block, const evmc_revision& revision) override;
-
 };
 
 }  // namespace silkworm::consensus

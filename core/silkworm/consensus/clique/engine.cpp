@@ -27,6 +27,65 @@ ValidationResult ConsensusEngineClique::validate_block_header(const BlockHeader&
         return err;
     }
 
+    // Checkpoint blocks need to enforce zero beneficiary
+    const bool is_check_point{(header.number % kEpochLength) == 0};
+    if (is_check_point && header.beneficiary) {
+        return ValidationResult::kInvalidCheckPointBeneficiary;
+    }
+
+    // Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
+    auto nonce_u64{endian::load_big_u64(header.nonce.data())};
+    if (nonce_u64 && nonce_u64 != UINT64_MAX) {
+        return ValidationResult::kInvalidVote;
+    }
+    if (is_check_point && nonce_u64) {
+        return ValidationResult::kInvalidCheckPointVote;
+    }
+
+    // Check that the extra-data contains both the vanity and signature
+    switch (header.extra_data.length()) {
+        case 0 ...(kExtraVanityLen - 1):
+            return ValidationResult::kMissingVanity;
+        case kExtraVanityLen ...(kExtraVanityLen + kExtraSealLen - 1):
+            return ValidationResult::kMissingSeal;
+    }
+
+    // Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
+    auto signers_bytes_len{header.extra_data.length() - kExtraVanityLen + kExtraSealLen};
+    if (is_check_point) {
+        if (signers_bytes_len % sizeof(evmc::address) != 0) {
+            return ValidationResult::kInvalidCheckPointSigners;
+        }
+    } else {
+        if (signers_bytes_len) {
+            return ValidationResult::kInvalidExtraSigners;
+        }
+    }
+
+    // Ensure that the mix digest is zero as we don't have fork protection currently
+    if (header.mix_hash) {
+        return ValidationResult::kInvalidMixHash;
+    }
+
+    // Ensure that the block doesn't contain any uncles which are meaningless in PoA
+    if (header.ommers_hash != kEmptyListHash) {
+        return ValidationResult::kWrongOmmersHash;
+    }
+
+    // Ensure that the block's difficulty is meaningful (may not be correct at this point)
+    if (header.number) {
+        if (!header.difficulty || header.difficulty > 2) {
+            return ValidationResult::kInvalidDifficulty;
+        }
+    }
+
+    // Ensure time interval amongst this header and its ancestor is not shorter than
+    // minimum interval
+    const std::optional<BlockHeader> parent{get_parent_header(state, header)};
+    if (parent->timestamp + kPeriodLength > header.timestamp) {
+        return ValidationResult::kInvalidTimestamp;
+    }
+
 }
 
 ValidationResult ConsensusEngineClique::validate_seal(const BlockHeader& header) {
