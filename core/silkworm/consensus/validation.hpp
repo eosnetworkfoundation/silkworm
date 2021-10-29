@@ -78,7 +78,7 @@ enum class [[nodiscard]] ValidationResult{
     kInvalidCheckPointSigners,      // Invalid list of signers on checkpoint
     kInvalidExtraSigners,           // Invalid list of signers on NON checkpoint
     kMissingVanity,                 // ‖Hx‖ < 32
-    kMissingSeal,                   // ‖Hx‖ < 32 + 65
+    kMissingSignature,              // ‖Hx‖ < 32 + 65
     kInvalidDifficulty              // Difficulty MUST be [1 .. 2]
 };
 

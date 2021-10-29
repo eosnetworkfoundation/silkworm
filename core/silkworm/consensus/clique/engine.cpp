@@ -44,16 +44,16 @@ ValidationResult ConsensusEngineClique::validate_block_header(const BlockHeader&
 
     // Check that the extra-data contains both the vanity and signature
     switch (header.extra_data.length()) {
-        case 0 ...(kExtraVanityLen - 1):
+        case 0 ...(kVanityLen - 1):
             return ValidationResult::kMissingVanity;
-        case kExtraVanityLen ...(kExtraVanityLen + kExtraSealLen - 1):
-            return ValidationResult::kMissingSeal;
+        case kVanityLen ...(kVanityLen + kSignatureLen - 1):
+            return ValidationResult::kMissingSignature;
     }
 
     // Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
-    auto signers_bytes_len{header.extra_data.length() - kExtraVanityLen + kExtraSealLen};
+    auto signers_bytes_len{header.extra_data.length() - kVanityLen - kSignatureLen};
     if (is_check_point) {
-        if (signers_bytes_len % sizeof(evmc::address) != 0) {
+        if (signers_bytes_len % kAddressLength != 0) {
             return ValidationResult::kInvalidCheckPointSigners;
         }
     } else {
@@ -86,6 +86,9 @@ ValidationResult ConsensusEngineClique::validate_block_header(const BlockHeader&
         return ValidationResult::kInvalidTimestamp;
     }
 
+    // If the block is a checkpoint block, verify the signer list
+    // matches the list of voted signers for current epoch
+    // TODO (Andrea)
 }
 
 ValidationResult ConsensusEngineClique::validate_seal(const BlockHeader& header) {
