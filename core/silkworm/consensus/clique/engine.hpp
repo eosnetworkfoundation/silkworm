@@ -28,10 +28,10 @@ class ConsensusEngineClique : public ConsensusEngineBase {
   public:
     explicit ConsensusEngineClique(const ChainConfig& chain_config) : base(chain_config){};
 
-    static constexpr const uint64_t kEpochLength{30000};  // Checkpoint interval
-    static constexpr const uint64_t kPeriodLength{15};    // Minimum block interval (in seconds)
-    static constexpr const size_t kVanityLen{32};         // Len for vanity data in extradata
-    static constexpr const size_t kSignatureLen{65};      // Len for seal data in extradata
+    static constexpr const uint64_t kEpochLength{30000};    // Checkpoint interval
+    static constexpr const uint64_t kMinBlockInterval{15};  // Minimum block interval (in seconds)
+    static constexpr const size_t kVanityLen{32};           // Len for vanity data in extradata
+    static constexpr const size_t kSignatureLen{65};        // Len for seal data in extradata
 
     //! \brief See [YP] Section 4.3.4 "Block Header Validity".
     //! \param [in] header: header to validate.

@@ -82,7 +82,7 @@ ValidationResult ConsensusEngineClique::validate_block_header(const BlockHeader&
     // Ensure time interval amongst this header and its ancestor is not shorter than
     // minimum interval
     const std::optional<BlockHeader> parent{get_parent_header(state, header)};
-    if (parent->timestamp + kPeriodLength > header.timestamp) {
+    if (parent->timestamp + kMinBlockInterval > header.timestamp) {
         return ValidationResult::kInvalidTimestamp;
     }
 
