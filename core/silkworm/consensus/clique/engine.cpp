@@ -43,11 +43,11 @@ ValidationResult ConsensusEngineClique::validate_block_header(const BlockHeader&
     }
 
     // Check that the extra-data contains both the vanity and signature
-    switch (header.extra_data.length()) {
-        case 0 ...(kVanityLen - 1):
-            return ValidationResult::kMissingVanity;
-        case kVanityLen ...(kVanityLen + kSignatureLen - 1):
-            return ValidationResult::kMissingSignature;
+    if (header.extra_data.length() < kVanityLen) {
+        return ValidationResult::kMissingVanity;
+    }
+    if (header.extra_data.length() < kVanityLen + kSignatureLen) {
+        return ValidationResult::kMissingSignature;
     }
 
     // Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
