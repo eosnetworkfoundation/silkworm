@@ -16,6 +16,8 @@
 
 #include "engine.hpp"
 
+#include <silkworm/common/as_range.hpp>
+#include <silkworm/chain/difficulty.hpp>
 #include <silkworm/chain/protocol_param.hpp>
 #include <silkworm/crypto/ecdsa.hpp>
 #include <silkworm/trie/vector_root.hpp>
@@ -66,8 +68,7 @@ ValidationResult ConsensusEngineBase::pre_validate_block(const silkworm::Block& 
             return ValidationResult::kNotAnOmmer;
         }
 
-        if (std::any_of(old_ommers.begin(), old_ommers.end(),
-                        [&ommer](const BlockHeader& old_ommer) -> bool { return old_ommer == ommer; })) {
+        if (as_range::any_of(old_ommers, [&ommer](const BlockHeader& old_ommer) -> bool { return old_ommer == ommer; })) {
             return ValidationResult::kDuplicateOmmer;
         }
     }
