@@ -14,7 +14,6 @@
    limitations under the License.
 */
 
-#include <filesystem>
 #include <iostream>
 
 #include <CLI/CLI.hpp>
@@ -103,7 +102,7 @@ int main(int argc, char* argv[]) {
             assert(bh->block.transactions.size() == receipts.size());
 
             // Erigon returns success in the receipt even for pre-Byzantium txs.
-            for (auto receipt : receipts) {
+            for (const auto& receipt : receipts) {
                 nTxs++;
                 nErrors += (!receipt.success);
             }

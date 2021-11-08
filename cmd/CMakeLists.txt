@@ -42,10 +42,10 @@ if(NOT SILKWORM_CORE_ONLY)
   target_link_libraries(node_test silkworm_node Catch2::Catch2)
 
   add_executable(check_changes check_changes.cpp)
-  target_link_libraries(check_changes PRIVATE silkworm_node CLI11::CLI11 absl::time)
+  target_link_libraries(check_changes PRIVATE silkworm_node CLI11::CLI11)
 
   add_executable(scan_txs scan_txs.cpp)
-  target_link_libraries(scan_txs PRIVATE silkworm_node CLI11::CLI11 absl::time)
+  target_link_libraries(scan_txs PRIVATE silkworm_node CLI11::CLI11)
 
   find_package(CLI11 CONFIG REQUIRED)
 

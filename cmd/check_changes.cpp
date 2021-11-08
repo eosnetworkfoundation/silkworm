@@ -19,6 +19,7 @@
 
 #include <silkworm/common/directories.hpp>
 #include <silkworm/common/log.hpp>
+#include <silkworm/common/stopwatch.hpp>
 #include <silkworm/db/access_layer.hpp>
 #include <silkworm/db/buffer.hpp>
 #include <silkworm/execution/processor.hpp>
@@ -61,7 +62,8 @@ int main(int argc, char* argv[]) {
 
     CLI11_PARSE(app, argc, argv);
 
-    absl::Time t1{absl::Now()};
+    silkworm::StopWatch sw;
+    auto t_start{sw.start()};
 
     SILKWORM_LOG(LogLevel::Info) << " Checking change sets in " << chaindata << "\n";
 
@@ -145,10 +147,9 @@ int main(int argc, char* argv[]) {
             }
 
             if (block_num % 1000 == 0) {
-                absl::Time t2{absl::Now()};
+                auto tl{sw.lap()};
                 SILKWORM_LOG(LogLevel::Info) << " Checked blocks ≤ " << block_num << " in "
-                                             << absl::ToDoubleSeconds(t2 - t1) << " s" << std::endl;
-                t1 = t2;
+                                             << silkworm::StopWatch::format(tl.second) << std::endl;
             }
         }
     } catch (const std::exception& ex) {
@@ -156,7 +157,9 @@ int main(int argc, char* argv[]) {
         return -5;
     }
 
-    t1 = absl::Now();
-    SILKWORM_LOG(LogLevel::Info) << " Blocks [" << from << "; " << block_num << ") have been checked\n";
+    auto t_end{sw.stop()};
+    auto total_time{sw.since_start(t_end)};
+    SILKWORM_LOG(LogLevel::Info) << " Blocks [" << from << "; " << block_num << ") have been checked. Total time "
+                                 << silkworm::StopWatch::format(total_time) << std::endl;
     return 0;
 }
