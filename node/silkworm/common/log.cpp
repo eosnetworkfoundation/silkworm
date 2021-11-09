@@ -16,9 +16,9 @@
 
 #include <thread>
 
-#include <absl/time/clock.h>
-
 #include <silkworm/common/log.hpp>
+
+#include "date.hpp"
 
 namespace silkworm {
 
@@ -37,8 +37,8 @@ void log_set_streams_(std::ostream& o1, std::ostream& o2) { log_streams_.set_str
 std::mutex log_::log_mtx_;
 
 std::ostream& log_::header_(LogLevel level) {
-    log_streams_ << kLogTags_[static_cast<int>(level)] << "["
-                 << absl::FormatTime("%m-%d|%H:%M:%E3S", absl::Now(), absl::LocalTimeZone()) << "]";
+    auto now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
+    log_streams_ << kLogTags_[static_cast<int>(level)] << "[" << date::format("%D %T", now) << "]";
     if (log_thread_enabled_) {
         log_streams_ << " " << std::this_thread::get_id();
     }

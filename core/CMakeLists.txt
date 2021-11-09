@@ -32,10 +32,4 @@ target_include_directories(silkworm_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 set(SILKWORM_CORE_PUBLIC_LIBS evmc ethash::ethash intx::intx ff Microsoft.GSL::GSL nlohmann_json secp256k1)
 set(SILKWORM_CORE_PRIVATE_LIBS evmone gmp)
 
-if(NOT SILKWORM_WASM_API)
-  hunter_add_package(abseil)
-  find_package(absl CONFIG REQUIRED)
-  list(APPEND SILKWORM_CORE_PRIVATE_LIBS absl::flat_hash_map absl::flat_hash_set absl::node_hash_map)
-endif()
-
 target_link_libraries(silkworm_core PUBLIC ${SILKWORM_CORE_PUBLIC_LIBS} PRIVATE ${SILKWORM_CORE_PRIVATE_LIBS})

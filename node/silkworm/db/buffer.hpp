@@ -19,11 +19,8 @@
 
 #include <cassert>
 #include <optional>
+#include <unordered_set>
 #include <vector>
-
-#include <absl/container/btree_map.h>
-#include <absl/container/flat_hash_map.h>
-#include <absl/container/flat_hash_set.h>
 
 #include <silkworm/db/util.hpp>
 #include <silkworm/state/state.hpp>
@@ -103,10 +100,10 @@ class Buffer : public State {
     ///@}
 
     /// Account (backward) changes per block
-    const absl::btree_map<uint64_t, AccountChanges>& account_changes() const { return account_changes_; }
+    const std::map<uint64_t, AccountChanges>& account_changes() const { return account_changes_; }
 
     /// Storage (backward) changes per block
-    const absl::btree_map<uint64_t, StorageChanges>& storage_changes() const { return storage_changes_; }
+    const std::map<uint64_t, StorageChanges>& storage_changes() const { return storage_changes_; }
 
     /** Approximate size of accumulated DB changes in bytes.*/
     size_t current_batch_size() const noexcept { return batch_size_; }
@@ -122,30 +119,29 @@ class Buffer : public State {
     uint64_t prune_from_;
     std::optional<uint64_t> historical_block_{};
 
-    absl::btree_map<Bytes, BlockHeader> headers_{};
-    absl::btree_map<Bytes, BlockBody> bodies_{};
-    absl::btree_map<Bytes, intx::uint256> difficulty_{};
+    std::map<Bytes, BlockHeader> headers_{};
+    std::map<Bytes, BlockBody> bodies_{};
+    std::map<Bytes, intx::uint256> difficulty_{};
 
-    absl::flat_hash_map<evmc::address, std::optional<Account>> accounts_;
+    std::unordered_map<evmc::address, std::optional<Account>> accounts_;
 
     // address -> incarnation -> location -> value
-    absl::flat_hash_map<evmc::address, absl::btree_map<uint64_t, absl::flat_hash_map<evmc::bytes32, evmc::bytes32>>>
-        storage_;
+    std::unordered_map<evmc::address, std::map<uint64_t, std::unordered_map<evmc::bytes32, evmc::bytes32>>> storage_;
 
-    absl::btree_map<uint64_t, AccountChanges> account_changes_;  // per block
-    absl::btree_map<uint64_t, StorageChanges> storage_changes_;  // per block
+    std::map<uint64_t, AccountChanges> account_changes_;  // per block
+    std::map<uint64_t, StorageChanges> storage_changes_;  // per block
 
-    absl::btree_map<evmc::address, uint64_t> incarnations_;
-    absl::btree_map<evmc::bytes32, Bytes> hash_to_code_;
-    absl::btree_map<Bytes, evmc::bytes32> storage_prefix_to_code_hash_;
-    absl::btree_map<Bytes, Bytes> receipts_;
-    absl::btree_map<Bytes, Bytes> logs_;
+    std::map<evmc::address, uint64_t> incarnations_;
+    std::map<evmc::bytes32, Bytes> hash_to_code_;
+    std::map<Bytes, evmc::bytes32> storage_prefix_to_code_hash_;
+    std::map<Bytes, Bytes> receipts_;
+    std::map<Bytes, Bytes> logs_;
 
     size_t batch_size_{0};
 
     // Current block stuff
     uint64_t block_number_{0};
-    absl::flat_hash_set<evmc::address> changed_storage_;
+    std::unordered_set<evmc::address> changed_storage_;
 };
 
 }  // namespace silkworm::db

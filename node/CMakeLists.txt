@@ -14,7 +14,6 @@
    limitations under the License.
 ]]
 
-find_package(absl CONFIG REQUIRED)
 find_package(Boost CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)

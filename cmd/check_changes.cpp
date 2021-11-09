@@ -15,7 +15,6 @@
 */
 
 #include <CLI/CLI.hpp>
-#include <absl/container/flat_hash_set.h>
 
 #include <silkworm/common/directories.hpp>
 #include <silkworm/common/log.hpp>
@@ -29,7 +28,7 @@ using namespace silkworm;
 
 // Non-existing accounts only touched by zero-value internal transactions:
 // e.g. https://etherscan.io/address/0x000000000000000000636f6e736f6c652e6c6f67
-static const absl::flat_hash_set<evmc::address> kPhantomAccounts{
+static const std::unordered_set<evmc::address> kPhantomAccounts{
     0x000000000000000000636f6e736f6c652e6c6f67_address,
     0x2386f26fc10000b4e16d0168e52d35cacd2c6185_address,
     0x5a719cf3e02c17c876f6d294adb5cb7c6eb47e2f_address,
@@ -108,8 +107,8 @@ int main(int argc, char* argv[]) {
                 bool mismatch{false};
 
                 for (const auto& e : db_account_changes) {
-                    if (!calculated_account_changes.contains(e.first)) {
-                        if (!kPhantomAccounts.contains(e.first)) {
+                    if (!(calculated_account_changes.find(e.first) != calculated_account_changes.end())) {
+                        if (!(kPhantomAccounts.find(e.first) != kPhantomAccounts.end())) {
                             SILKWORM_LOG(LogLevel::Error) << to_hex(e.first) << " is missing" << std::endl;
                             mismatch = true;
                         }
@@ -122,7 +121,7 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 for (const auto& e : calculated_account_changes) {
-                    if (!db_account_changes.contains(e.first)) {
+                    if (!(db_account_changes.find(e.first) != db_account_changes.end())) {
                         SILKWORM_LOG(LogLevel::Error) << to_hex(e.first) << " is not in DB" << std::endl;
                         mismatch = true;
                     }
@@ -136,7 +135,7 @@ int main(int argc, char* argv[]) {
 
             db::StorageChanges db_storage_changes{db::read_storage_changes(txn, block_num)};
             db::StorageChanges calculated_storage_changes{};
-            if (buffer.storage_changes().contains(block_num)) {
+            if (auto it{buffer.storage_changes().find(block_num)}; it != buffer.storage_changes().end()) {
                 calculated_storage_changes = buffer.storage_changes().at(block_num);
             }
             if (calculated_storage_changes != db_storage_changes) {

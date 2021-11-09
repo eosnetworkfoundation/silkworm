@@ -24,8 +24,6 @@ see its package dbutils.
 
 #include <string>
 
-#include <absl/container/btree_map.h>
-
 #include <silkworm/common/base.hpp>
 #include <silkworm/db/mdbx.hpp>
 #include <silkworm/types/block.hpp>
@@ -93,10 +91,10 @@ inline constexpr size_t kPlainStoragePrefixLength{kAddressLength + kIncarnationL
 inline constexpr size_t kHashedStoragePrefixLength{kHashLength + kIncarnationLength};
 
 // address -> storage-encoded initial value
-using AccountChanges = absl::btree_map<evmc::address, Bytes>;
+using AccountChanges = std::map<evmc::address, Bytes>;
 
 // address -> incarnation -> location -> zeroless initial value
-using StorageChanges = absl::btree_map<evmc::address, absl::btree_map<uint64_t, absl::btree_map<evmc::bytes32, Bytes>>>;
+using StorageChanges = std::map<evmc::address, std::map<uint64_t, std::map<evmc::bytes32, Bytes>>>;
 
 // Erigon GenerateStoragePrefix, PlainGenerateStoragePrefix
 // address can be either plain account address (20 bytes) or hash thereof (32 bytes)

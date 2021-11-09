@@ -17,13 +17,6 @@
 hunter_config(Boost VERSION 1.72.0-p1)
 
 hunter_config(
-  abseil
-  VERSION 20210324.2
-  URL https://github.com/abseil/abseil-cpp/archive/20210324.2.tar.gz
-  SHA1 2d46ae096bfbdab19de1d65079b95e0fae9efe2e
-)
-
-hunter_config(
   Catch
   VERSION 2.13.4
   URL https://github.com/catchorg/Catch2/archive/v2.13.4.tar.gz

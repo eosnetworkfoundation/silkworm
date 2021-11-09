@@ -16,10 +16,7 @@
 
 #include "intra_block_state.hpp"
 
-#include <ethash/keccak.hpp>
-
 #include <silkworm/common/cast.hpp>
-#include <silkworm/common/util.hpp>
 
 namespace silkworm {
 

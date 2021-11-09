@@ -17,8 +17,7 @@
 #include "buffer.hpp"
 
 #include <algorithm>
-
-#include <absl/container/btree_set.h>
+#include <set>
 
 #include <silkworm/common/endian.hpp>
 #include <silkworm/types/log_cbor.hpp>
@@ -44,8 +43,9 @@ void Buffer::update_account(const evmc::address& address, std::optional<Account>
                             std::optional<Account> current) {
     bool equal{current == initial};
     bool account_deleted{!current};
+    bool in_changed_storage{changed_storage_.find(address) != changed_storage_.end()};
 
-    if (equal && !account_deleted && !changed_storage_.contains(address)) {
+    if (equal && !account_deleted && !in_changed_storage) {
         // Follows the Erigon logic when to populate account changes.
         // See (ChangeSetWriter)UpdateAccountData & DeleteAccount.
         return;
@@ -112,7 +112,7 @@ void Buffer::write_to_state_table() {
     auto state_table{db::open_cursor(txn_, table::kPlainState)};
 
     // sort before inserting into the DB
-    absl::btree_set<evmc::address> addresses;
+    std::set<evmc::address> addresses;
     for (auto& x : accounts_) {
         addresses.insert(x.first);
     }
