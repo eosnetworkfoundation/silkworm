@@ -25,6 +25,7 @@
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/flat_hash_set.h>
 
+#include <silkworm/common/lru_cache2.hpp>
 #include <silkworm/db/util.hpp>
 #include <silkworm/state/state.hpp>
 #include <silkworm/trie/hash_builder.hpp>
@@ -36,9 +37,12 @@ namespace silkworm::db {
 
 class Buffer : public State {
   public:
+    using CachedAccounts = lru_cache2<evmc::address, std::optional<Account>>;
+
     // txn must be valid (its handle != nullptr)
-    explicit Buffer(mdbx::txn& txn, uint64_t prune_from, std::optional<uint64_t> historical_block = std::nullopt)
-        : txn_{txn}, prune_from_{prune_from}, historical_block_{historical_block} {
+    explicit Buffer(mdbx::txn& txn, uint64_t prune_from, std::optional<uint64_t> historical_block = std::nullopt,
+                    CachedAccounts* cached_accounts = nullptr)
+        : txn_{txn}, prune_from_{prune_from}, historical_block_{historical_block}, cached_accounts_{cached_accounts} {
         assert(txn_);
     }
 
@@ -126,6 +130,8 @@ class Buffer : public State {
     mdbx::txn& txn_;
     uint64_t prune_from_;
     std::optional<uint64_t> historical_block_{};
+
+    CachedAccounts* cached_accounts_;
 
     absl::btree_map<Bytes, BlockHeader> headers_{};
     absl::btree_map<Bytes, BlockBody> bodies_{};

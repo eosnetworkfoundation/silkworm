@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <vector>
 
+#include <silkworm/common/lru_cache2.hpp>
 #include <silkworm/consensus/engine.hpp>
 #include <silkworm/db/stages.hpp>
 #include <silkworm/db/tables.hpp>
@@ -67,6 +68,8 @@ class Senders final : public IStage {
 
 class Execution final : public IStage {
   public:
+    using CachedAccounts = lru_cache2<evmc::address, std::optional<Account>>;
+
     explicit Execution(NodeSettings* node_settings)
         : IStage(db::stages::kExecutionKey, node_settings),
           consensus_engine_{consensus::engine_factory(node_settings->chain_config.value())} {};
@@ -81,7 +84,8 @@ class Execution final : public IStage {
     std::unique_ptr<consensus::IEngine> consensus_engine_;
     BlockNum block_num_{0};
     StageResult execute_batch(db::RWTxn& txn, BlockNum max_block_num, BlockNum prune_from,
-                              AnalysisCache& analysis_cache, ExecutionStatePool& state_pool);
+                              AnalysisCache& analysis_cache, ExecutionStatePool& state_pool,
+                              CachedAccounts& cached_accounts);
 
     //! \brief For given changeset cursor/bucket it reverts the changes on states buckets
     static void unwind_state_from_changeset(mdbx::cursor& source_changeset, mdbx::cursor& plain_state_table,

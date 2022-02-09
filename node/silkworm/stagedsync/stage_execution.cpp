@@ -72,12 +72,13 @@ StageResult Execution::forward(db::RWTxn& txn) {
         log::Info("Begin Execution", {"from", std::to_string(block_num_), "to", std::to_string(bodies_stage_progress)});
     }
 
+    CachedAccounts cached_accounts{50'000'000};
     AnalysisCache analysis_cache;
     ExecutionStatePool state_pool;
 
     while (!is_stopping() && block_num_ <= max_block_num) {
         // TODO(Andrea) Prune logic must be amended
-        const auto res{execute_batch(txn, max_block_num, 0, analysis_cache, state_pool)};
+        const auto res{execute_batch(txn, max_block_num, 0, analysis_cache, state_pool, cached_accounts)};
         if (res != StageResult::kSuccess) {
             return res;
         }
@@ -93,9 +94,11 @@ StageResult Execution::forward(db::RWTxn& txn) {
 }
 
 StageResult Execution::execute_batch(db::RWTxn& txn, BlockNum max_block_num, BlockNum prune_from,
-                                     AnalysisCache& analysis_cache, ExecutionStatePool& state_pool) {
+                                     AnalysisCache& analysis_cache, ExecutionStatePool& state_pool,
+                                     CachedAccounts& cached_accounts) {
     try {
-        db::Buffer buffer(*txn, prune_from);
+        log::Trace("Cached accounts", {"items", std::to_string(cached_accounts.size())});
+        db::Buffer buffer(*txn, prune_from, std::nullopt, &cached_accounts);
         std::vector<Receipt> receipts;
 
         {

@@ -120,8 +120,19 @@ void Buffer::write_to_state_table() {
     }
 
     for (const auto& address : addresses) {
+
         if (auto it{accounts_.find(address)}; it != accounts_.end()) {
-            auto key{to_slice(address)};
+            bool do_not_save_account{false};
+            if (cached_accounts_) {
+                auto cached_account{cached_accounts_->at(address)};
+                if (cached_account != nullptr && *cached_account == it->second) {
+                    do_not_save_account = true;
+                } else {
+                    cached_accounts_->put(it->first, it->second);
+                }
+            }
+
+
 
             /*
              * Maybe a changed account is reverted to its original state during the batch
@@ -129,22 +140,26 @@ void Buffer::write_to_state_table() {
              * simply check new value differs from old value. The extra memcmp is worth the
              * savings by MDBX dealing with free pages
              */
-            auto data{state_table.move(mdbx::cursor::move_operation::find_key, key, false)};
-            if (data.done) {
-                if (it->second.has_value()) {
-                    Bytes new_encoded{it->second->encode_for_storage()};
-                    if (new_encoded.length() != data.value.length() ||
-                        std::memcmp(new_encoded.data(), data.value.data(), new_encoded.length()) != 0) {
-                        auto new_encoded_slice{to_slice(new_encoded)};
-                        ::mdbx::error::success_or_throw(state_table.put(key, &new_encoded_slice, MDBX_CURRENT));
+            if(!do_not_save_account) {
+                auto key{to_slice(address)};
+                auto data{state_table.move(mdbx::cursor::move_operation::find_key, key, false)};
+                if (data.done) {
+                    if (it->second.has_value()) {
+                        Bytes new_encoded{it->second->encode_for_storage()};
+                        if (new_encoded.length() != data.value.length() ||
+                            std::memcmp(new_encoded.data(), data.value.data(), new_encoded.length()) != 0) {
+                            auto new_encoded_slice{to_slice(new_encoded)};
+                            ::mdbx::error::success_or_throw(state_table.put(key, &new_encoded_slice, MDBX_CURRENT));
+                        }
+                    } else {
+                        state_table.erase(true);
                     }
-                } else {
-                    state_table.erase(true);
+                } else if (it->second.has_value()) {
+                    Bytes encoded{it->second->encode_for_storage()};
+                    state_table.upsert(key, to_slice(encoded));
                 }
-            } else if (it->second.has_value()) {
-                Bytes encoded{it->second->encode_for_storage()};
-                state_table.upsert(key, to_slice(encoded));
             }
+
         }
 
         if (auto it{storage_.find(address)}; it != storage_.end()) {
@@ -316,7 +331,18 @@ std::optional<Account> Buffer::read_account(const evmc::address& address) const 
     if (auto it{accounts_.find(address)}; it != accounts_.end()) {
         return it->second;
     }
-    return db::read_account(txn_, address, historical_block_);
+    if (cached_accounts_) {
+        auto cached_account{cached_accounts_->at(address)};
+        if (cached_account) {
+            return *cached_account;
+        }
+    }
+
+    auto db_account{db::read_account(txn_, address, historical_block_)};
+    if (cached_accounts_) {
+        cached_accounts_->put(address, db_account);
+    }
+    return db_account;
 }
 
 ByteView Buffer::read_code(const evmc::bytes32& code_hash) const noexcept {
