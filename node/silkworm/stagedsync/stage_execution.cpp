@@ -72,7 +72,7 @@ StageResult Execution::forward(db::RWTxn& txn) {
         log::Info("Begin Execution", {"from", std::to_string(block_num_), "to", std::to_string(bodies_stage_progress)});
     }
 
-    CachedAccounts cached_accounts{50'000'000};
+    CachedAccounts cached_accounts(5'000'000, silkworm::BumpMode::kOnUpdate);
     AnalysisCache analysis_cache;
     ExecutionStatePool state_pool;
 
@@ -97,7 +97,7 @@ StageResult Execution::execute_batch(db::RWTxn& txn, BlockNum max_block_num, Blo
                                      AnalysisCache& analysis_cache, ExecutionStatePool& state_pool,
                                      CachedAccounts& cached_accounts) {
     try {
-        log::Trace("Cached accounts", {"items", std::to_string(cached_accounts.size())});
+        log::Trace("Cache", {"accounts", std::to_string(cached_accounts.size()), "analyses", std::to_string(analysis_cache.size())});
         db::Buffer buffer(*txn, prune_from, std::nullopt, &cached_accounts);
         std::vector<Receipt> receipts;
 

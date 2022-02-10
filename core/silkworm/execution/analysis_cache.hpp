@@ -35,7 +35,7 @@ namespace silkworm {
  */
 class AnalysisCache {
   public:
-    static constexpr size_t kDefaultMaxSize{5'000};
+    static constexpr size_t kDefaultMaxSize{50'000};
 
     explicit AnalysisCache(size_t maxSize = kDefaultMaxSize) : cache_{maxSize} {}
 
@@ -52,6 +52,8 @@ class AnalysisCache {
      */
     void put(const evmc::bytes32& key, const std::shared_ptr<evmone::AdvancedCodeAnalysis>& analysis,
              evmc_revision revision) noexcept;
+
+    size_t size() const noexcept { return cache_.size(); }
 
   private:
     lru_cache<evmc::bytes32, std::shared_ptr<evmone::AdvancedCodeAnalysis>> cache_;

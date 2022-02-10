@@ -12,17 +12,17 @@
 
 namespace silkworm {
 
+//! \brief Determines how cached items should be bumped up (as most recent)
+//! \remarks Items freshly inserted are always the most recent
+enum class BumpMode {
+    kAlways,     // Always bump items
+    kOnUpdate,   // Bump items on update only (i.e. is "used" when value inserted or updated)
+    kOnConsume,  // Bump items on use only (i.e. is "used" when value accessed)
+};
+
 template <typename key_t, typename value_t>
 class lru_cache2 {
   public:
-    //! \brief Determines how items should be bumped up (as most recent)
-    //! \remarks Items freshly inserted are always the most recent
-    enum class BumpMode {
-        kAlways,     // Always bump items
-        kOnUpdate,   // Bump items on update only (i.e. is "used" when value inserted or updated)
-        kOnConsume,  // Bump items on use only (i.e. is "used" when value accessed)
-    };
-
     using list_type = std::list<key_t>;
     using map_type = std::unordered_map<key_t, std::pair<value_t, typename list_type::iterator>>;
 
@@ -58,6 +58,15 @@ class lru_cache2 {
     void clear() noexcept {
         list_.clear();
         map_.clear();
+    }
+
+    const list_type& keys() { return list_; }
+
+    void bump(const key_t& key) {
+        auto map_it{map_.find(key)};
+        if (map_it != map_.end()) {
+            bump(map_it);
+        }
     }
 
     [[nodiscard]] std::optional<value_t> get(const key_t& key) {
