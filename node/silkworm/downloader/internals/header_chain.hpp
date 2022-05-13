@@ -78,6 +78,7 @@ class HeaderChain {
     size_t pending_links() const;
     size_t anchors() const;
     std::string human_readable_status() const;
+    std::string human_readable_stats() const;
     std::string dump_chain_bundles() const;
 
     // core functionalities: anchor collection
@@ -170,7 +171,6 @@ class HeaderChain {
     uint64_t request_id_prefix;
     uint64_t request_count = 0;
 
-  public:
     struct Statistics {
         // headers status
         uint64_t requested_headers = 0;
@@ -184,7 +184,7 @@ class HeaderChain {
         // skeleton condition
         std::string skeleton_condition;
 
-        friend std::ostream& operator<<(std::ostream& os, const HeaderChain::Statistics& stats);
+        std::string human_readable_report() const;
     } statistics_;
 };
 
