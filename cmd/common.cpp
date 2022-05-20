@@ -18,7 +18,7 @@
 
 #include <regex>
 
-#include <boost/asio/ip/address.hpp>
+#include <asio/ip/address.hpp>
 
 #include <silkworm/chain/genesis.hpp>
 #include <silkworm/db/access_layer.hpp>
@@ -74,8 +74,8 @@ struct IPEndPointValidator : public CLI::Validator {
             }
 
             // Validate IP address
-            boost::system::error_code err;
-            std::string ip_address{boost::asio::ip::address::from_string(matches[1], err).to_string()};
+            asio::error_code err;
+            std::string ip_address{asio::ip::address::from_string(matches[1], err).to_string()};
             if (err) {
                 return "Value " + std::string(matches[1]) + " is not a valid ip address";
             }

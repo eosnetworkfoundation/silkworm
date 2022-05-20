@@ -130,7 +130,7 @@ class Server {
     ServerContext const& next_context() { return context_pool_.next_context(); }
 
     //! Get the next server scheduler in round-robin scheme.
-    boost::asio::io_context& next_io_context() { return context_pool_.next_io_context(); }
+    asio::io_context& next_io_context() { return context_pool_.next_io_context(); }
 
   protected:
     //! Subclasses must override this method to register gRPC RPC services into the server.

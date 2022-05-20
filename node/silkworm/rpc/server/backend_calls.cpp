@@ -36,7 +36,7 @@ void EtherbaseCall::fill_predefined_reply(const EthereumBackEnd& backend) {
     }
 }
 
-EtherbaseCall::EtherbaseCall(boost::asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+EtherbaseCall::EtherbaseCall(asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : UnaryRpc<remote::ETHBACKEND::AsyncService, remote::EtherbaseRequest, remote::EtherbaseReply>(scheduler, service, queue, handlers) {
 }
 
@@ -68,7 +68,7 @@ void NetVersionCall::fill_predefined_reply(const EthereumBackEnd& backend) {
     }
 }
 
-NetVersionCall::NetVersionCall(boost::asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+NetVersionCall::NetVersionCall(asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : UnaryRpc<remote::ETHBACKEND::AsyncService, remote::NetVersionRequest, remote::NetVersionReply>(scheduler, service, queue, handlers) {
 }
 
@@ -95,7 +95,7 @@ void NetPeerCountCall::remove_sentry(SentryClient* sentry) {
     NetPeerCountCall::sentries_.erase(sentry);
 }
 
-NetPeerCountCall::NetPeerCountCall(boost::asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+NetPeerCountCall::NetPeerCountCall(asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : UnaryRpc<remote::ETHBACKEND::AsyncService, remote::NetPeerCountRequest, remote::NetPeerCountReply>(scheduler, service, queue, handlers) {
 }
 
@@ -155,7 +155,7 @@ void BackEndVersionCall::fill_predefined_reply() {
     BackEndVersionCall::response_.set_patch(std::get<2>(kEthBackEndApiVersion));
 }
 
-BackEndVersionCall::BackEndVersionCall(boost::asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+BackEndVersionCall::BackEndVersionCall(asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : UnaryRpc<remote::ETHBACKEND::AsyncService, google::protobuf::Empty, types::VersionReply>(scheduler, service, queue, handlers) {
 }
 
@@ -178,7 +178,7 @@ void ProtocolVersionCall::fill_predefined_reply() {
     ProtocolVersionCall::response_.set_id(kEthDevp2pProtocolVersion);
 }
 
-ProtocolVersionCall::ProtocolVersionCall(boost::asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+ProtocolVersionCall::ProtocolVersionCall(asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : UnaryRpc<remote::ETHBACKEND::AsyncService, remote::ProtocolVersionRequest, remote::ProtocolVersionReply>(scheduler, service, queue, handlers) {
 }
 
@@ -201,7 +201,7 @@ void ClientVersionCall::fill_predefined_reply(const EthereumBackEnd& backend) {
     ClientVersionCall::response_.set_nodename(backend.node_name());
 }
 
-ClientVersionCall::ClientVersionCall(boost::asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+ClientVersionCall::ClientVersionCall(asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : UnaryRpc<remote::ETHBACKEND::AsyncService, remote::ClientVersionRequest, remote::ClientVersionReply>(scheduler, service, queue, handlers) {
 }
 
@@ -218,7 +218,7 @@ ClientVersionCallFactory::ClientVersionCallFactory(const EthereumBackEnd& backen
     ClientVersionCall::fill_predefined_reply(backend);
 }
 
-SubscribeCall::SubscribeCall(boost::asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+SubscribeCall::SubscribeCall(asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : ServerStreamingRpc<remote::ETHBACKEND::AsyncService, remote::SubscribeRequest, remote::SubscribeReply>(scheduler, service, queue, handlers) {
 }
 
@@ -254,7 +254,7 @@ void NodeInfoCall::remove_sentry(SentryClient* sentry) {
     NodeInfoCall::sentries_.erase(sentry);
 }
 
-NodeInfoCall::NodeInfoCall(boost::asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+NodeInfoCall::NodeInfoCall(asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : UnaryRpc<remote::ETHBACKEND::AsyncService, remote::NodesInfoRequest, remote::NodesInfoReply>(scheduler, service, queue, handlers) {
 }
 
@@ -302,7 +302,7 @@ BackEndService::BackEndService(const EthereumBackEnd& backend)
     : etherbase_factory_{backend}, net_version_factory_{backend}, client_version_factory_{backend} {
 }
 
-void BackEndService::register_backend_request_calls(boost::asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* async_service, grpc::ServerCompletionQueue* queue) {
+void BackEndService::register_backend_request_calls(asio::io_context& scheduler, remote::ETHBACKEND::AsyncService* async_service, grpc::ServerCompletionQueue* queue) {
     // Register one requested call for each RPC factory
     etherbase_factory_.create_rpc(scheduler, async_service, queue);
     net_version_factory_.create_rpc(scheduler, async_service, queue);

@@ -90,8 +90,8 @@ TEST_CASE("CompletionEndPoint::post_one", "[silkworm][rpc][completion_end_point]
     silkworm::log::set_verbosity(silkworm::log::Level::kNone);
     grpc::CompletionQueue queue;
     CompletionEndPoint completion_end_point{queue};
-    boost::asio::io_context io_context;
-    boost::asio::io_context::work work{io_context};
+    asio::io_context io_context;
+    asio::io_context::work work{io_context};
 
     SECTION("waiting on empty completion queue") {
         auto completion_runner_thread = std::thread([&]() {

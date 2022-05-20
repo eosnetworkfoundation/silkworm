@@ -16,11 +16,11 @@
 
 #include "kv_calls.hpp"
 
-#include <boost/asio/post.hpp>
-#include <boost/date_time/posix_time/posix_time_io.hpp>
+#include <asio/post.hpp>
 
 #include <silkworm/common/assert.hpp>
 #include <silkworm/common/log.hpp>
+#include <silkworm/rpc/util.hpp>
 
 namespace silkworm::rpc {
 
@@ -67,7 +67,7 @@ void KvVersionCall::fill_predefined_reply() {
     KvVersionCall::response_.set_patch(std::get<2>(max_version));
 }
 
-KvVersionCall::KvVersionCall(boost::asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+KvVersionCall::KvVersionCall(asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : UnaryRpc<remote::KV::AsyncService, google::protobuf::Empty, types::VersionReply>(scheduler, service, queue, handlers) {
 }
 
@@ -85,17 +85,17 @@ KvVersionCallFactory::KvVersionCallFactory()
 }
 
 mdbx::env* TxCall::chaindata_env_{nullptr};
-boost::posix_time::milliseconds TxCall::max_ttl_duration_{kMaxTxDuration};
+std::chrono::milliseconds TxCall::max_ttl_duration_{kMaxTxDuration};
 
 void TxCall::set_chaindata_env(mdbx::env* chaindata_env) {
     TxCall::chaindata_env_ = chaindata_env;
 }
 
-void TxCall::set_max_ttl_duration(const boost::posix_time::milliseconds& max_ttl_duration) {
+void TxCall::set_max_ttl_duration(const std::chrono::milliseconds& max_ttl_duration) {
     TxCall::max_ttl_duration_ = max_ttl_duration;
 }
 
-TxCall::TxCall(boost::asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+TxCall::TxCall(asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : BidirectionalStreamingRpc<remote::KV::AsyncService, remote::Cursor, remote::Pair>(scheduler, service, queue, handlers),
     max_ttl_timer_{scheduler} {
 }
@@ -305,7 +305,7 @@ void TxCall::handle_operation(const remote::Cursor* request, db::Cursor& cursor)
     SILK_TRACE << "TxCall::handle_operation " << this << " op=" << remote::Op_Name(request->op()) << " END";
 }
 
-void TxCall::handle_max_ttl_timer_expired(const boost::system::error_code& ec) {
+void TxCall::handle_max_ttl_timer_expired(const asio::error_code& ec) {
     SILK_TRACE << "TxCall::handle_max_ttl_timer_expired " << this << " ec: " << ec << " START";
     if (!ec) {
         try {
@@ -661,7 +661,7 @@ void StateChangesCall::set_source(StateChangeSource* source) {
     StateChangesCall::source_ = source;
 }
 
-StateChangesCall::StateChangesCall(boost::asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
+StateChangesCall::StateChangesCall(asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers)
     : ServerStreamingRpc<remote::KV::AsyncService, remote::StateChangeRequest, remote::StateChangeBatch>(scheduler, service, queue, handlers) {
 }
 
@@ -677,7 +677,7 @@ void StateChangesCall::process(const remote::StateChangeRequest* request) {
     StateChangeFilter filter{request->withstorage(), request->withtransactions()};
     token_ = source_->subscribe([&](std::optional<remote::StateChangeBatch> batch) {
         // Make the batch handling logic execute on the scheduler associated to the RPC
-        boost::asio::post(scheduler_, [&, batch = std::move(batch)]() {
+        asio::post(scheduler_, [&, batch = std::move(batch)]() {
             if (batch) {
                 const auto block_height = batch->changebatch(0).blockheight();
                 const bool sent = send_response(*batch);
@@ -708,7 +708,7 @@ StateChangesCallFactory::StateChangesCallFactory(const EthereumBackEnd& backend)
 KvService::KvService(const EthereumBackEnd& backend) : tx_factory_{backend}, state_changes_factory_{backend} {
 }
 
-void KvService::register_kv_request_calls(boost::asio::io_context& scheduler, remote::KV::AsyncService* async_service, grpc::ServerCompletionQueue* queue) {
+void KvService::register_kv_request_calls(asio::io_context& scheduler, remote::KV::AsyncService* async_service, grpc::ServerCompletionQueue* queue) {
     // Register one requested call for each RPC factory
     kv_version_factory_.create_rpc(scheduler, async_service, queue);
     tx_factory_.create_rpc(scheduler, async_service, queue);

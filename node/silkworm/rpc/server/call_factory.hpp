@@ -40,7 +40,7 @@ class CallFactory {
     using CallHandlers = typename Call::Handlers;
 
   public:
-    void create_rpc(boost::asio::io_context& scheduler, AsyncService* service, grpc::ServerCompletionQueue* queue) {
+    void create_rpc(asio::io_context& scheduler, AsyncService* service, grpc::ServerCompletionQueue* queue) {
         SILK_TRACE << "CallFactory::create_rpc START service: " << service << " queue: " << queue;
 
         auto rpc = new Call(scheduler, service, queue, handlers_);

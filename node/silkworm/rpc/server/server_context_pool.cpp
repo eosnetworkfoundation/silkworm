@@ -32,7 +32,7 @@ std::ostream& operator<<(std::ostream& out, const ServerContext& c) {
 }
 
 ServerContext::ServerContext(std::unique_ptr<grpc::ServerCompletionQueue> queue)
-    : io_context_{std::make_shared<boost::asio::io_context>()},
+    : io_context_{std::make_shared<asio::io_context>()},
     server_queue_{std::move(queue)},
     server_end_point_{std::make_unique<CompletionEndPoint>(*server_queue_)},
     client_queue_{std::make_unique<grpc::CompletionQueue>()},
@@ -73,7 +73,7 @@ void ServerContextPool::add_context(std::unique_ptr<grpc::ServerCompletionQueue>
     ServerContext server_context{std::move(server_queue)};
 
     // Give the io_context work to do so that its event loop will not exit until it is explicitly stopped.
-    work_.push_back(boost::asio::require(server_context.io_context()->get_executor(), boost::asio::execution::outstanding_work.tracked));
+    work_.push_back(asio::require(server_context.io_context()->get_executor(), asio::execution::outstanding_work.tracked));
 
     const auto num_contexts = contexts_.size();
     contexts_.push_back(std::move(server_context));
@@ -132,7 +132,7 @@ const ServerContext& ServerContextPool::next_context() {
     return context;
 }
 
-boost::asio::io_context& ServerContextPool::next_io_context() {
+asio::io_context& ServerContextPool::next_io_context() {
     const auto& context = next_context();
     return *context.io_context();
 }

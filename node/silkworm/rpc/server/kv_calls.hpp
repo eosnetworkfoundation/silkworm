@@ -17,14 +17,14 @@
 #ifndef SILKWORM_RPC_KV_FACTORIES_HPP_
 #define SILKWORM_RPC_KV_FACTORIES_HPP_
 
+#include <chrono>
 #include <exception>
 #include <map>
 #include <optional>
 #include <tuple>
 #include <vector>
 
-#include <boost/asio/deadline_timer.hpp>
-#include <boost/date_time/posix_time/posix_time_io.hpp>
+#include <asio/steady_timer.hpp>
 #include <grpcpp/grpcpp.h>
 #include <remote/kv.grpc.pb.h>
 
@@ -52,7 +52,7 @@ constexpr auto kDbSchemaVersion = KvVersion{3, 0, 0};
 constexpr auto kKvApiVersion = KvVersion{4, 1, 0};
 
 //! The max life duration for MDBX transactions (long-lived transactions are discouraged).
-constexpr boost::posix_time::milliseconds kMaxTxDuration{60'000};
+constexpr std::chrono::milliseconds kMaxTxDuration{60'000};
 
 //! The max number of opened cursors for each remote transaction (arbitrary limit on this KV implementation).
 constexpr std::size_t kMaxTxCursors{100};
@@ -62,7 +62,7 @@ class KvVersionCall : public UnaryRpc<remote::KV::AsyncService, google::protobuf
   public:
     static void fill_predefined_reply();
 
-    KvVersionCall(boost::asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers);
+    KvVersionCall(asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers);
 
     void process(const google::protobuf::Empty* request) override;
 
@@ -80,9 +80,9 @@ class KvVersionCallFactory : public CallFactory<remote::KV::AsyncService, KvVers
 class TxCall : public BidirectionalStreamingRpc<remote::KV::AsyncService, remote::Cursor, remote::Pair> {
   public:
     static void set_chaindata_env(mdbx::env* chaindata_env);
-    static void set_max_ttl_duration(const boost::posix_time::milliseconds& max_ttl_duration);
+    static void set_max_ttl_duration(const std::chrono::milliseconds& max_ttl_duration);
 
-    TxCall(boost::asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers);
+    TxCall(asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers);
 
     void start() override;
 
@@ -109,7 +109,7 @@ class TxCall : public BidirectionalStreamingRpc<remote::KV::AsyncService, remote
 
     void handle_operation(const remote::Cursor* request, db::Cursor& cursor);
 
-    void handle_max_ttl_timer_expired(const boost::system::error_code& ec);
+    void handle_max_ttl_timer_expired(const asio::error_code& ec);
 
     bool save_cursors(std::vector<CursorPosition>& positions);
 
@@ -150,10 +150,10 @@ class TxCall : public BidirectionalStreamingRpc<remote::KV::AsyncService, remote
     void close_with_internal_error(const std::string& error_message);
 
     static mdbx::env* chaindata_env_;
-    static boost::posix_time::milliseconds max_ttl_duration_;
+    static std::chrono::milliseconds max_ttl_duration_;
 
     mdbx::txn_managed read_only_txn_;
-    boost::asio::deadline_timer max_ttl_timer_;
+    asio::steady_timer max_ttl_timer_;
     std::map<uint32_t, TxCursor> cursors_;
     uint32_t last_cursor_id_{0};
 };
@@ -169,7 +169,7 @@ class StateChangesCall : public ServerStreamingRpc<remote::KV::AsyncService, rem
   public:
     static void set_source(StateChangeSource* source);
 
-    StateChangesCall(boost::asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers);
+    StateChangesCall(asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers);
     ~StateChangesCall();
 
     void process(const remote::StateChangeRequest* request) override;
@@ -191,7 +191,7 @@ class KvService {
   public:
     explicit KvService(const EthereumBackEnd& backend);
 
-    void register_kv_request_calls(boost::asio::io_context& scheduler, remote::KV::AsyncService* async_service, grpc::ServerCompletionQueue* queue);
+    void register_kv_request_calls(asio::io_context& scheduler, remote::KV::AsyncService* async_service, grpc::ServerCompletionQueue* queue);
 
   private:
     KvVersionCallFactory kv_version_factory_;

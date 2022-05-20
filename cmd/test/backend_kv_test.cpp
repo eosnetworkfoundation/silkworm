@@ -24,8 +24,8 @@
 #include <vector>
 
 #include <CLI/CLI.hpp>
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/signal_set.hpp>
+#include <asio/io_context.hpp>
+#include <asio/signal_set.hpp>
 #include <boost/process/environment.hpp>
 #include <grpcpp/grpcpp.h>
 #include <magic_enum.hpp>
@@ -832,8 +832,8 @@ int main(int argc, char* argv[]) {
     silkworm::rpc::Grpc2SilkwormLogGuard log_guard;
 
     try {
-        boost::asio::io_context scheduler;
-        boost::asio::signal_set signals{scheduler, SIGINT, SIGTERM};
+        asio::io_context scheduler;
+        asio::signal_set signals{scheduler, SIGINT, SIGTERM};
 
         auto channel = grpc::CreateChannel(target_uri, grpc::InsecureChannelCredentials());
         grpc::CompletionQueue queue;
@@ -888,9 +888,9 @@ int main(int argc, char* argv[]) {
         }};
 
         SILK_DEBUG << "Signals registered on scheduler " << &scheduler;
-        signals.async_wait([&](const boost::system::error_code& error, int signal_number) {
+        signals.async_wait([&](const std::system_error& error, int signal_number) {
             std::cout << "\n";
-            SILK_INFO << "Signal caught, error: " << error << " number: " << signal_number;
+            SILK_INFO << "Signal number: " << signal_number << " caught, error code: " << error.code();
             pump_stop = true;
             completion_stop = true;
             shutdown_requested.notify_one();

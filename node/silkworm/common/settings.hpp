@@ -22,10 +22,10 @@
 #include <optional>
 
 #ifdef __APPLE__
-// otherwise <boost/asio/detail/socket_types.hpp> dependency doesn't compile
+// otherwise <asio/detail/socket_types.hpp> dependency doesn't compile
 #define _DARWIN_C_SOURCE
 #endif
-#include <boost/asio/io_context.hpp>
+#include <asio/io_context.hpp>
 
 #include <silkworm/chain/config.hpp>
 #include <silkworm/common/base.hpp>
@@ -36,7 +36,7 @@
 namespace silkworm {
 
 struct NodeSettings {
-    boost::asio::io_context asio_context;                  // Async context (e.g. for timers)
+    asio::io_context asio_context;                         // Async context (e.g. for timers)
     std::unique_ptr<DataDirectory> data_directory;         // Pointer to data folder
     db::EnvConfig chaindata_env_config{};                  // Chaindata db config
     uint64_t network_id{kMainnetConfig.chain_id};          // Network/Chain id

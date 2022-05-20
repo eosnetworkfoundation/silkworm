@@ -38,7 +38,7 @@ class MockUnaryRpc : public BaseRpc {
 
     static int instance_count() { return instance_count_; }
 
-    explicit MockUnaryRpc(boost::asio::io_context& scheduler) : BaseRpc(scheduler) { instance_count_++; }
+    explicit MockUnaryRpc(asio::io_context& scheduler) : BaseRpc(scheduler) { instance_count_++; }
     ~MockUnaryRpc() { instance_count_--; }
 
     void cleanup() override {}
@@ -78,7 +78,7 @@ TEST_CASE("CallFactory::CallFactory", "[silkworm][node][rpc]") {
 TEST_CASE("CallFactory::add_rpc", "[silkworm][node][rpc]") {
     CHECK(MockRpc::instance_count() == 0);
 
-    boost::asio::io_context scheduler;
+    asio::io_context scheduler;
 
     SECTION("OK: insert new rpc", "[silkworm][node][rpc]") {
         MockFactory factory;
@@ -95,7 +95,7 @@ TEST_CASE("CallFactory::add_rpc", "[silkworm][node][rpc]") {
 TEST_CASE("CallFactory::remove_rpc", "[silkworm][node][rpc]") {
     CHECK(MockRpc::instance_count() == 0);
 
-    boost::asio::io_context scheduler;
+    asio::io_context scheduler;
 
     SECTION("KO: remove unexisting rpc", "[silkworm][node][rpc]") {
         MockFactory factory;

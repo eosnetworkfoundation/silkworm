@@ -56,7 +56,7 @@ TEST_CASE("ServerContext", "[silkworm][rpc][server_context]") {
     }
 
     SECTION("execution_loop") {
-        boost::asio::io_context::work work{*server_context.io_context()};
+        asio::io_context::work work{*server_context.io_context()};
         std::atomic_bool context_thread_failed{false};
         std::thread context_thread{[&]() {
             try {
@@ -71,7 +71,7 @@ TEST_CASE("ServerContext", "[silkworm][rpc][server_context]") {
     }
 
     SECTION("stop") {
-        boost::asio::io_context::work work{*server_context.io_context()};
+        asio::io_context::work work{*server_context.io_context()};
         std::thread context_thread{[&]() { server_context.execution_loop(); }};
         CHECK(!server_context.io_context()->stopped());
         server_context.stop();

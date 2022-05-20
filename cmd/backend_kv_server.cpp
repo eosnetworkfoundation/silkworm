@@ -18,9 +18,9 @@
 #include <thread>
 
 #include <CLI/CLI.hpp>
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/ip/address.hpp>
-#include <boost/asio/signal_set.hpp>
+#include <asio/io_context.hpp>
+#include <asio/ip/address.hpp>
+#include <asio/signal_set.hpp>
 #include <boost/process/environment.hpp>
 
 #include <silkworm/backend/ethereum_backend.hpp>
@@ -200,13 +200,13 @@ int main(int argc, char* argv[]) {
         silkworm::rpc::BackEndKvServer server{server_settings, backend};
         server.build_and_start();
 
-        boost::asio::io_context& scheduler = server.next_io_context();
-        boost::asio::signal_set signals{scheduler, SIGINT, SIGTERM};
+        asio::io_context& scheduler = server.next_io_context();
+        asio::signal_set signals{scheduler, SIGINT, SIGTERM};
 
         SILK_DEBUG << "Signals registered on scheduler " << &scheduler;
-        signals.async_wait([&](const boost::system::error_code& error, int signal_number) {
+        signals.async_wait([&](const std::system_error& error, int signal_number) {
             std::cout << "\n";
-            SILK_INFO << "Signal caught, error: " << error << " number: " << signal_number;
+            SILK_INFO << "Signal number: " << signal_number << " caught, error code: " << error.code();
             backend.close();
             server.shutdown();
         });

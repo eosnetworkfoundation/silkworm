@@ -26,7 +26,7 @@
 #include <thread>
 #include <vector>
 
-#include <boost/asio/post.hpp>
+#include <asio/post.hpp>
 #include <catch2/catch.hpp>
 #include <grpc/grpc.h>
 
@@ -504,7 +504,7 @@ TEST_CASE("BackEndKvServer", "[silkworm][node][rpc]") {
         }};
         server.shutdown();
         server_thread.join();
-        server.join(); // cannot move before server_thread.join() due to data race in boost::asio::detail::posix_thread
+        server.join(); // cannot move before server_thread.join() due to data race in asio::detail::posix_thread
     }
 }
 
@@ -1074,7 +1074,7 @@ TEST_CASE("BackEndKvServer E2E: Tx max opened cursors exceeded", "[silkworm][nod
 class TxIdleTimeoutGuard {
   public:
     explicit TxIdleTimeoutGuard(uint8_t t) {
-        TxCall::set_max_idle_duration(boost::posix_time::milliseconds{t});
+        TxCall::set_max_idle_duration(std::chrono::milliseconds{t});
     }
     ~TxIdleTimeoutGuard() {
         TxCall::set_max_idle_duration(kMaxIdleDuration);
@@ -2224,7 +2224,7 @@ TEST_CASE("BackEndKvServer E2E: Tx cursor invalid operations", "[silkworm][node]
 class TxMaxTimeToLiveGuard {
   public:
     explicit TxMaxTimeToLiveGuard(uint8_t t) {
-        TxCall::set_max_ttl_duration(boost::posix_time::milliseconds{t});
+        TxCall::set_max_ttl_duration(std::chrono::milliseconds{t});
     }
     ~TxMaxTimeToLiveGuard() {
         TxCall::set_max_ttl_duration(kMaxTxDuration);

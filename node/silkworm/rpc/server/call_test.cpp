@@ -23,12 +23,12 @@ namespace silkworm::rpc {
 TEST_CASE("BaseRpc", "[silkworm][rpc][call]") {
     class FakeRpc : public BaseRpc {
       public:
-        explicit FakeRpc(boost::asio::io_context& scheduler) : BaseRpc(scheduler) {}
+        explicit FakeRpc(asio::io_context& scheduler) : BaseRpc(scheduler) {}
       protected:
         void cleanup() override {}
     };
 
-    boost::asio::io_context scheduler;
+    asio::io_context scheduler;
 
     SECTION("count live instances") {
         REQUIRE(BaseRpc::instance_count() == 0);

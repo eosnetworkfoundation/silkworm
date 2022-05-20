@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
         auto chaindata_env{silkworm::db::open_env(node_settings.chaindata_env_config)};
 
         // Start boost asio
-        using asio_guard_type = boost::asio::executor_work_guard<boost::asio::io_context::executor_type>;
+        using asio_guard_type = asio::executor_work_guard<asio::io_context::executor_type>;
         auto asio_guard = std::make_unique<asio_guard_type>(node_settings.asio_context.get_executor());
         std::thread asio_thread{[&node_settings]() -> void {
             log::set_thread_name("Asio");

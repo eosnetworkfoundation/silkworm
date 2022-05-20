@@ -17,6 +17,7 @@
 #ifndef SILKWORM_RPC_UTIL_HPP_
 #define SILKWORM_RPC_UTIL_HPP_
 
+#include <chrono>
 #include <ostream>
 #include <string>
 
@@ -25,6 +26,17 @@
 
 #include <silkworm/common/base.hpp>
 #include <silkworm/common/log.hpp>
+
+//! operator<< overload converting std::chrono::steady_clock::time_point to std::time_t
+namespace std::chrono {
+
+inline std::ostream& operator<<(std::ostream& out, steady_clock::time_point t) {
+    const std::time_t expiry = system_clock::to_time_t(system_clock::now() +
+        std::chrono::duration_cast<system_clock::duration>(t - steady_clock::now()));
+    return out << std::put_time(std::gmtime(&expiry), "%c %Z");
+}
+
+} // namespace std::chrono
 
 namespace grpc {
 

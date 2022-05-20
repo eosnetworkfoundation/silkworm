@@ -21,14 +21,16 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <functional>
+#include <system_error>
 #include <utility>
 
 #ifdef __APPLE__
-// otherwise <boost/asio/detail/socket_types.hpp> dependency doesn't compile
+// otherwise <asio/detail/socket_types.hpp> dependency doesn't compile
 #define _DARWIN_C_SOURCE
 #endif
-#include <boost/asio/deadline_timer.hpp>
-#include <boost/asio/io_context.hpp>
+#include <asio/steady_timer.hpp>
+#include <asio/io_context.hpp>
 
 #include <silkworm/common/assert.hpp>
 #include <silkworm/concurrency/signal_handler.hpp>
@@ -44,7 +46,7 @@ class Timer {
     //! \param interval [in] : length of wait interval (in milliseconds)
     //! \param call_back [in] : the call back function to be called
     //! \param auto_start [in] : whether to start the timer immediately
-    explicit Timer(boost::asio::io_context& asio_context, uint32_t interval, std::function<bool()> call_back,
+    explicit Timer(asio::io_context& asio_context, uint32_t interval, std::function<bool()> call_back,
                    bool auto_start = false)
         : interval_(interval), timer_(asio_context), call_back_(std::move(call_back)) {
         SILKWORM_ASSERT(interval > 0);
@@ -78,8 +80,8 @@ class Timer {
   private:
     //! \brief Launches async timer
     void launch() {
-        timer_.expires_from_now(boost::posix_time::milliseconds(interval_));
-        (void)timer_.async_wait([&, this](const boost::system::error_code& ec) {
+        timer_.expires_from_now(std::chrono::milliseconds(interval_));
+        (void)timer_.async_wait([&, this](const asio::error_code& ec) {
             if (!ec && call_back_) {
                 call_back_();
             }
@@ -91,7 +93,7 @@ class Timer {
 
     std::atomic_bool is_running{false};
     const uint32_t interval_;
-    boost::asio::deadline_timer timer_;
+    asio::steady_timer timer_;
     std::function<bool()> call_back_;
 };
 

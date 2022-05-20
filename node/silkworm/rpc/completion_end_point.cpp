@@ -44,7 +44,7 @@ int CompletionEndPoint::poll_one() {
     return num_completed;
 }
 
-bool CompletionEndPoint::post_one(boost::asio::io_context& scheduler) {
+bool CompletionEndPoint::post_one(asio::io_context& scheduler) {
     SILK_TRACE << "CompletionEndPoint::post_one START";
     void* tag{nullptr};
     bool ok{false};
