@@ -29,7 +29,10 @@
 // otherwise <asio/detail/socket_types.hpp> dependency doesn't compile
 #define _DARWIN_C_SOURCE
 #endif
-#include <asio/steady_timer.hpp>
+#ifndef ASIO_HAS_BOOST_DATE_TIME
+#define ASIO_HAS_BOOST_DATE_TIME
+#endif
+#include <asio/deadline_timer.hpp>
 #include <asio/io_context.hpp>
 
 #include <silkworm/common/assert.hpp>
@@ -80,7 +83,7 @@ class Timer {
   private:
     //! \brief Launches async timer
     void launch() {
-        timer_.expires_from_now(std::chrono::milliseconds(interval_));
+        timer_.expires_from_now(boost::posix_time::milliseconds(interval_));
         (void)timer_.async_wait([&, this](const asio::error_code& ec) {
             if (!ec && call_back_) {
                 call_back_();
@@ -93,7 +96,7 @@ class Timer {
 
     std::atomic_bool is_running{false};
     const uint32_t interval_;
-    asio::steady_timer timer_;
+    asio::deadline_timer timer_;
     std::function<bool()> call_back_;
 };
 

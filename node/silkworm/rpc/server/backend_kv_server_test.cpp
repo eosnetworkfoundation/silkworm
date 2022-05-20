@@ -1074,7 +1074,7 @@ TEST_CASE("BackEndKvServer E2E: Tx max opened cursors exceeded", "[silkworm][nod
 class TxIdleTimeoutGuard {
   public:
     explicit TxIdleTimeoutGuard(uint8_t t) {
-        TxCall::set_max_idle_duration(std::chrono::milliseconds{t});
+        TxCall::set_max_idle_duration(boost::posix_time::milliseconds{t});
     }
     ~TxIdleTimeoutGuard() {
         TxCall::set_max_idle_duration(kMaxIdleDuration);
@@ -2224,7 +2224,7 @@ TEST_CASE("BackEndKvServer E2E: Tx cursor invalid operations", "[silkworm][node]
 class TxMaxTimeToLiveGuard {
   public:
     explicit TxMaxTimeToLiveGuard(uint8_t t) {
-        TxCall::set_max_ttl_duration(std::chrono::milliseconds{t});
+        TxCall::set_max_ttl_duration(boost::posix_time::milliseconds{t});
     }
     ~TxMaxTimeToLiveGuard() {
         TxCall::set_max_ttl_duration(kMaxTxDuration);

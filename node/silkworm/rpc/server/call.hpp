@@ -22,7 +22,10 @@
 #include <functional>
 #include <list>
 
-#include <asio/steady_timer.hpp>
+#ifndef ASIO_HAS_BOOST_DATE_TIME
+#define ASIO_HAS_BOOST_DATE_TIME
+#endif
+#include <asio/deadline_timer.hpp>
 #include <asio/io_context.hpp>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/impl/codegen/async_stream.h>
@@ -36,7 +39,7 @@
 namespace silkworm::rpc {
 
 //! The max idle interval to protect from clients which don't send any requests.
-constexpr std::chrono::milliseconds kMaxIdleDuration{30'000};
+constexpr boost::posix_time::milliseconds kMaxIdleDuration{30'000};
 
 //! This represents the generic gRPC call composed by a sequence of bidirectional operations.
 class BaseRpc {
@@ -448,7 +451,7 @@ class ServerStreamingRpc : public BaseRpc {
         SILK_TRACE << "ServerStreamingRpc::cleanup [" << this << "] END";
     }
 
-    inline static std::chrono::milliseconds max_idle_duration_{kMaxIdleDuration};
+    inline static boost::posix_time::milliseconds max_idle_duration_{kMaxIdleDuration};
 
     //! The gRPC generated asynchronous service.
     AsyncService* service_;
@@ -501,7 +504,7 @@ struct BidirectionalStreamingRpcHandlers : public RpcHandlers<AsyncService, Requ
 template<typename AsyncService, typename Request, typename Response>
 class BidirectionalStreamingRpc : public BaseRpc {
   public:
-    static void set_max_idle_duration(const std::chrono::milliseconds& max_idle_duration) {
+    static void set_max_idle_duration(const boost::posix_time::milliseconds& max_idle_duration) {
         max_idle_duration_ = max_idle_duration;
     }
 
@@ -742,7 +745,7 @@ class BidirectionalStreamingRpc : public BaseRpc {
         SILK_TRACE << "BidirectionalStreamingRpc::handle_idle_timer_expired " << this << " ec: " << ec << " END";
     }
 
-    inline static std::chrono::milliseconds max_idle_duration_{kMaxIdleDuration};
+    inline static boost::posix_time::milliseconds max_idle_duration_{kMaxIdleDuration};
 
     //! The gRPC generated asynchronous service.
     AsyncService* service_;
@@ -778,7 +781,7 @@ class BidirectionalStreamingRpc : public BaseRpc {
     std::list<Response> response_queue_;
 
     //! The one-shot timer to protect from clients which don't send any requests.
-    asio::steady_timer idle_timer_;
+    asio::deadline_timer idle_timer_;
 
     //! The bidirectional-streaming call result.
     grpc::Status status_{grpc::Status::OK};

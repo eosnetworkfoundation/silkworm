@@ -24,7 +24,10 @@
 #include <tuple>
 #include <vector>
 
-#include <asio/steady_timer.hpp>
+#ifndef ASIO_HAS_BOOST_DATE_TIME
+#define ASIO_HAS_BOOST_DATE_TIME
+#endif
+#include <asio/deadline_timer.hpp>
 #include <grpcpp/grpcpp.h>
 #include <remote/kv.grpc.pb.h>
 
@@ -52,7 +55,7 @@ constexpr auto kDbSchemaVersion = KvVersion{3, 0, 0};
 constexpr auto kKvApiVersion = KvVersion{4, 1, 0};
 
 //! The max life duration for MDBX transactions (long-lived transactions are discouraged).
-constexpr std::chrono::milliseconds kMaxTxDuration{60'000};
+constexpr boost::posix_time::milliseconds kMaxTxDuration{60'000};
 
 //! The max number of opened cursors for each remote transaction (arbitrary limit on this KV implementation).
 constexpr std::size_t kMaxTxCursors{100};
@@ -80,7 +83,7 @@ class KvVersionCallFactory : public CallFactory<remote::KV::AsyncService, KvVers
 class TxCall : public BidirectionalStreamingRpc<remote::KV::AsyncService, remote::Cursor, remote::Pair> {
   public:
     static void set_chaindata_env(mdbx::env* chaindata_env);
-    static void set_max_ttl_duration(const std::chrono::milliseconds& max_ttl_duration);
+    static void set_max_ttl_duration(const boost::posix_time::milliseconds& max_ttl_duration);
 
     TxCall(asio::io_context& scheduler, remote::KV::AsyncService* service, grpc::ServerCompletionQueue* queue, Handlers handlers);
 
@@ -150,10 +153,10 @@ class TxCall : public BidirectionalStreamingRpc<remote::KV::AsyncService, remote
     void close_with_internal_error(const std::string& error_message);
 
     static mdbx::env* chaindata_env_;
-    static std::chrono::milliseconds max_ttl_duration_;
+    static boost::posix_time::milliseconds max_ttl_duration_;
 
     mdbx::txn_managed read_only_txn_;
-    asio::steady_timer max_ttl_timer_;
+    asio::deadline_timer max_ttl_timer_;
     std::map<uint32_t, TxCursor> cursors_;
     uint32_t last_cursor_id_{0};
 };

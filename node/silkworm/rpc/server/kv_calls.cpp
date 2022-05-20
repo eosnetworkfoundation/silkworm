@@ -17,6 +17,7 @@
 #include "kv_calls.hpp"
 
 #include <asio/post.hpp>
+#include <boost/date_time/posix_time/posix_time_io.hpp>
 
 #include <silkworm/common/assert.hpp>
 #include <silkworm/common/log.hpp>
@@ -85,13 +86,13 @@ KvVersionCallFactory::KvVersionCallFactory()
 }
 
 mdbx::env* TxCall::chaindata_env_{nullptr};
-std::chrono::milliseconds TxCall::max_ttl_duration_{kMaxTxDuration};
+boost::posix_time::milliseconds TxCall::max_ttl_duration_{kMaxTxDuration};
 
 void TxCall::set_chaindata_env(mdbx::env* chaindata_env) {
     TxCall::chaindata_env_ = chaindata_env;
 }
 
-void TxCall::set_max_ttl_duration(const std::chrono::milliseconds& max_ttl_duration) {
+void TxCall::set_max_ttl_duration(const boost::posix_time::milliseconds& max_ttl_duration) {
     TxCall::max_ttl_duration_ = max_ttl_duration;
 }
 
