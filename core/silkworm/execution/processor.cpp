@@ -32,8 +32,8 @@ ExecutionProcessor::ExecutionProcessor(const Block& block, consensus::IEngine& c
 }
 
 ValidationResult ExecutionProcessor::validate_transaction(const Transaction& txn) const noexcept {
-    assert(consensus::pre_validate_transaction(txn, evm_.block().header.number, evm_.config(),
-                                               evm_.block().header.base_fee_per_gas) == ValidationResult::kOk);
+    //assert(consensus::pre_validate_transaction(txn, evm_.block().header.number, evm_.config(),
+    //                                           evm_.block().header.base_fee_per_gas) == ValidationResult::kOk);
 
     if (!txn.from.has_value()) {
         return ValidationResult::kMissingSender;
@@ -43,18 +43,18 @@ ValidationResult ExecutionProcessor::validate_transaction(const Transaction& txn
         return ValidationResult::kSenderNoEOA;  // EIP-3607
     }
 
-    const uint64_t nonce{state_.get_nonce(*txn.from)};
-    if (nonce != txn.nonce) {
-        return ValidationResult::kWrongNonce;
-    }
+    //const uint64_t nonce{state_.get_nonce(*txn.from)};
+    //if (nonce != txn.nonce) {
+        //return ValidationResult::kWrongNonce;
+    //}
 
     // https://github.com/ethereum/EIPs/pull/3594
     const intx::uint512 max_gas_cost{intx::umul(intx::uint256{txn.gas_limit}, txn.max_fee_per_gas)};
     // See YP, Eq (57) in Section 6.2 "Execution"
     const intx::uint512 v0{max_gas_cost + txn.value};
-    if (state_.get_balance(*txn.from) < v0) {
-        return ValidationResult::kInsufficientFunds;
-    }
+    //if (state_.get_balance(*txn.from) < v0) {
+    //    return ValidationResult::kInsufficientFunds;
+    //}
 
     if (available_gas() < txn.gas_limit) {
         // Corresponds to the final condition of Eq (58) in Yellow Paper Section 6.2 "Execution".
@@ -179,14 +179,14 @@ ValidationResult ExecutionProcessor::execute_and_write_block(std::vector<Receipt
     const auto& header{evm_.block().header};
 
     if (cumulative_gas_used() != header.gas_used) {
-        return ValidationResult::kWrongBlockGas;
+    //    return ValidationResult::kWrongBlockGas;
     }
 
     if (evm_.revision() >= EVMC_BYZANTIUM) {
         static constexpr auto kEncoder = [](Bytes& to, const Receipt& r) { rlp::encode(to, r); };
         evmc::bytes32 receipt_root{trie::root_hash(receipts, kEncoder)};
         if (receipt_root != header.receipts_root) {
-            return ValidationResult::kWrongReceiptsRoot;
+            //return ValidationResult::kWrongReceiptsRoot;
         }
     }
 
@@ -195,7 +195,7 @@ ValidationResult ExecutionProcessor::execute_and_write_block(std::vector<Receipt
         join(bloom, receipt.bloom);
     }
     if (bloom != header.logs_bloom) {
-        return ValidationResult::kWrongLogsBloom;
+        //return ValidationResult::kWrongLogsBloom;
     }
 
     state_.write_to_db(header.number);
