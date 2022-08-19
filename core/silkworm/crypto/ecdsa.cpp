@@ -18,7 +18,19 @@
 
 #include <ethash/hash_types.hpp>
 #include <ethash/keccak.hpp>
+
+#if defined(ANTELOPE)
+namespace eosio {
+   namespace internal_use_do_not_use {
+    extern "C" {
+      __attribute__((eosio_wasm_import))
+      int32_t k1_recover( const char* sig, uint32_t sig_len, const char* dig, uint32_t dig_len, char* pub, uint32_t pub_len);
+      }
+   }
+}
+#else
 #include <secp256k1_recovery.h>
+#endif
 
 namespace silkworm::ecdsa {
 
@@ -50,7 +62,9 @@ std::optional<YParityAndChainId> v_to_y_parity_and_chain_id(const intx::uint256&
     return res;
 }
 
+#if not defined(ANTELOPE)
 secp256k1_context* create_context(uint32_t flags) { return secp256k1_context_create(flags); }
+#endif
 
 bool is_valid_signature(const intx::uint256& r, const intx::uint256& s, bool homestead) noexcept {
     if (!r || !s) {
@@ -66,6 +80,27 @@ bool is_valid_signature(const intx::uint256& r, const intx::uint256& s, bool hom
     return true;
 }
 
+#if defined(ANTELOPE)
+std::optional<Bytes> recover(ByteView message, ByteView signature, bool odd_y_parity) noexcept {
+
+    if (message.length() != 32 || signature.length() != 64) {
+        return std::nullopt;
+    }
+
+    uint8_t vrs[65];
+    vrs[0] = odd_y_parity ? 1 : 0;
+    vrs[0] += (27 + 4);
+    memcpy(&vrs[1], signature.data(), signature.length());
+
+    uint8_t uncompressed_pubkey[65];
+    int32_t res = eosio::internal_use_do_not_use::k1_recover((const char*)&vrs[0], 65, (const char*)message.data(), message.size(), (char *)uncompressed_pubkey, 65);
+    if(res) {
+        return {};
+    }
+
+    return Bytes{uncompressed_pubkey, std::end(uncompressed_pubkey)};
+}
+#else
 std::optional<Bytes> recover(ByteView message, ByteView signature, bool odd_y_parity,
                              secp256k1_context* context) noexcept {
     static secp256k1_context* static_context{create_context()};
@@ -92,6 +127,7 @@ std::optional<Bytes> recover(ByteView message, ByteView signature, bool odd_y_pa
     secp256k1_ec_pubkey_serialize(context, &out[0], &kOutLen, &pub_key, SECP256K1_EC_UNCOMPRESSED);
     return out;
 }
+#endif
 
 std::optional<evmc::address> public_key_to_address(const Bytes& public_key) noexcept {
     if (public_key.length() != 65 || public_key[0] != 4u) {
@@ -102,10 +138,17 @@ std::optional<evmc::address> public_key_to_address(const Bytes& public_key) noex
     return evmc::address(*reinterpret_cast<const evmc_address*>(&key_hash.bytes[12]));
 }
 
+#if defined(ANTELOPE)
+std::optional<evmc::address> recover_address(ByteView message, ByteView signature, bool odd_y_parity) noexcept {
+    const auto recovered_public_key{recover(message, signature, odd_y_parity)};
+    return public_key_to_address(recovered_public_key.value_or(Bytes{}));
+}
+#else
 std::optional<evmc::address> recover_address(ByteView message, ByteView signature, bool odd_y_parity,
                                              secp256k1_context* context) noexcept {
     const auto recovered_public_key{recover(message, signature, odd_y_parity, context)};
     return public_key_to_address(recovered_public_key.value_or(Bytes{}));
 }
+#endif
 
 }  // namespace silkworm::ecdsa

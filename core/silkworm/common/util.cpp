@@ -17,7 +17,9 @@
 #include "util.hpp"
 
 #include <cassert>
+#if not defined(ANTELOPE)
 #include <regex>
+#endif
 
 #include <silkworm/common/as_range.hpp>
 
@@ -220,6 +222,7 @@ bool iequals(const std::string& a, const std::string& b) {
     return (a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), case_insensitive_char_comparer));
 }
 
+#if not defined(ANTELOPE)
 std::optional<uint64_t> parse_size(const std::string& sizestr) {
     if (sizestr.empty()) {
         return 0ull;
@@ -263,6 +266,7 @@ std::optional<uint64_t> parse_size(const std::string& sizestr) {
     }
     return number;
 }
+#endif
 
 std::string human_size(uint64_t bytes) {
     static const char* suffix[]{"B", "KB", "MB", "GB", "TB"};

@@ -21,10 +21,16 @@
 #include <cstdint>
 #include <optional>
 #include <variant>
+#if defined(ANTELOPE)
+#include <map>
+#endif
 
 #include <evmc/evmc.h>
 #include <intx/intx.hpp>
+
+#if not defined(ANTELOPE)
 #include <nlohmann/json.hpp>
+#endif
 
 #include <silkworm/common/util.hpp>
 
@@ -99,7 +105,9 @@ struct ChainConfig {
 
     void set_revision_block(evmc_revision rev, std::optional<uint64_t> block);
 
+    #if not defined(ANTELOPE)
     [[nodiscard]] nlohmann::json to_json() const noexcept;
+    #endif
 
     /*Sample JSON input:
     {
@@ -116,7 +124,9 @@ struct ChainConfig {
             "berlinBlock":12244000
     }
     */
+    #if not defined(ANTELOPE)
     static std::optional<ChainConfig> from_json(const nlohmann::json& json) noexcept;
+    #endif
 };
 
 bool operator==(const ChainConfig& a, const ChainConfig& b);
