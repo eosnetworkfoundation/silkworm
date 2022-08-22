@@ -17,9 +17,6 @@
 [submodule "magic_enum"]
 	path = third_party/magic_enum
 	url = https://github.com/Neargye/magic_enum.git
-[submodule "libmdbx"]
-	path = third_party/libmdbx
-	url = https://github.com/torquem-ch/libmdbx.git
 [submodule "interfaces/proto"]
 	path = interfaces/proto
 	url = https://github.com/ledgerwatch/interfaces.git
@@ -27,3 +24,6 @@
 [submodule "third_party/evmone"]
 	path = third_party/evmone
 	url = https://github.com/eosnetworkfoundation/evmone
+[submodule "third_party/libmdbx"]
+	path = third_party/libmdbx
+	url = https://github.com/eosnetworkfoundation/libmdbx
