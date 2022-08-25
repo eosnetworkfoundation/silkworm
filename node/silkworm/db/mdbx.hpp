@@ -59,6 +59,9 @@ class RWTxn {
     // The code that invokes the stages is responsible for committing the external txn later on.
     explicit RWTxn(mdbx::txn& external_txn) : external_txn_{&external_txn} {}
 
+    explicit RWTxn(RWTxn* parent)
+       : env_(parent->env_) { managed_txn_ = parent->managed_txn_.start_nested(); }
+
     // Not copyable nor movable
     RWTxn(const RWTxn&) = delete;
     RWTxn& operator=(const RWTxn&) = delete;
@@ -86,6 +89,9 @@ class RWTxn {
             }
         }
     }
+
+    inline void abort() { managed_txn_.abort(); }
+    inline uint64_t id()  const { return managed_txn_.id(); }
 
   private:
     mdbx::txn* external_txn_{nullptr};
