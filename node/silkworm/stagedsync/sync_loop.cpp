@@ -32,11 +32,11 @@
 
 namespace silkworm::stagedsync {
 
-SyncLoop::SyncLoop(silkworm::NodeSettings* node_settings, mdbx::env* chaindata_env, BlockExchange& be)
+SyncLoop::SyncLoop(silkworm::NodeSettings* node_settings, mdbx::env* chaindata_env/*, BlockExchange& be*/)
     : Worker("SyncLoop"),
       node_settings_{node_settings},
       chaindata_env_{chaindata_env},
-      block_exchange_{be},
+      //block_exchange_{be},
       sync_context_{std::make_unique<SyncContext>()} {
     load_stages();
 }
@@ -61,10 +61,10 @@ void SyncLoop::load_stages() {
      * 15 StageFinish -> stagedsync::Finish
      */
 
-    stages_.emplace(db::stages::kHeadersKey,
-                    std::make_unique<stagedsync::HeadersStage>(sync_context_.get(), block_exchange_, node_settings_));
-    stages_.emplace(db::stages::kBlockBodiesKey,
-                    std::make_unique<stagedsync::BodiesStage>(sync_context_.get(), block_exchange_, node_settings_));
+    // stages_.emplace(db::stages::kHeadersKey,
+    //                 std::make_unique<stagedsync::HeadersStage>(sync_context_.get(), block_exchange_, node_settings_));
+    // stages_.emplace(db::stages::kBlockBodiesKey,
+    //                 std::make_unique<stagedsync::BodiesStage>(sync_context_.get(), block_exchange_, node_settings_));
     stages_.emplace(db::stages::kBlockHashesKey,
                     std::make_unique<stagedsync::BlockHashes>(node_settings_, sync_context_.get()));
     stages_.emplace(db::stages::kSendersKey,
@@ -87,9 +87,9 @@ void SyncLoop::load_stages() {
 
     stages_forward_order_.insert(stages_forward_order_.begin(),
                                  {
-                                     db::stages::kHeadersKey,
+                                     //db::stages::kHeadersKey,
                                      db::stages::kBlockHashesKey,
-                                     db::stages::kBlockBodiesKey,
+                                     //db::stages::kBlockBodiesKey,
                                      db::stages::kSendersKey,
                                      db::stages::kExecutionKey,
                                      db::stages::kHashStateKey,
@@ -110,9 +110,9 @@ void SyncLoop::load_stages() {
                                     db::stages::kIntermediateHashesKey,  // Needs to happen after unwinding HashState
                                     db::stages::kExecutionKey,
                                     db::stages::kSendersKey,
-                                    db::stages::kBlockBodiesKey,
+                                    //db::stages::kBlockBodiesKey,
                                     db::stages::kBlockHashesKey,  // Decanonify block hashes
-                                    db::stages::kHeadersKey,
+                                    //db::stages::kHeadersKey,
                                 });
 }
 void SyncLoop::stop(bool wait) {

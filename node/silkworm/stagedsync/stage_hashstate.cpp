@@ -512,7 +512,7 @@ StageResult HashState::hash_from_storage_changeset(db::RWTxn& txn, BlockNum prev
         db::Cursor source_plainstate(txn, db::table::kPlainState);
 
         auto source_initial_key{db::block_key(previous_progress + 1)};
-        auto changeset_data{source_changeset.lower_bound(db::to_slice(source_initial_key), /*throw_notfound=*/true)};
+        auto changeset_data{source_changeset.lower_bound(db::to_slice(source_initial_key), /*throw_notfound=*/false)};
 
         while (changeset_data.done) {
             auto changeset_key_view{db::from_slice(changeset_data.key)};
