@@ -18,7 +18,6 @@
 
 // The most common and basic macros, concepts, types, and constants.
 
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -37,9 +36,18 @@ namespace silkworm {
 
 using namespace evmc::literals;
 
-template <class T>
-concept UnsignedIntegral = std::unsigned_integral<T> || std::same_as<T, intx::uint128> ||
-    std::same_as<T, intx::uint256> || std::same_as<T, intx::uint512>;
+template <typename T>
+struct is_vector : std::false_type {};
+
+template <typename U>
+struct is_vector<std::vector<U>> : std::true_type {};
+
+template <typename T>
+constexpr bool is_vector_v = is_vector<T>::value;
+
+template <typename T>
+constexpr bool UnsignedIntegral = (std::is_integral_v<T> && !std::is_signed_v<T> ) || std::is_same_v<T, intx::uint128>
+          || std::is_same_v<T, intx::uint256> || std::is_same_v<T, intx::uint512>;
 
 using Bytes = std::basic_string<uint8_t>;
 

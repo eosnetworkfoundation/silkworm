@@ -180,6 +180,8 @@ std::vector<BlockNum> ChainConfig::distinct_fork_numbers() const {
     return {ret.cbegin(), ret.cend()};
 }
 
+bool operator==(const ChainConfig& a, const ChainConfig& b) { return a.to_json() == b.to_json(); }
+
 std::ostream& operator<<(std::ostream& out, const ChainConfig& obj) { return out << obj.to_json(); }
 
 std::optional<std::pair<const std::string, const ChainConfig*>> lookup_known_chain(const uint64_t chain_id) noexcept {

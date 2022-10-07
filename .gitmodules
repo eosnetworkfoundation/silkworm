@@ -1,6 +1,3 @@
-[submodule "evmone"]
-	path = third_party/evmone
-	url = https://github.com/ethereum/evmone.git
 [submodule "tests"]
 	path = third_party/tests
 	url = https://github.com/ethereum/tests.git
@@ -20,9 +17,12 @@
 	path = interfaces/proto
 	url = https://github.com/ledgerwatch/interfaces.git
 	branch = stable
-[submodule "silkpre"]
-	path = third_party/silkpre
-	url = https://github.com/torquem-ch/silkpre.git
 [submodule "third_party/gmplib"]
 	path = third_party/gmplib
 	url = https://github.com/torquem-ch/gmp-wasm.git
+[submodule "third_party/evmone"]
+	path = third_party/evmone
+	url = https://github.com/eosnetworkfoundation/evmone
+[submodule "third_party/silkpre"]
+	path = third_party/silkpre
+	url = https://github.com/eosnetworkfoundation/silkpre

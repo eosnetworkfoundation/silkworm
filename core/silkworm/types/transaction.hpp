@@ -31,7 +31,7 @@ struct AccessListEntry {
     evmc::address account{};
     std::vector<evmc::bytes32> storage_keys{};
 
-    friend bool operator==(const AccessListEntry&, const AccessListEntry&) = default;
+    friend bool operator==(const AccessListEntry&, const AccessListEntry&);
 };
 
 struct Transaction {

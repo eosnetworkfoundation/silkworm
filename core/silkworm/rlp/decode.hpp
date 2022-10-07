@@ -37,7 +37,7 @@ namespace silkworm::rlp {
 // in which case the byte is put back.
 [[nodiscard]] std::pair<Header, DecodingResult> decode_header(ByteView& from) noexcept;
 
-template <class T>
+template <class T, std::enable_if_t<!UnsignedIntegral<T> && !is_vector_v<T>, int> = 1>
 DecodingResult decode(ByteView& from, T& to) noexcept;
 
 template <>
@@ -46,7 +46,7 @@ DecodingResult decode(ByteView& from, evmc::bytes32& to) noexcept;
 template <>
 DecodingResult decode(ByteView& from, Bytes& to) noexcept;
 
-template <UnsignedIntegral T>
+template <typename T, std::enable_if_t<UnsignedIntegral<T>, int> = 1>
 DecodingResult decode(ByteView& from, T& to) noexcept {
     auto [h, err]{decode_header(from)};
     if (err != DecodingResult::kOk) {

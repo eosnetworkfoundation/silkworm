@@ -29,6 +29,10 @@
 
 namespace silkworm {
 
+bool operator==(const AccessListEntry& a, const AccessListEntry& b) {
+    return a.account == b.account && a.storage_keys == b.storage_keys;
+}
+
 bool operator==(const Transaction& a, const Transaction& b) {
     // from is omitted since it's derived from the signature
     return a.type == b.type && a.nonce == b.nonce && a.max_priority_fee_per_gas == b.max_priority_fee_per_gas &&
@@ -403,10 +407,16 @@ void Transaction::recover_sender() {
     intx::be::unsafe::store(signature + kHashLength, s);
 
     from = evmc::address{};
+    #if defined(ANTELOPE)
+    if (!silkpre_recover_address(from->bytes, hash.bytes, signature, odd_y_parity)) {
+        from = std::nullopt;
+    }
+    #else
     static secp256k1_context* context{secp256k1_context_create(SILKPRE_SECP256K1_CONTEXT_FLAGS)};
     if (!silkpre_recover_address(from->bytes, hash.bytes, signature, odd_y_parity, context)) {
         from = std::nullopt;
     }
+    #endif
 }
 
 intx::uint256 Transaction::priority_fee_per_gas(const intx::uint256& base_fee_per_gas) const {

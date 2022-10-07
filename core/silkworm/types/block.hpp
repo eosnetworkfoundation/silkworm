@@ -61,7 +61,7 @@ struct BlockHeader {
     //! \return A hash of 256 bits with big endian byte order
     [[nodiscard, maybe_unused]] ethash::hash256 boundary() const;
 
-    friend bool operator==(const BlockHeader&, const BlockHeader&) = default;
+    friend bool operator==(const BlockHeader&, const BlockHeader&);
 
   private:
     friend DecodingResult rlp::decode<BlockHeader>(ByteView& from, BlockHeader& to) noexcept;
@@ -71,7 +71,7 @@ struct BlockBody {
     std::vector<Transaction> transactions;
     std::vector<BlockHeader> ommers;
 
-    friend bool operator==(const BlockBody&, const BlockBody&) = default;
+    friend bool operator==(const BlockBody&, const BlockBody&);
 };
 
 struct Block : public BlockBody {
