@@ -276,25 +276,26 @@ std::vector<evmc::address> read_senders(mdbx::txn& txn, const Bytes& key) {
     return senders;
 }
 
-void parse_senders(mdbx::txn& txn, const Bytes& key, std::vector<Transaction>& out) {
+void parse_senders(mdbx::txn& , const Bytes& , std::vector<Transaction>& out) {
     if (out.empty()) {
         return;
     }
-    auto data_view{read_senders_raw(txn, key)};
-    if (!data_view.empty()) {
-        SILKWORM_ASSERT(data_view.length() % kAddressLength == 0);
-        SILKWORM_ASSERT(data_view.length() / kAddressLength == out.size());
-        auto addresses = reinterpret_cast<const evmc::address*>(data_view.data());
-        size_t idx{0};
-        for (auto& transaction : out) {
-            transaction.from.emplace(addresses[idx++]);
-        }
-    } else {
+    std::cout << "enter access_layer.cpp, parse_senders()" << std::endl;
+    // auto data_view{read_senders_raw(txn, key)};
+    // if (!data_view.empty()) {
+    //     SILKWORM_ASSERT(data_view.length() % kAddressLength == 0);
+    //     SILKWORM_ASSERT(data_view.length() / kAddressLength == out.size());
+    //     auto addresses = reinterpret_cast<const evmc::address*>(data_view.data());
+    //     size_t idx{0};
+    //     for (auto& transaction : out) {
+    //         transaction.from.emplace(addresses[idx++]);
+    //     }
+    // } else {
         // Might be empty due to pruning
         for (auto& transaction : out) {
             transaction.recover_sender();
         }
-    }
+    //}
 }
 
 std::optional<ByteView> read_code(mdbx::txn& txn, const evmc::bytes32& code_hash) {

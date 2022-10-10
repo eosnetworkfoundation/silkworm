@@ -466,18 +466,21 @@ void TxCall::handle_seek_both(const remote::Cursor* request, db::Cursor& cursor)
 }
 
 void TxCall::handle_seek_exact(const remote::Cursor* request, db::Cursor& cursor) {
-    SILK_TRACE << "TxCall::handle_seek_exact " << this << " START";
+   
     mdbx::slice key{request->k()};
 
+    SILK_TRACE << "TxCall::handle_seek_exact " << request->k() << this << " START";
     const bool found = cursor.seek(key);
 
     remote::Pair kv_pair;
     if (found) {
+        mdbx::pair res = cursor.current();
+        kv_pair.set_v(static_cast<std::string>(res.value));
         kv_pair.set_k(request->k());
     }
 
     const bool sent = send_response(kv_pair);
-    SILK_TRACE << "TxCall::handle_seek_exact " << this << " sent: " << sent << " END";
+    SILK_TRACE << "TxCall::handle_seek_exact " << this << " found:" << found << " sent: " << sent << " END";
 }
 
 void TxCall::handle_seek_both_exact(const remote::Cursor* request, db::Cursor& cursor) {

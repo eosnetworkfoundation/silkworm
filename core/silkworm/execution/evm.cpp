@@ -77,6 +77,8 @@ CallResult EVM::execute(const Transaction& txn, uint64_t gas) noexcept {
     const bool contract_creation{!txn.to.has_value()};
     const evmc::address destination{contract_creation ? evmc::address{} : *txn.to};
 
+    printf("in EVM::execute(), contract_creation=%d,", static_cast<int>(contract_creation));
+
     evmc_message message{
         contract_creation ? EVMC_CREATE : EVMC_CALL,  // kind
         0,                                            // flags
@@ -97,6 +99,9 @@ CallResult EVM::execute(const Transaction& txn, uint64_t gas) noexcept {
 }
 
 evmc::result EVM::create(const evmc_message& message) noexcept {
+
+    printf("in EVM::create(),");
+
     evmc::result res{EVMC_SUCCESS, message.gas, nullptr, 0};
 
     auto value{intx::be::load<intx::uint256>(message.value)};
@@ -157,20 +162,26 @@ evmc::result EVM::create(const evmc_message& message) noexcept {
 
     res = execute(deploy_message, ByteView{message.input_data, message.input_size}, /*code_hash=*/nullptr);
 
+    //printf("in EVM::create() after execute status_code %d,", static_cast<int>(res.status_code));
+
     if (res.status_code == EVMC_SUCCESS) {
         const size_t code_len{res.output_size};
         const uint64_t code_deploy_gas{code_len * fee::kGCodeDeposit};
 
         if (rev >= EVMC_LONDON && code_len > 0 && res.output_data[0] == 0xEF) {
+            printf("in EVM::create(), eip-3541");
             // https://eips.ethereum.org/EIPS/eip-3541
             res.status_code = EVMC_CONTRACT_VALIDATION_FAILURE;
         } else if (rev >= EVMC_SPURIOUS_DRAGON && code_len > param::kMaxCodeSize) {
+            printf("in EVM::create(), eip-170");
             // https://eips.ethereum.org/EIPS/eip-170
             res.status_code = EVMC_OUT_OF_GAS;
         } else if (res.gas_left >= 0 && static_cast<uint64_t>(res.gas_left) >= code_deploy_gas) {
+            printf("in EVM::create(), before calling state.set_code()");
             res.gas_left -= static_cast<int64_t>(code_deploy_gas);
             state_.set_code(contract_addr, {res.output_data, res.output_size});
         } else if (rev >= EVMC_HOMESTEAD) {
+            printf("in EVM::create(), out of gas, rev %d", static_cast<int>(rev));
             res.status_code = EVMC_OUT_OF_GAS;
         }
     }
@@ -232,6 +243,9 @@ evmc::result EVM::call(const evmc_message& message) noexcept {
         }
     } else {
         const ByteView code{state_.get_code(message.code_address)};
+
+        printf("in EVM::call(), code size=%d,", static_cast<int>(code.size()));
+        
         if (code.empty() && tracers_.empty()) { // Do not skip execution if there are any tracers
             return res;
         }
@@ -255,11 +269,14 @@ evmc::result EVM::execute(const evmc_message& msg, ByteView code, const evmc::by
 
     evmc_result res;
     if (exo_evm) {
+        printf("EVM::execute() exo_evm,");
         EvmHost host{*this};
         res = exo_evm->execute(exo_evm, &host.get_interface(), host.to_context(), rev, &msg, code.data(), code.size());
     } else if (code_hash && advanced_analysis_cache) {
+        printf("EVM::execute() ad interp,");
         res = execute_with_advanced_interpreter(rev, msg, code, *code_hash);
     } else {
+        printf("EVM::execute() base interp,");
         // for one-off execution baseline interpreter is generally faster
         res = execute_with_baseline_interpreter(rev, msg, code, code_hash);
     }

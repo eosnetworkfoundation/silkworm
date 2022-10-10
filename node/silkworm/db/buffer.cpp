@@ -287,9 +287,11 @@ void Buffer::write_state_to_db() {
     // Extract sorted index of unique addresses before inserting into the DB
     absl::btree_set<evmc::address> addresses;
     for (auto& x : accounts_) {
+        log::Info("write_state_to_db():", {"account", silkworm::to_hex(x.first.bytes), x.second.has_value() ? silkworm::to_hex(x.second->encode_for_storage()) : std::string("")});
         addresses.insert(x.first);
     }
     for (auto& x : storage_) {
+        log::Info("write_state_to_db():", {"storage", silkworm::to_hex(x.first.bytes)});
         addresses.insert(x.first);
     }
 
@@ -307,6 +309,8 @@ void Buffer::write_state_to_db() {
                 Bytes encoded{it->second->encode_for_storage()};
                 state_table.upsert(key, to_slice(encoded));
                 written_size += kAddressLength + encoded.length();
+                log::Info("upsert to Plainstate ", 
+                    {"key", silkworm::to_hex(address), "value", silkworm::to_hex(encoded)});
             }
             accounts_.erase(it);
         }

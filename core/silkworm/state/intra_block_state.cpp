@@ -300,6 +300,9 @@ void IntraBlockState::set_storage(const evmc::address& address, const evmc::byte
 }
 
 void IntraBlockState::write_to_db(uint64_t block_number) {
+
+    int sc = 0, ac = 0, cc = 0;
+
     db_.begin_block(block_number);
 
     for (const auto& [address, storage] : storage_) {
@@ -315,11 +318,13 @@ void IntraBlockState::write_to_db(uint64_t block_number) {
         for (const auto& [key, val] : storage.committed) {
             uint64_t incarnation{obj.current->incarnation};
             db_.update_storage(address, incarnation, key, val.initial, val.original);
+            ++sc;
         }
     }
 
     for (const auto& [address, obj] : objects_) {
         db_.update_account(address, obj.initial, obj.current);
+        ++ac;
         if (!obj.current.has_value()) {
             continue;
         }
@@ -328,10 +333,13 @@ void IntraBlockState::write_to_db(uint64_t block_number) {
             (!obj.initial.has_value() || obj.initial->incarnation != obj.current->incarnation)) {
             if (auto it{new_code_.find(code_hash)}; it != new_code_.end()) {
                 db_.update_account_code(address, obj.current->incarnation, code_hash, it->second);
+                ++cc;
             }
         }
     }
-}
+
+    printf("Leave IntraBlockState::write_to_db #storage %d #acc %d #code %d", sc, ac, cc);
+} 
 
 IntraBlockState::Snapshot IntraBlockState::take_snapshot() const noexcept {
     IntraBlockState::Snapshot snapshot;

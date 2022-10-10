@@ -176,27 +176,30 @@ ValidationResult ExecutionProcessor::execute_and_write_block(std::vector<Receipt
         return res;
     }
 
-    const auto& header{evm_.block().header};
+    auto& header = const_cast<silkworm::BlockHeader &>(evm_.block().header);
 
-    if (cumulative_gas_used() != header.gas_used) {
-        return ValidationResult::kWrongBlockGas;
-    }
+    // if (cumulative_gas_used() != header.gas_used) {
+    //     header.gas_used = cumulative_gas_used();
+    //     //return ValidationResult::kWrongBlockGas;
+    // }
 
-    if (evm_.revision() >= EVMC_BYZANTIUM) {
-        static constexpr auto kEncoder = [](Bytes& to, const Receipt& r) { rlp::encode(to, r); };
-        evmc::bytes32 receipt_root{trie::root_hash(receipts, kEncoder)};
-        if (receipt_root != header.receipts_root) {
-            return ValidationResult::kWrongReceiptsRoot;
-        }
-    }
+    // if (evm_.revision() >= EVMC_BYZANTIUM) {
+    //     static constexpr auto kEncoder = [](Bytes& to, const Receipt& r) { rlp::encode(to, r); };
+    //     evmc::bytes32 receipt_root{trie::root_hash(receipts, kEncoder)};
+    //     if (receipt_root != header.receipts_root) {
+    //         header.receipts_root = receipt_root;
+    //         //return ValidationResult::kWrongReceiptsRoot;
+    //     }
+    // }
 
-    Bloom bloom{};  // zero initialization
-    for (const Receipt& receipt : receipts) {
-        join(bloom, receipt.bloom);
-    }
-    if (bloom != header.logs_bloom) {
-        return ValidationResult::kWrongLogsBloom;
-    }
+    // Bloom bloom{};  // zero initialization
+    // for (const Receipt& receipt : receipts) {
+    //     join(bloom, receipt.bloom);
+    // }
+    // if (bloom != header.logs_bloom) {
+    //     header.logs_bloom = bloom;
+    //     //return ValidationResult::kWrongLogsBloom;
+    // }
 
     state_.write_to_db(header.number);
 
