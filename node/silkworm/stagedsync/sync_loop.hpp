@@ -23,13 +23,14 @@
 #include <silkworm/concurrency/worker.hpp>
 #include <silkworm/downloader/block_exchange.hpp>
 #include <silkworm/stagedsync/stage.hpp>
+#include <silkworm/stagedsync/stage_direct_bodies.hpp>
 
 namespace silkworm::stagedsync {
 
 class SyncLoop final : public Worker {
   public:
     //explicit SyncLoop(silkworm::NodeSettings*, mdbx::env*, BlockExchange&);
-    explicit SyncLoop(silkworm::NodeSettings*, mdbx::env*);
+    explicit SyncLoop(silkworm::NodeSettings*, mdbx::env*, DirectBodiesStage::BlockQueue& bq);
     ~SyncLoop() override = default;
 
     void stop(bool wait = false) final;
@@ -38,6 +39,7 @@ class SyncLoop final : public Worker {
     silkworm::NodeSettings* node_settings_;      // As being passed by CLI arguments and/or already initialized data
     mdbx::env* chaindata_env_;                   // The actual opened environment
     //BlockExchange& block_exchange_;              // The block downloader
+    silkworm::stagedsync::DirectBodiesStage::BlockQueue& block_queue_;
     std::unique_ptr<SyncContext> sync_context_;  // Context shared across stages
     std::map<const char*, std::unique_ptr<stagedsync::Stage>> stages_;
     std::map<const char*, std::unique_ptr<stagedsync::Stage>>::iterator current_stage_;
