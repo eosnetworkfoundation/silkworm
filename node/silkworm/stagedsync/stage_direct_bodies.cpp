@@ -44,17 +44,15 @@ Stage::Result DirectBodiesStage::forward(db::RWTxn& txn) {
 
     StopWatch timing;
     timing.start();
-    log::Info(log_prefix_) << "Start";
+    log::Debug(log_prefix_) << "Start";
 
     try {
-        SILK_INFO << "Start Persist EVM Block ";
-
         std::shared_ptr<silkworm::Block> b;
         if( ! block_queue_.try_pop(b) ) {
             return Stage::Result::kSuccess;
         }
 
-        SILK_INFO << "Persist EVM Block " << b->header.number;
+        SILK_INFO << "Persist EVM Block: " << b->header.number;
         current_height_ = b->header.number;
 
         silkworm::HeaderPersistence hp{txn};
