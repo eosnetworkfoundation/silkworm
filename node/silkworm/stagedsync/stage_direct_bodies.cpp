@@ -48,7 +48,7 @@ Stage::Result DirectBodiesStage::forward(db::RWTxn& txn) {
 
     try {
         std::shared_ptr<silkworm::Block> b;
-        if( ! block_queue_.try_pop(b) ) {
+        if (!block_queue_.timed_wait_and_pop(b, 1000ms)) {
             return Stage::Result::kSuccess;
         }
 
