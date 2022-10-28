@@ -342,8 +342,8 @@ bool RecoveryFarm::dispatch_batch() {
             log::Trace(log_prefix_,
                        {"recoverer", std::to_string((*it)->get_id()), "items", std::to_string(batch_.size())})
                 << " dispatching";
-            (*it)->set_work(batch_, /*kick=*/true);  // Worker will swap contents
             workers_in_flight_++;
+            (*it)->set_work(batch_, /*kick=*/true);  // Worker will swap contents
             batch_.clear();
             batch_.reserve(batch_size_);
             return true;

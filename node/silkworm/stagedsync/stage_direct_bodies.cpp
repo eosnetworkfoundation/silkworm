@@ -44,7 +44,7 @@ Stage::Result DirectBodiesStage::forward(db::RWTxn& txn) {
 
     StopWatch timing;
     timing.start();
-    log::Debug(log_prefix_) << "Start";
+    log::Trace(log_prefix_) << "Start";
 
     try {
         std::shared_ptr<silkworm::Block> b;
