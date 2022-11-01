@@ -453,9 +453,11 @@ void TxCall::handle_seek_exact(const remote::Cursor* request, db::Cursor& cursor
 
     remote::Pair kv_pair;
     if (found) {
-        mdbx::pair res = cursor.current();
-        kv_pair.set_v(static_cast<std::string>(res.value));
         kv_pair.set_k(request->k());
+        const auto result = cursor.current(/*throw_notfound=*/false);
+        if (result) {
+            kv_pair.set_v(result.value.as_string());
+        }
     }
 
     const bool sent = send_response(kv_pair);
