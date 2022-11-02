@@ -40,6 +40,7 @@ class DirectBodiesStage : public Stage {
   private:
     std::vector<std::string> get_log_progress() override;  // thread safe
     std::atomic<BlockNum> current_height_{0};
+    std::optional<BlockNum> target_block_;
 
     BlockQueue& block_queue_;
 };

@@ -29,46 +29,94 @@ namespace silkworm::stagedsync {
 
 DirectBodiesStage::DirectBodiesStage(SyncContext* sc, BlockQueue& bq, NodeSettings* ns)
     : Stage(sc, db::stages::kBlockBodiesKey, ns), block_queue_{bq} {
+    // User can specify to stop at some block
+    const auto stop_at_block = stop_at_block_from_env();
+    if (stop_at_block.has_value()) {
+        target_block_ = stop_at_block;
+        log::Info(log_prefix_) << "env var STOP_AT_BLOCK set, target block=" << target_block_.value();
+    }
 }
 
-DirectBodiesStage::~DirectBodiesStage() {
-}
+DirectBodiesStage::~DirectBodiesStage() = default;
 
-Stage::Result DirectBodiesStage::forward(db::RWTxn& txn) {
+Stage::Result DirectBodiesStage::forward(db::RWTxn& tx) {
     using std::shared_ptr;
     using namespace std::chrono_literals;
     using namespace std::chrono;
 
     Stage::Result result = Stage::Result::kUnspecified;
+    std::thread message_receiving;
     operation_ = OperationType::Forward;
 
     StopWatch timing;
     timing.start();
-    log::Trace(log_prefix_) << "Start";
+    log::Info(log_prefix_) << "Start";
 
     try {
+        HeaderPersistence header_persistence(tx);
+
+        if (header_persistence.canonical_repaired()) {
+            tx.commit();
+            log::Info(log_prefix_) << "End (forward skipped due to the need of to complete the previous run, canonical chain updated), "
+                                   << "duration=" << StopWatch::format(timing.lap_duration());
+            return Stage::Result::kSuccess;
+        }
+
+        current_height_ = header_persistence.initial_height();
+        get_log_progress();  // this is a trick to set log progress initial value, please improve
+
+        if (target_block_ && current_height_ >= *target_block_) {
+            tx.commit();
+            log::Info(log_prefix_) << "End, forward skipped due to target block (" << *target_block_ << ") reached";
+            return Stage::Result::kStoppedByEnv;
+        }
+
+        RepeatedMeasure<BlockNum> height_progress(header_persistence.initial_height());
+        log::Debug(log_prefix_) << "Waiting for blocks... from=" << height_progress.get();
+
+
         std::shared_ptr<silkworm::Block> b;
         if (!block_queue_.timed_wait_and_pop(b, 1000ms)) {
             return Stage::Result::kSuccess;
         }
 
         SILK_INFO << "Persist EVM Block: " << b->header.number;
-        current_height_ = b->header.number;
 
-        silkworm::HeaderPersistence hp{txn};
-        silkworm::BodyPersistence bp{txn, *node_settings_->chain_config};
+        // Header
+        header_persistence.persist(b->header);
+        current_height_ = header_persistence.highest_height();
 
-        hp.persist(b->header);
-        bp.persist(*b);
-        hp.finish();
-
-        if(hp.unwind_needed()) {
-
+        bool unwind_needed = false;
+        if (header_persistence.unwind_needed()) {
+            result = Stage::Result::kWrongFork;
+            sync_context_->unwind_point = header_persistence.unwind_point();
+            unwind_needed = true;
+            // no need to set result.bad_block
+            log::Info(log_prefix_) << "Unwind needed";
         }
 
-        txn.commit();
+        header_persistence.finish();
 
-        result = Stage::Result::kSuccess;
+        // Body
+        if( !unwind_needed ) {
+            silkworm::BodyPersistence body_persistence{tx, *node_settings_->chain_config};
+            body_persistence.persist(*b);
+
+            if (body_persistence.unwind_needed()) {
+                result = Stage::Result::kInvalidBlock;
+                sync_context_->unwind_point = body_persistence.unwind_point();
+            } else {
+                result = Stage::Result::kSuccess;
+            }
+
+            body_persistence.close();
+        }
+
+        tx.commit();  // this will commit or not depending on the creator of txn
+
+        // todo: do we need a sentry.set_status() here?
+
+        log::Debug(log_prefix_) << "Done, duration= " << StopWatch::format(timing.lap_duration());
 
     } catch (const std::exception& e) {
         log::Error(log_prefix_) << "Aborted due to exception: " << e.what();
@@ -80,7 +128,7 @@ Stage::Result DirectBodiesStage::forward(db::RWTxn& txn) {
     return result;
 }
 
-Stage::Result DirectBodiesStage::unwind(db::RWTxn& ) {
+Stage::Result DirectBodiesStage::unwind(db::RWTxn& tx) {
     Stage::Result result{Stage::Result::kSuccess};
     operation_ = OperationType::Unwind;
 
@@ -88,7 +136,43 @@ Stage::Result DirectBodiesStage::unwind(db::RWTxn& ) {
     timing.start();
     log::Info(log_prefix_) << "Unwind start";
 
-    // TODO: anything needed here?
+    current_height_ = db::stages::read_stage_progress(tx, db::stages::kHeadersKey);
+    get_log_progress();  // this is a trick to set log progress initial value, please improve
+
+    std::optional<Hash> bad_block = sync_context_->bad_block_hash;
+
+    if (!sync_context_->unwind_point.has_value()) {
+        operation_ = OperationType::None;
+        return result;
+    }
+    auto new_height = sync_context_->unwind_point.value();
+
+    try {
+        std::set<Hash> bad_headers;
+        std::tie(bad_headers, new_height) = HeaderPersistence::remove_headers(new_height, bad_block, tx);
+        // todo: do we need to save bad_headers in the state and pass old bad headers here?
+
+        silkworm::BodyPersistence body_persistence{tx, *node_settings_->chain_config};
+        if ( body_persistence.unwind_needed() ) {
+            BodyPersistence::remove_bodies(new_height, sync_context_->bad_block_hash, tx);
+        }
+
+        current_height_ = new_height;
+
+        tx.commit();
+
+        result = Stage::Result::kSuccess;
+
+        // todo: do we need a sentry.set_status() here?
+
+        log::Info(log_prefix_) << "Unwind completed, duration= " << StopWatch::format(timing.lap_duration());
+
+    } catch (const std::exception& e) {
+        log::Error(log_prefix_) << "Unwind aborted due to exception: " << e.what();
+
+        // tx rollback executed automatically if needed
+        result = Stage::Result::kUnexpectedError;
+    }
 
     return result;
 }
