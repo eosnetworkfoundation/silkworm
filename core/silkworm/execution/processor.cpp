@@ -15,6 +15,7 @@
 */
 
 #include "processor.hpp"
+#include <reserved_address.hpp>
 
 #include <cassert>
 
@@ -48,19 +49,23 @@ ValidationResult ExecutionProcessor::validate_transaction(const Transaction& txn
         return ValidationResult::kWrongNonce;
     }
 
+    bool is_from_reserved = trust::evm::is_reserved_address(*(txn.from));
+
     // https://github.com/ethereum/EIPs/pull/3594
     const intx::uint512 max_gas_cost{intx::umul(intx::uint256{txn.gas_limit}, txn.max_fee_per_gas)};
     // See YP, Eq (57) in Section 6.2 "Execution"
     const intx::uint512 v0{max_gas_cost + txn.value};
-    if (state_.get_balance(*txn.from) < v0) {
-        return ValidationResult::kInsufficientFunds;
-    }
+    if (!is_from_reserved) {
+        if (state_.get_balance(*txn.from) < v0) {
+            return ValidationResult::kInsufficientFunds;
+        }
 
-    if (available_gas() < txn.gas_limit) {
-        // Corresponds to the final condition of Eq (58) in Yellow Paper Section 6.2 "Execution".
-        // The sum of the transaction’s gas limit and the gas utilized in this block prior
-        // must be no greater than the block’s gas limit.
-        return ValidationResult::kBlockGasLimitExceeded;
+        if (available_gas() < txn.gas_limit) {
+            // Corresponds to the final condition of Eq (58) in Yellow Paper Section 6.2 "Execution".
+            // The sum of the transaction’s gas limit and the gas utilized in this block prior
+            // must be no greater than the block’s gas limit.
+            return ValidationResult::kBlockGasLimitExceeded;
+        }
     }
 
     return ValidationResult::kOk;
@@ -79,7 +84,12 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
 
     const intx::uint256 base_fee_per_gas{evm_.block().header.base_fee_per_gas.value_or(0)};
     const intx::uint256 effective_gas_price{txn.effective_gas_price(base_fee_per_gas)};
-    state_.subtract_from_balance(*txn.from, txn.gas_limit * effective_gas_price);
+
+    bool is_from_reserved = trust::evm::is_reserved_address(*(txn.from));
+
+    if (!is_from_reserved) {
+        state_.subtract_from_balance(*txn.from, txn.gas_limit * effective_gas_price);
+    }
 
     if (txn.to.has_value()) {
         state_.access_account(*txn.to);
