@@ -103,7 +103,7 @@ Stage::Result DirectBodiesStage::forward(db::RWTxn& tx) {
             }
 
             ++block_count;
-            if(block_count == 5000 || b->irreversible == false) {
+            if(block_count == 5000 || b->irreversible == false || is_stopping() ) {
                 result = Stage::Result::kSuccess;
                 break;
             }
