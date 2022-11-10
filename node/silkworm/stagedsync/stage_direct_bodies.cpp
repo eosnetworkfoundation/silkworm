@@ -74,43 +74,45 @@ Stage::Result DirectBodiesStage::forward(db::RWTxn& tx) {
         RepeatedMeasure<BlockNum> height_progress(header_persistence.initial_height());
         log::Debug(log_prefix_) << "Waiting for blocks... from=" << height_progress.get();
 
+        silkworm::BodyPersistence body_persistence{tx, *node_settings_->chain_config};
 
-        std::shared_ptr<silkworm::Block> b;
-        if (!block_queue_.timed_wait_and_pop(b, 1000ms)) {
-            return Stage::Result::kSuccess;
-        }
-
-        SILK_INFO << "Persist EVM Block: " << b->header.number;
-
-        // Header
-        header_persistence.persist(b->header);
-        current_height_ = header_persistence.highest_height();
-
-        bool unwind_needed = false;
-        if (header_persistence.unwind_needed()) {
-            result = Stage::Result::kWrongFork;
-            sync_context_->unwind_point = header_persistence.unwind_point();
-            unwind_needed = true;
-            // no need to set result.bad_block
-            log::Info(log_prefix_) << "Unwind needed";
-        }
-
-        header_persistence.finish();
-
-        // Body
-        if( !unwind_needed ) {
-            silkworm::BodyPersistence body_persistence{tx, *node_settings_->chain_config};
-            body_persistence.persist(*b);
-
-            if (body_persistence.unwind_needed()) {
-                result = Stage::Result::kInvalidBlock;
-                sync_context_->unwind_point = body_persistence.unwind_point();
-            } else {
+        size_t block_count{0};
+        while(true) {
+            std::shared_ptr<silkworm::Block> b;
+            if (!block_queue_.timed_wait_and_pop(b, 1000ms)) {
                 result = Stage::Result::kSuccess;
+                break;
             }
 
-            body_persistence.close();
+            //SILK_INFO << "Persist EVM Block: " << b->header.number;
+
+            // Header & Body
+            header_persistence.persist(b->header);
+            current_height_ = header_persistence.highest_height();
+
+            body_persistence.persist(*b);
+
+            //bool unwind_needed = false;
+            if (header_persistence.unwind_needed()) {
+                result = Stage::Result::kWrongFork;
+                sync_context_->unwind_point = header_persistence.unwind_point();
+                //unwind_needed = true;
+                // no need to set result.bad_block
+                log::Info(log_prefix_) << "Unwind needed";
+                break;
+            }
+
+            ++block_count;
+            if(block_count == 5000 || b->irreversible == false || is_stopping() ) {
+                result = Stage::Result::kSuccess;
+                break;
+            }
         }
+
+        SILK_INFO << "Persisted #" << block_count << " blocks";
+
+        header_persistence.finish();
+        body_persistence.close();
 
         tx.commit();  // this will commit or not depending on the creator of txn
 

@@ -76,7 +76,7 @@ struct BlockBody {
 
 struct Block : public BlockBody {
     BlockHeader header;
-
+    bool irreversible{false};
     void recover_senders();
 };
 
