@@ -52,7 +52,7 @@ void Worker::start(bool wait) {
 
     while (wait) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        if (auto state{get_state()}; state == State::kStarted || state == State::kKickWaiting) {
+        if (auto state{get_state()}; state != State::kStarting) {
             break;
         }
     }
