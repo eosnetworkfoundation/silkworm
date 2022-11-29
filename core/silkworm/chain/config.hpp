@@ -247,7 +247,12 @@ inline constexpr ChainConfig kSepoliaConfig{
 
 inline constexpr evmc::bytes32 kTrustGenesisHash{0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9_bytes32};
 inline constexpr ChainConfig kTrustConfig{
+
+#ifdef OVERRIDE_CHAIN_ID
+    .chain_id = OVERRIDE_CHAIN_ID, 
+#else
     .chain_id = 15555,
+#endif
     .seal_engine = SealEngineType::kNoProof,
     .evmc_fork_blocks =
         {
