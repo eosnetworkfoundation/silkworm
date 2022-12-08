@@ -359,6 +359,14 @@ void IntraBlockState::finalize_transaction() {
     }
 }
 
+void IntraBlockState::reset() {
+    clear_journal_and_substate();
+    objects_.clear();
+    storage_.clear();
+    existing_code_.clear();
+    new_code_.clear();
+}
+
 void IntraBlockState::clear_journal_and_substate() {
     journal_.clear();
 
