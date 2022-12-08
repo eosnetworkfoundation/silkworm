@@ -102,6 +102,7 @@ class IntraBlockState {
 
     // See Section 6.1 "Substate" of the Yellow Paper
     void clear_journal_and_substate();
+    void reset();
 
     void add_log(const Log& log) noexcept;
 
