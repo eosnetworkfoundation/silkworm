@@ -31,12 +31,13 @@
 
 namespace silkworm::stagedsync::recovery {
 
-RecoveryFarm::RecoveryFarm(db::RWTxn& txn, NodeSettings* node_settings, const std::string& log_prefix)
+RecoveryFarm::RecoveryFarm(db::RWTxn& txn, NodeSettings* node_settings, Secpk1ContextPool && secpk1_context_pool, const std::string& log_prefix)
     : txn_{txn},
       node_settings_{node_settings},
       log_prefix_{log_prefix},
       collector_(node_settings),
-      batch_size_{node_settings->batch_size / std::thread::hardware_concurrency() / sizeof(RecoveryPackage)} {
+      batch_size_{node_settings->batch_size / std::thread::hardware_concurrency() / sizeof(RecoveryPackage)},
+      secpk1_context_pool_(std::move(secpk1_context_pool)) {
     workers_.reserve(max_workers_);
     workers_connections_.reserve(max_workers_ * 2);  // One for task completed event and one for worker completed event
     batch_.reserve(batch_size_);
@@ -164,6 +165,14 @@ Stage::Result RecoveryFarm::recover() {
     stop_all_workers(/*wait=*/true);
     headers_.clear();
     workers_connections_.clear();
+
+    for (auto &w: workers_) {
+        if (w) {
+            if (Secpk1ContextPtr context = w->release_context()) {
+                secpk1_context_pool_.push_back(std::move(context));
+            }
+        }
+    }
     workers_.clear();
     return ret;
 }
@@ -196,8 +205,10 @@ void RecoveryFarm::stop_all_workers(bool wait) {
 }
 
 void RecoveryFarm::wait_workers_completion() {
+    uint64_t sleep_us = 50;
     while (workers_in_flight_.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
+        sleep_us = static_cast<uint64_t>(std::min(sleep_us * 1.5, 10000.0));
     }
 }
 
@@ -382,7 +393,12 @@ bool RecoveryFarm::initialize_new_worker() {
     log::Trace(log_prefix_, {"recoverer", std::to_string(workers_.size())}) << " spawning";
     using namespace std::placeholders;
     try {
-        workers_.emplace_back(new RecoveryWorker(static_cast<uint32_t>(workers_.size())));
+        std::unique_ptr<secp256k1_context_wrapper> secpk1_context;
+        if (secpk1_context_pool_.size()) {
+            secpk1_context = std::move(secpk1_context_pool_.back());
+            secpk1_context_pool_.pop_back();
+        }
+        workers_.emplace_back(new RecoveryWorker(static_cast<uint32_t>(workers_.size()), std::move(secpk1_context)));
         workers_connections_.emplace_back(
             workers_.back()->signal_task_completed.connect(std::bind(&RecoveryFarm::task_completed_handler, this, _1)));
         workers_connections_.emplace_back(workers_.back()->signal_worker_stopped.connect(
