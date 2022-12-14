@@ -27,7 +27,7 @@ Stage::Result Senders::forward(db::RWTxn& txn) {
 
     std::unique_lock log_lock(sl_mutex_);
     operation_ = OperationType::Forward;
-    farm_ = std::make_unique<recovery::RecoveryFarm>(txn, node_settings_, log_prefix_);
+    farm_ = std::make_unique<recovery::RecoveryFarm>(txn, node_settings_, std::move(secpk1_context_pool_), log_prefix_);
     log_lock.unlock();
 
     const auto res{farm_->recover()};
@@ -36,6 +36,7 @@ Stage::Result Senders::forward(db::RWTxn& txn) {
     }
 
     log_lock.lock();
+    secpk1_context_pool_ = farm_->release_secpk1_context_pool();
     farm_.reset();
     operation_ = OperationType::None;
     log_lock.unlock();

@@ -38,6 +38,9 @@ class Senders final : public Stage {
 
     // Logging
     std::string current_key_{};
+
+    /* secp256k1_context pool */
+    recovery::Secpk1ContextPool secpk1_context_pool_;
 };
 
 }  // namespace silkworm::stagedsync
