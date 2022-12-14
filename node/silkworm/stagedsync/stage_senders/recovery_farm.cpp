@@ -208,7 +208,7 @@ void RecoveryFarm::wait_workers_completion() {
     uint64_t sleep_us = 50;
     while (workers_in_flight_.load()) {
         std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
-        sleep_us = static_cast<uint64_t>(std::min(sleep_us * 1.5, 10000.0));
+        sleep_us = std::min<uint64_t>(sleep_us * 1.5, 10000.0);
     }
 }
 

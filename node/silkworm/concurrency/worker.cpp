@@ -56,7 +56,7 @@ void Worker::start(bool wait) {
         if (auto state{get_state()}; state != State::kStarting) {
             break;
         }
-        sleep_us = static_cast<uint64_t>(std::min(sleep_us * 1.5, 5000.0));
+        sleep_us = std::min<uint64_t>(sleep_us * 1.5, 5000.0);
     }
 }
 
