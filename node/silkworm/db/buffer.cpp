@@ -38,7 +38,8 @@ void Buffer::begin_block(uint64_t block_number) {
 
 void Buffer::update_account(const evmc::address& address, std::optional<Account> initial,
                             std::optional<Account> current) {
-    const bool equal{current == initial};
+    // To avoid empty account change set, updates to account 0 (block reward account) will not be ignored
+    const bool equal{current == initial && address != evmc::address{}};
     const bool account_deleted{!current.has_value()};
 
     if (equal && !account_deleted && !changed_storage_.contains(address)) {
