@@ -33,7 +33,7 @@ class RecoveryFarm : public Stoppable {
 
     //! \brief This class coordinates the recovery of senders' addresses through multiple threads. May eventually handle
     //! the unwinding of already recovered addresses.
-    RecoveryFarm(db::RWTxn& txn, NodeSettings* node_settings, Secpk1ContextPool && secpk1_context_pool, const std::string& log_prefix);
+    RecoveryFarm(db::RWTxn& txn, NodeSettings* node_settings, const std::string& log_prefix);
     ~RecoveryFarm() = default;
 
     //! \brief Recover sender's addresses from transactions
@@ -51,10 +51,6 @@ class RecoveryFarm : public Stoppable {
 
     //! \brief Returns a collection of progress strings to be printed in log
     [[nodiscard]] std::vector<std::string> get_log_progress();
-
-    Secpk1ContextPool release_secpk1_context_pool() {
-        return std::move(secpk1_context_pool_);
-    }
 
   private:
     friend class RecoveryWorker;
@@ -134,9 +130,6 @@ class RecoveryFarm : public Stoppable {
     uint16_t current_phase_{0};
     size_t total_processed_blocks_{0};
     size_t total_collected_transactions_{0};
-
-    /* secp256k1_context pool */
-    Secpk1ContextPool secpk1_context_pool_;
 };
 
 }  // namespace silkworm::stagedsync::recovery

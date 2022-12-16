@@ -16,7 +16,6 @@
 
 #include "recovery_worker.hpp"
 
-#include <secp256k1.h>
 #include <silkpre/ecdsa.h>
 
 #include <silkworm/common/log.hpp>
@@ -24,24 +23,20 @@
 
 namespace silkworm::stagedsync::recovery {
 
-secp256k1_context_wrapper::secp256k1_context_wrapper(): context_(secp256k1_context_create(SILKPRE_SECP256K1_CONTEXT_FLAGS)) 
-{
-}
-
-RecoveryWorker::RecoveryWorker(uint32_t id, Secpk1ContextPtr && context)
+RecoveryWorker::RecoveryWorker(uint32_t id)
     : Worker("Address recoverer #" + std::to_string(id)),
       id_(id),
-      context_(std::move(context)) {
+      context_{secp256k1_context_create(SILKPRE_SECP256K1_CONTEXT_FLAGS)} {
     if (!context_) {
-        SILK_INFO << "RecoveryWorker allocating elliptic curve context";
-        context_.reset(new secp256k1_context_wrapper());
-        if (!context_) {
-            throw std::runtime_error("Could not create elliptic curve context");
-        }
+        throw std::runtime_error("Could not create elliptic curve context");
     }
 }
 
-RecoveryWorker::~RecoveryWorker() { }
+RecoveryWorker::~RecoveryWorker() {
+    if (context_) {
+        std::free(context_);
+    }
+}
 
 void RecoveryWorker::set_work(std::vector<RecoveryPackage>& farm_batch, bool kick) {
     batch_.swap(farm_batch);
@@ -68,7 +63,7 @@ void RecoveryWorker::work() {
             }
 
             if (!silkpre_recover_address(package.tx_from.bytes, package.tx_hash.bytes, package.tx_signature,
-                                         package.odd_y_parity, context_.get()->get())) {
+                                         package.odd_y_parity, context_)) {
                 throw std::runtime_error("Unable to recover from address in block " + std::to_string(block_num));
             }
             ++processed;

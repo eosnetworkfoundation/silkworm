@@ -308,7 +308,7 @@ Stage::Result SyncLoop::run_cycle_forward(db::RWTxn& cycle_txn, Timer& log_timer
             }
 
             auto [_, stage_duration] = stages_stop_watch.lap();
-            if (stage_duration > std::chrono::milliseconds(5)) {
+            if (stage_duration > std::chrono::milliseconds(10)) {
                 log::Info(get_log_prefix(),
                           {"op", "Forward",
                            "done", StopWatch::format(stage_duration)});
