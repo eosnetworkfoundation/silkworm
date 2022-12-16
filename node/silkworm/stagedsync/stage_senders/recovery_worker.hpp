@@ -30,28 +30,6 @@
 
 namespace silkworm::stagedsync::recovery {
 
-class secp256k1_context_wrapper {
-private:
-    secp256k1_context *context_;
-
-public:
-    secp256k1_context_wrapper();
-
-    secp256k1_context_wrapper(const secp256k1_context_wrapper&) = delete;
-    secp256k1_context_wrapper(secp256k1_context_wrapper&&) = delete;
-    secp256k1_context_wrapper &operator=(const secp256k1_context_wrapper&) = delete;
-    secp256k1_context_wrapper &operator=(secp256k1_context_wrapper&&) = delete;
-
-    ~secp256k1_context_wrapper() { 
-        std::free(context_);
-    }
-    operator secp256k1_context *() { return context_; }
-
-    secp256k1_context * get() { return context_; }
-};
-typedef std::unique_ptr<secp256k1_context_wrapper>  Secpk1ContextPtr;
-typedef std::vector<Secpk1ContextPtr>               Secpk1ContextPool;
-
 //! \brief A recovery package
 struct RecoveryPackage {
     BlockNum block_num;        // Block number this package refers to
@@ -68,7 +46,8 @@ class RecoveryWorker final : public silkworm::Worker {
     //! \brief Creates an instance of recovery worker
     //! \param [in] id : unique identifier for this instance
     //! \remarks data_size is expressed as number of transactions to recover per batch times address size
-    explicit RecoveryWorker(uint32_t id, Secpk1ContextPtr && context);
+    explicit RecoveryWorker(uint32_t id);
+
     ~RecoveryWorker() final;
 
     //! \brief Feed the worker with a new set of data to process
@@ -82,14 +61,10 @@ class RecoveryWorker final : public silkworm::Worker {
     //! \brief Signals connected handlers a task is completed
     boost::signals2::signal<void(RecoveryWorker* sender)> signal_task_completed;
 
-    Secpk1ContextPtr && release_context() {
-      return std::move(context_);
-    }
-
   private:
     const uint32_t id_;                   // Unique identifier
     std::vector<RecoveryPackage> batch_;  // Batch to process
-    Secpk1ContextPtr context_;            // Elliptic curve context;
+    secp256k1_context* context_;          // Elliptic curve context;
 
     //! \brief Basic recovery work loop
     //! \remarks Overrides Worker::work()

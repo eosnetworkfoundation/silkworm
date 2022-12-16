@@ -51,12 +51,10 @@ void Worker::start(bool wait) {
     });
 
     while (wait) {
-        uint64_t sleep_us = 10;
-        std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
         if (auto state{get_state()}; state != State::kStarting) {
             break;
         }
-        sleep_us = std::min<uint64_t>(sleep_us * 1.5, 5000.0);
     }
 }
 
