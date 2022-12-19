@@ -264,6 +264,24 @@ inline constexpr ChainConfig kTrustConfig{
         }
 };
 
+inline constexpr ChainConfig kTrustLocalConfig{ // for local testnet
+    .chain_id = 25555,
+    .seal_engine = SealEngineType::kNoProof,
+    .evmc_fork_blocks =
+        {
+            0,        // Homestead
+            0,        // Tangerine Whistle
+            0,        // Spurious Dragon
+            0,        // Byzantium
+            0,        // Constantinople
+            0,        // Petersburg
+            0,        // Istanbul
+            //0,        // Berlin
+            //0,        // London
+            //1735371,  // Merge Netsplit
+        }
+};
+
 //! \brief Looks up a known chain config provided its chain ID
 std::optional<std::pair<const std::string, const ChainConfig*>> lookup_known_chain(uint64_t chain_id) noexcept;
 
