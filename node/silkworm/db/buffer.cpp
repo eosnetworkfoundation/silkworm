@@ -39,10 +39,11 @@ void Buffer::begin_block(uint64_t block_number) {
 void Buffer::update_account(const evmc::address& address, std::optional<Account> initial,
                             std::optional<Account> current) {
     // To avoid empty account change set, updates to account 0 (block reward account) will not be ignored
-    const bool equal{current == initial && address != evmc::address{}};
+    const bool zero_address{address == evmc::address()};
+    const bool equal{current == initial};
     const bool account_deleted{!current.has_value()};
 
-    if (equal && !account_deleted && !changed_storage_.contains(address)) {
+    if (equal && !zero_address && !account_deleted && !changed_storage_.contains(address)) {
         // Follows the Erigon logic when to populate account changes.
         // See (ChangeSetWriter)UpdateAccountData & DeleteAccount.
         return;
@@ -62,7 +63,7 @@ void Buffer::update_account(const evmc::address& address, std::optional<Account>
         batch_history_size_ += payload_size;
     }
 
-    if (equal) {
+    if (equal && !zero_address) {
         return;
     }
     auto it{accounts_.find(address)};
