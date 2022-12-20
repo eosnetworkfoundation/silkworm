@@ -38,6 +38,8 @@ constexpr const char* kTerminalBlockNumber{"terminalBlockNumber"};
 constexpr const char* kTerminalBlockHash{"terminalBlockHash"};
 constexpr const char* kGenesisHash{"genesisBlockHash"};
 
+#if not defined(ANTELOPE)
+
 static inline void member_to_json(nlohmann::json& json, const std::string& key, const std::optional<uint64_t>& source) {
     if (source.has_value()) {
         json[key] = source.value();
@@ -153,6 +155,12 @@ std::optional<ChainConfig> ChainConfig::from_json(const nlohmann::json& json) no
     return config;
 }
 
+bool operator==(const ChainConfig& a, const ChainConfig& b) { return a.to_json() == b.to_json(); }
+
+std::ostream& operator<<(std::ostream& out, const ChainConfig& obj) { return out << obj.to_json(); }
+
+#endif
+
 std::optional<uint64_t> ChainConfig::revision_block(evmc_revision rev) const noexcept {
     if (rev == EVMC_FRONTIER) {
         return 0;
@@ -181,10 +189,6 @@ std::vector<BlockNum> ChainConfig::distinct_fork_numbers() const {
     ret.erase(0);  // Block 0 is not a fork number
     return {ret.cbegin(), ret.cend()};
 }
-
-bool operator==(const ChainConfig& a, const ChainConfig& b) { return a.to_json() == b.to_json(); }
-
-std::ostream& operator<<(std::ostream& out, const ChainConfig& obj) { return out << obj.to_json(); }
 
 std::optional<std::pair<const std::string, const ChainConfig*>> lookup_known_chain(const uint64_t chain_id) noexcept {
     auto it{
