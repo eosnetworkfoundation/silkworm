@@ -66,7 +66,7 @@ void SyncLoop::load_stages() {
     //                 std::make_unique<stagedsync::HeadersStage>(sync_context_.get(), block_exchange_, node_settings_));
     // stages_.emplace(db::stages::kBlockBodiesKey,
     //                 std::make_unique<stagedsync::BodiesStage>(sync_context_.get(), block_exchange_, node_settings_));
-    stages_.emplace(db::stages::kBlockBodiesKey,
+    stages_.emplace(db::stages::kHeadersKey,
                     std::make_unique<stagedsync::DirectBodiesStage>(sync_context_.get(), block_queue_, node_settings_));
     stages_.emplace(db::stages::kBlockHashesKey,
                     std::make_unique<stagedsync::BlockHashes>(node_settings_, sync_context_.get()));
@@ -90,9 +90,9 @@ void SyncLoop::load_stages() {
 
     stages_forward_order_.insert(stages_forward_order_.begin(),
                                  {
-                                     //db::stages::kHeadersKey,
+                                     db::stages::kHeadersKey,
                                      db::stages::kBlockHashesKey,
-                                     db::stages::kBlockBodiesKey,
+                                     //db::stages::kBlockBodiesKey,
                                      db::stages::kSendersKey,
                                      db::stages::kExecutionKey,
                                      db::stages::kHashStateKey,
@@ -113,9 +113,9 @@ void SyncLoop::load_stages() {
                                     db::stages::kIntermediateHashesKey,  // Needs to happen after unwinding HashState
                                     db::stages::kExecutionKey,
                                     db::stages::kSendersKey,
-                                    db::stages::kBlockBodiesKey,
+                                    //db::stages::kBlockBodiesKey,
                                     db::stages::kBlockHashesKey,  // Decanonify block hashes
-                                    //db::stages::kHeadersKey,
+                                    db::stages::kHeadersKey,
                                 });
 }
 void SyncLoop::stop(bool wait) {
