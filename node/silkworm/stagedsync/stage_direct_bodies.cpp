@@ -155,9 +155,7 @@ Stage::Result DirectBodiesStage::unwind(db::RWTxn& tx) {
         // todo: do we need to save bad_headers in the state and pass old bad headers here?
 
         silkworm::BodyPersistence body_persistence{tx, *node_settings_->chain_config};
-        if ( body_persistence.unwind_needed() ) {
-            BodyPersistence::remove_bodies(new_height, sync_context_->bad_block_hash, tx);
-        }
+        BodyPersistence::remove_bodies(new_height, sync_context_->bad_block_hash, tx);
 
         current_height_ = new_height;
 

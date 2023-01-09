@@ -422,7 +422,7 @@ std::map<Bytes, bool> HistoryIndex::collect_unique_keys_from_changeset(
     while (source_data) {
         auto source_data_key_view{db::from_slice(source_data.key)};
         reached_block_number = endian::load_big_u64(source_data_key_view.data());
-        check_block_sequence(expected_block_number, reached_block_number);
+
         if (reached_block_number > max_block_number) break;
         source_data_key_view.remove_prefix(sizeof(BlockNum));
 

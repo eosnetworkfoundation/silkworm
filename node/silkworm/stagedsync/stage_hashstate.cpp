@@ -695,7 +695,7 @@ Stage::Result HashState::unwind_from_storage_changeset(db::RWTxn& txn, BlockNum 
 
         db::Cursor source_changeset(txn, db::table::kStorageChangeSet);
         auto source_initial_key{db::block_key(to + 1)};
-        auto changeset_data{source_changeset.lower_bound(db::to_slice(source_initial_key), /*throw_notfound=*/true)};
+        auto changeset_data{source_changeset.lower_bound(db::to_slice(source_initial_key), /*throw_notfound=*/false)};
 
         while (changeset_data.done) {
             auto changeset_key_view{db::from_slice(changeset_data.key)};
