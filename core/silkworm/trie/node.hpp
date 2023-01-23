@@ -50,8 +50,6 @@ class Node {
 
     void set_root_hash(const std::optional<evmc::bytes32>& root_hash);
 
-    friend bool operator==(const Node&, const Node&) = default;
-
     //! \see Erigon's MarshalTrieNodeTyped
     [[nodiscard]] Bytes encode_for_storage() const;
 
