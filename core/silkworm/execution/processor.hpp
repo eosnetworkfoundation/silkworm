@@ -54,6 +54,8 @@ class ExecutionProcessor {
     EVM& evm() noexcept { return evm_; }
     const EVM& evm() const noexcept { return evm_; }
 
+    IntraBlockState& state() noexcept { return state_; }
+
   private:
     /// Execute the block, but do not write to the DB yet.
     /// Does not perform any post-execution validation (for example, receipt root is not checked).
