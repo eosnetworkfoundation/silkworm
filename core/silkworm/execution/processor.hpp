@@ -54,7 +54,12 @@ class ExecutionProcessor {
     EVM& evm() noexcept { return evm_; }
     const EVM& evm() const noexcept { return evm_; }
 
+    // Added by ENF --v
     IntraBlockState& state() noexcept { return state_; }
+
+    // ENF: moved from private so available by evm_contract::validate_transaction
+    uint64_t available_gas() const noexcept;
+    // Added by ENF --^
 
   private:
     /// Execute the block, but do not write to the DB yet.
@@ -62,7 +67,6 @@ class ExecutionProcessor {
     /// Precondition: validate_block_header & pre_validate_block_body must return kOk.
     [[nodiscard]] ValidationResult execute_block_no_post_validation(std::vector<Receipt>& receipts) noexcept;
 
-    uint64_t available_gas() const noexcept;
     uint64_t refund_gas(const Transaction& txn, uint64_t gas_left, uint64_t refund_gas) noexcept;
 
     uint64_t cumulative_gas_used_{0};
