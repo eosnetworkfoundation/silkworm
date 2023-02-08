@@ -70,6 +70,9 @@ nlohmann::json ChainConfig::to_json() const noexcept {
         case silkworm::SealEngineType::kAuRA:
             ret.emplace("aura", empty_object);
             break;
+        case silkworm::SealEngineType::kTrust:
+            ret.emplace("trust", empty_object);
+            break;
         default:
             break;
     }
@@ -114,6 +117,8 @@ std::optional<ChainConfig> ChainConfig::from_json(const nlohmann::json& json) no
         config.seal_engine = SealEngineType::kClique;
     } else if (json.contains("aura")) {
         config.seal_engine = SealEngineType::kAuRA;
+    } else if (json.contains("trust")) {
+        config.seal_engine = SealEngineType::kTrust;
     } else {
         config.seal_engine = SealEngineType::kNoProof;
     }

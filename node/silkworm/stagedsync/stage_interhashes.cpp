@@ -230,7 +230,6 @@ trie::PrefixSet InterHashes::collect_account_changes(db::RWTxn& txn, BlockNum fr
 
     while (changeset_data) {
         reached_blocknum = endian::load_big_u64(db::from_slice(changeset_data.key).data());
-        check_block_sequence(reached_blocknum, expected_blocknum);
         if (reached_blocknum > max_blocknum) {
             break;
         } else if (auto now{std::chrono::steady_clock::now()}; log_time <= now) {
