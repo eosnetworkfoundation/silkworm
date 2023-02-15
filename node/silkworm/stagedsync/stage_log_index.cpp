@@ -376,6 +376,18 @@ void LogIndex::collect_bitmaps_from_logs(db::RWTxn& txn,
 
         source_data = source.to_next(/*throw_notfound=*/false);
     }
+
+    if (topics_bitmaps_size > 0) {
+        db::bitmap::IndexLoader::flush_bitmaps_to_etl(topics_bitmaps,
+                                                      topics_collector_.get(),
+                                                      topics_flush_count);
+    }
+    
+    if (addresses_bitmaps_size > 0) {
+        db::bitmap::IndexLoader::flush_bitmaps_to_etl(addresses_bitmaps,
+                                                      addresses_collector_.get(),
+                                                      addresses_flush_count);
+    }
 }
 
 void LogIndex::collect_unique_keys_from_logs(db::RWTxn& txn,
