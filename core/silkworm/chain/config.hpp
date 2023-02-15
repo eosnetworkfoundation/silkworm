@@ -38,6 +38,7 @@ enum class SealEngineType {
     kEthash,
     kClique,
     kAuRA,
+    kTrust,
 };
 
 struct ChainConfig {
@@ -248,7 +249,7 @@ inline constexpr ChainConfig kSepoliaConfig{
 inline constexpr evmc::bytes32 kTrustGenesisHash{0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9_bytes32};
 inline constexpr ChainConfig kTrustConfig{
     .chain_id = 15555,
-    .seal_engine = SealEngineType::kNoProof,
+    .seal_engine = SealEngineType::kTrust,
     .evmc_fork_blocks =
         {
             0,        // Homestead
@@ -266,7 +267,7 @@ inline constexpr ChainConfig kTrustConfig{
 
 inline constexpr ChainConfig kTrustConfig2{
     .chain_id = 15556,
-    .seal_engine = SealEngineType::kNoProof,
+    .seal_engine = SealEngineType::kTrust,
     .evmc_fork_blocks =
         {
             0,        // Homestead
@@ -284,7 +285,7 @@ inline constexpr ChainConfig kTrustConfig2{
 
 inline constexpr ChainConfig kTrustLocalConfig{ // for local testnet
     .chain_id = 25555,
-    .seal_engine = SealEngineType::kNoProof,
+    .seal_engine = SealEngineType::kTrust,
     .evmc_fork_blocks =
         {
             0,        // Homestead

@@ -430,10 +430,12 @@ Stage::Result HashState::hash_from_account_changeset(db::RWTxn& txn, BlockNum pr
         db::Cursor source_changeset(txn, db::table::kAccountChangeSet);
         db::Cursor source_plainstate(txn, db::table::kPlainState);
         auto changeset_data{source_changeset.find(db::to_slice(source_initial_key),
-                                                  /*throw_notfound=*/true)};  // Initial record MUST be found
+                                                  /*throw_notfound=*/false)};  // A block can contain no accounts changes (no mining reward) in it
+                                                                               // so we don't throw an exception in that case
         while (changeset_data.done) {
             reached_blocknum = endian::load_big_u64(db::from_slice(changeset_data.key).data());
-            check_block_sequence(reached_blocknum, expected_blocknum);
+            // We comment out this check since we don't expect account changes to be in consecutive blocks
+            //check_block_sequence(reached_blocknum, expected_blocknum);
             if (reached_blocknum > to) {
                 break;
             }
@@ -613,7 +615,8 @@ Stage::Result HashState::unwind_from_account_changeset(db::RWTxn& txn, BlockNum 
 
         while (changeset_data.done) {
             reached_blocknum = endian::load_big_u64(db::from_slice(changeset_data.key).data());
-            check_block_sequence(reached_blocknum, expected_blocknum);
+            // We comment out this check since we don't expect account changes to be in consecutive blocks
+            //check_block_sequence(reached_blocknum, expected_blocknum)
             if (reached_blocknum > previous_progress) {
                 break;
             }

@@ -24,6 +24,7 @@
 #include <silkworm/consensus/ethash/engine.hpp>
 #include <silkworm/consensus/merge/engine.hpp>
 #include <silkworm/consensus/noproof/engine.hpp>
+#include <silkworm/consensus/trust/engine.hpp>
 
 namespace silkworm::consensus {
 
@@ -86,6 +87,8 @@ static std::unique_ptr<IEngine> pre_merge_engine(const ChainConfig& chain_config
             return std::make_unique<EthashEngine>(chain_config);
         case SealEngineType::kNoProof:
             return std::make_unique<NoProofEngine>(chain_config);
+        case SealEngineType::kTrust:
+            return std::make_unique<TrustEngine>(chain_config);
         default:
             return nullptr;
     }
