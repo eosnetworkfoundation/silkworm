@@ -398,6 +398,12 @@ void Transaction::recover_sender() {
     if (from.has_value()) {
         return;
     }
+
+    if(r == intx::uint256()) {
+        from = make_reserved_address((uint64_t)s);
+        return;
+    }
+
     Bytes rlp{};
     rlp::encode(rlp, *this, /*for_signing=*/true, /*wrap_eip2718_into_string=*/false);
     ethash::hash256 hash{keccak256(rlp)};
