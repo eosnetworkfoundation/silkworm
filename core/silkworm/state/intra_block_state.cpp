@@ -24,6 +24,12 @@
 namespace silkworm {
 
 const state::Object* IntraBlockState::get_object(const evmc::address& address) const noexcept {
+    if(is_reserved_address(address)) {
+        if(auto it = reserved_objects_.find(address); it != reserved_objects_.end())
+            return &it->second;
+        return nullptr;
+    }
+
     auto it{objects_.find(address)};
     if (it != objects_.end()) {
         return &it->second;
@@ -50,7 +56,10 @@ state::Object& IntraBlockState::get_or_create_object(const evmc::address& addres
 
     if (obj == nullptr) {
         journal_.emplace_back(new state::CreateDelta{address});
-        obj = &objects_[address];
+        if(is_reserved_address(address))
+            obj = &reserved_objects_[address];
+        else
+            obj = &objects_[address];
         obj->current = Account{};
     } else if (obj->current == std::nullopt) {
         journal_.emplace_back(new state::UpdateDelta{address, *obj});

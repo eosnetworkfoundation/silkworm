@@ -21,6 +21,7 @@
 #include <optional>
 #include <string_view>
 #include <vector>
+#include <endian.h>
 
 #include <ethash/keccak.hpp>
 #include <intx/intx.hpp>
@@ -133,6 +134,36 @@ inline constexpr Int from_string_sci(std::string_view str) {
         --exp;
     }
     return x;
+}
+
+inline std::optional<uint64_t> extract_reserved_address(const evmc::address& addr) {
+    constexpr uint8_t reserved_address_prefix[] = {0xff, 0xff, 0xff, 0xff,
+                                                   0xff, 0xff, 0xff, 0xff,
+                                                   0xff, 0xff, 0xff, 0xff};
+
+    if(!std::equal(std::begin(reserved_address_prefix), std::end(reserved_address_prefix), static_cast<evmc::bytes_view>(addr).begin()))
+        return std::nullopt;
+    uint64_t reserved;
+    memcpy(&reserved, static_cast<evmc::bytes_view>(addr).data()+sizeof(reserved_address_prefix), sizeof(reserved));
+    return be64toh(reserved);
+}
+
+inline bool is_reserved_address(const evmc::address& addr) {
+    return extract_reserved_address(addr) != std::nullopt;
+}
+
+inline evmc::address make_reserved_address(uint64_t account) {
+    return evmc_address({0xff, 0xff, 0xff, 0xff,
+                         0xff, 0xff, 0xff, 0xff,
+                         0xff, 0xff, 0xff, 0xff,
+                         static_cast<uint8_t>(account >> 56),
+                         static_cast<uint8_t>(account >> 48),
+                         static_cast<uint8_t>(account >> 40),
+                         static_cast<uint8_t>(account >> 32),
+                         static_cast<uint8_t>(account >> 24),
+                         static_cast<uint8_t>(account >> 16),
+                         static_cast<uint8_t>(account >> 8),
+                         static_cast<uint8_t>(account >> 0)});
 }
 
 }  // namespace silkworm
