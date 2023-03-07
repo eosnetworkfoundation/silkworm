@@ -198,8 +198,11 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
 evmc::Result EVM::call(const evmc_message& message) noexcept {
     evmc_result res{evmc_make_result(EVMC_SUCCESS, message.gas, 0, nullptr, 0)};
 
+    const static evmc_address zero_addr{};
+    bool is_zero_sender = std::equal(std::begin(message.sender.bytes), std::end(message.sender.bytes), std::begin(zero_addr.bytes));
+
     const auto value{intx::be::load<intx::uint256>(message.value)};
-    if (message.kind != EVMC_DELEGATECALL && state_.get_balance(message.sender) < value) {
+    if (message.kind != EVMC_DELEGATECALL && (!is_zero_sender && state_.get_balance(message.sender) < value)) {
         res.status_code = EVMC_INSUFFICIENT_BALANCE;
         return evmc::Result{res};
     }
@@ -212,7 +215,9 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
             // https://github.com/ethereum/go-ethereum/blob/v1.9.25/core/vm/evm.go#L391
             state_.touch(message.recipient);
         } else {
-            state_.subtract_from_balance(message.sender, value);
+            if (!is_zero_sender) {
+                state_.subtract_from_balance(message.sender, value);
+            }
             state_.add_to_balance(message.recipient, value);
         }
     }

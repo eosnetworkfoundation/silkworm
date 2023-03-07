@@ -477,9 +477,11 @@ Stage::Result Senders::add_to_batch(BlockNum block_num, std::vector<Transaction>
                 break;
         }
 
-        if (!silkpre::is_valid_signature(transaction.r, transaction.s, has_homestead)) {
-            log::Error(log_prefix_) << "Got invalid signature for transaction #" << tx_id << " in block #" << block_num;
-            return Stage::Result::kInvalidTransaction;
+        if (transaction.r || transaction.s) { // special case when r & s both are 0
+            if (!silkpre::is_valid_signature(transaction.r, transaction.s, has_homestead)) {
+                log::Error(log_prefix_) << "Got invalid signature for transaction #" << tx_id << " in block #" << block_num;
+                return Stage::Result::kInvalidTransaction;
+            }
         }
 
         if (transaction.chain_id.has_value()) {
@@ -512,6 +514,8 @@ void Senders::recover_batch(secp256k1_context* context, BlockNum from) {
     // Launch parallel senders recovery
     log::Trace(log_prefix_, {"op", "recover_batch", "first", std::to_string(batch_->cbegin()->block_num)});
 
+    static AddressRecovery zero_addr{};
+
     StopWatch sw;
     const auto start = sw.start();
 
@@ -527,10 +531,14 @@ void Senders::recover_batch(secp256k1_context* context, BlockNum from) {
     ready_batch.swap(batch_);
     auto batch_result = worker_pool_.submit([=]() {
         std::for_each(ready_batch->begin(), ready_batch->end(), [&](auto& package) {
-            const auto tx_hash{keccak256(package.rlp)};
-            const bool ok = silkpre_recover_address(package.tx_from.bytes, tx_hash.bytes, package.tx_signature, package.odd_y_parity, context);
-            if (!ok) {
-                throw std::runtime_error("Unable to recover from address in block " + std::to_string(package.block_num));
+            if (std::equal(std::begin(zero_addr.tx_signature), std::end(zero_addr.tx_signature), std::begin(package.tx_signature))) { // special case if r & s are 0
+                package.tx_from = zero_addr.tx_from;
+            } else {
+                const auto tx_hash{keccak256(package.rlp)};
+                const bool ok = silkpre_recover_address(package.tx_from.bytes, tx_hash.bytes, package.tx_signature, package.odd_y_parity, context);
+                if (!ok) {
+                    throw std::runtime_error("Unable to recover from address in block " + std::to_string(package.block_num));
+                }
             }
         });
         return ready_batch;

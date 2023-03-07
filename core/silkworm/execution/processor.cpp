@@ -52,8 +52,15 @@ ValidationResult ExecutionProcessor::validate_transaction(const Transaction& txn
     const intx::uint512 max_gas_cost{intx::umul(intx::uint256{txn.gas_limit}, txn.max_fee_per_gas)};
     // See YP, Eq (57) in Section 6.2 "Execution"
     const intx::uint512 v0{max_gas_cost + txn.value};
-    if (state_.get_balance(*txn.from) < v0) {
-        return ValidationResult::kInsufficientFunds;
+
+    if (*txn.from != evmc::address{}) { // zero from is special case
+        if (state_.get_balance(*txn.from) < v0) {
+            return ValidationResult::kInsufficientFunds;
+        }
+    } else {
+        if (txn.max_fee_per_gas != intx::uint256{0}) { // EOS->EVM should set max_gas_cost to 0
+            return ValidationResult::kInsufficientFunds;
+        }
     }
 
     if (available_gas() < txn.gas_limit) {

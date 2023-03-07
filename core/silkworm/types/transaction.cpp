@@ -400,7 +400,7 @@ void Transaction::recover_sender() {
     }
 
     if(r == intx::uint256()) {
-        from = make_reserved_address((uint64_t)s);
+        from = make_reserved_address(static_cast<uint64_t>(s));
         return;
     }
 
