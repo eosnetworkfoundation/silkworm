@@ -477,7 +477,7 @@ Stage::Result Senders::add_to_batch(BlockNum block_num, std::vector<Transaction>
                 break;
         }
 
-        if (!silkpre::is_valid_signature(transaction.r, transaction.s, has_homestead)) {
+        if (transaction.r != intx::uint256() && !silkpre::is_valid_signature(transaction.r, transaction.s, has_homestead)) {
             log::Error(log_prefix_) << "Got invalid signature for transaction #" << tx_id << " in block #" << block_num;
             return Stage::Result::kInvalidTransaction;
         }
@@ -527,10 +527,15 @@ void Senders::recover_batch(secp256k1_context* context, BlockNum from) {
     ready_batch.swap(batch_);
     auto batch_result = worker_pool_.submit([=]() {
         std::for_each(ready_batch->begin(), ready_batch->end(), [&](auto& package) {
-            const auto tx_hash{keccak256(package.rlp)};
-            const bool ok = silkpre_recover_address(package.tx_from.bytes, tx_hash.bytes, package.tx_signature, package.odd_y_parity, context);
-            if (!ok) {
-                throw std::runtime_error("Unable to recover from address in block " + std::to_string(package.block_num));
+            if(intx::be::unsafe::load<intx::uint256>(&package.tx_signature[0]) != intx::uint256()) {
+                const auto tx_hash{keccak256(package.rlp)};
+                const bool ok = silkpre_recover_address(package.tx_from.bytes, tx_hash.bytes, package.tx_signature, package.odd_y_parity, context);
+                if (!ok) {
+                    throw std::runtime_error("Unable to recover from address in block " + std::to_string(package.block_num));
+                }
+            } else {
+                const auto s = intx::be::unsafe::load<intx::uint256>(&package.tx_signature[32]);
+                package.tx_from = make_reserved_address(static_cast<uint64_t>(s));
             }
         });
         return ready_batch;
