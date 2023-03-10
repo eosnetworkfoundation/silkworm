@@ -28,11 +28,6 @@ class NoProofEngine : public EthashEngine {
 
     //! \brief Validates the seal of the header
     ValidationResult validate_seal(const BlockHeader& header) final;
-
-    //! \brief Override the block reward calculation to NOP
-    void finalize(IntraBlockState &state, const Block &block, evmc_revision) final {
-      state.add_to_balance(block.header.beneficiary, intx::uint256{0});
-    }
 };
 
 }  // namespace silkworm::consensus
