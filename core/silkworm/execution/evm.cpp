@@ -226,7 +226,9 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
             res.status_code = EVMC_OUT_OF_GAS;
         } else {
             SilkpreOutput output{contract.run(input.data(), input.length())};
-            if (output.data) {
+            // We must handle the case of empty data passed to the Identity precompile since it will return a nullptr
+            // from the silkpre module when built with the CDT (CDT malloc returns nullptr when passing 0 size)
+            if (output.data || (num == 0x4 && output.size == 0)) {
                 res.gas_left -= gas;
                 res.output_size = output.size;
                 res.output_data = output.data;
