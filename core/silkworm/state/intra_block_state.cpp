@@ -303,6 +303,9 @@ void IntraBlockState::set_storage(const evmc::address& address, const evmc::byte
 void IntraBlockState::write_to_db(uint64_t block_number) {
     db_.begin_block(block_number);
 
+    // We change the order in which accounts and storage objects are persisted.
+    // This allow us to clean the account storage when new incarnation is detected by the our state implementation.
+    // (useful for some tests cases)
     for (const auto& [address, obj] : objects_) {
         db_.update_account(address, obj.initial, obj.current);
         if (!obj.current.has_value()) {
