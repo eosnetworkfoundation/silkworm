@@ -312,6 +312,23 @@ void IntraBlockState::set_storage(const evmc::address& address, const evmc::byte
 void IntraBlockState::write_to_db(uint64_t block_number) {
     db_.begin_block(block_number);
 
+    // We change the order in which accounts and storage objects are persisted.
+    // This allow us to clean the account storage when new incarnation is detected by the our state implementation.
+    // (useful for some tests cases)
+    for (const auto& [address, obj] : objects_) {
+        db_.update_account(address, obj.initial, obj.current);
+        if (!obj.current.has_value()) {
+            continue;
+        }
+        const auto& code_hash{obj.current->code_hash};
+        if (code_hash != kEmptyHash &&
+            (!obj.initial.has_value() || obj.initial->incarnation != obj.current->incarnation)) {
+            if (auto it{new_code_.find(code_hash)}; it != new_code_.end()) {
+                db_.update_account_code(address, obj.current->incarnation, code_hash, it->second);
+            }
+        }
+    }
+
     for (const auto& [address, storage] : storage_) {
         auto it1{objects_.find(address)};
         if (it1 == objects_.end()) {
@@ -328,19 +345,6 @@ void IntraBlockState::write_to_db(uint64_t block_number) {
         }
     }
 
-    for (const auto& [address, obj] : objects_) {
-        db_.update_account(address, obj.initial, obj.current);
-        if (!obj.current.has_value()) {
-            continue;
-        }
-        const auto& code_hash{obj.current->code_hash};
-        if (code_hash != kEmptyHash &&
-            (!obj.initial.has_value() || obj.initial->incarnation != obj.current->incarnation)) {
-            if (auto it{new_code_.find(code_hash)}; it != new_code_.end()) {
-                db_.update_account_code(address, obj.current->incarnation, code_hash, it->second);
-            }
-        }
-    }
 }
 
 IntraBlockState::Snapshot IntraBlockState::take_snapshot() const noexcept {
