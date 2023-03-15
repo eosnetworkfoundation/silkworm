@@ -137,9 +137,9 @@ inline constexpr Int from_string_sci(std::string_view str) {
 }
 
 inline std::optional<uint64_t> extract_reserved_address(const evmc::address& addr) {
-    constexpr uint8_t reserved_address_prefix[] = {0xff, 0xff, 0xff, 0xff,
-                                                   0xff, 0xff, 0xff, 0xff,
-                                                   0xff, 0xff, 0xff, 0xff};
+    constexpr uint8_t reserved_address_prefix[] = {0xbb, 0xbb, 0xbb, 0xbb,
+                                                   0xbb, 0xbb, 0xbb, 0xbb,
+                                                   0xbb, 0xbb, 0xbb, 0xbb};
 
     if(!std::equal(std::begin(reserved_address_prefix), std::end(reserved_address_prefix), static_cast<evmc::bytes_view>(addr).begin()))
         return std::nullopt;
@@ -153,9 +153,9 @@ inline bool is_reserved_address(const evmc::address& addr) {
 }
 
 inline evmc::address make_reserved_address(uint64_t account) {
-    return evmc_address({0xff, 0xff, 0xff, 0xff,
-                         0xff, 0xff, 0xff, 0xff,
-                         0xff, 0xff, 0xff, 0xff,
+    return evmc_address({0xbb, 0xbb, 0xbb, 0xbb,
+                         0xbb, 0xbb, 0xbb, 0xbb,
+                         0xbb, 0xbb, 0xbb, 0xbb,
                          static_cast<uint8_t>(account >> 56),
                          static_cast<uint8_t>(account >> 48),
                          static_cast<uint8_t>(account >> 40),
