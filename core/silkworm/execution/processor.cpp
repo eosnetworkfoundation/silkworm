@@ -155,11 +155,18 @@ ValidationResult ExecutionProcessor::execute_block_no_post_validation(std::vecto
     receipts.resize(block.transactions.size());
     auto receipt_it{receipts.begin()};
     for (const auto& txn : block.transactions) {
+        if(is_reserved_address(*txn.from)) {
+            //must mirror contract's initial state of reserved address
+            state_.set_balance(*txn.from, txn.value + intx::uint256(txn.gas_limit) * txn.max_fee_per_gas);
+            state_.set_nonce(*txn.from, txn.nonce);
+        }
+
         const ValidationResult err{validate_transaction(txn)};
         if (err != ValidationResult::kOk) {
             return err;
         }
         execute_transaction(txn, *receipt_it);
+        state_.reset_reserved_objects();
         ++receipt_it;
     }
 

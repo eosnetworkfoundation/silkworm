@@ -111,6 +111,9 @@ class IntraBlockState {
 
     const FlatHashSet<evmc::address>& touched() const noexcept { return touched_; }
 
+    const FlatHashMap<evmc::address, state::Object>& reserved_objects() const noexcept { return reserved_objects_; }
+    void reset_reserved_objects() { reserved_objects_.clear(); }
+
   private:
     friend class state::CreateDelta;
     friend class state::UpdateDelta;
@@ -134,6 +137,8 @@ class IntraBlockState {
 
     mutable FlatHashMap<evmc::address, state::Object> objects_;
     mutable FlatHashMap<evmc::address, state::Storage> storage_;
+
+    mutable FlatHashMap<evmc::address, state::Object> reserved_objects_;
 
     // we want pointer stability here, thus node map
     mutable NodeHashMap<evmc::bytes32, ByteView> existing_code_;
