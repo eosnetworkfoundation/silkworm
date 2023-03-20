@@ -283,6 +283,24 @@ inline constexpr ChainConfig kTrustConfig2{
         }
 };
 
+inline constexpr ChainConfig kTrustConfig3{
+    .chain_id = 15557,
+    .seal_engine = SealEngineType::kTrust,
+    .evmc_fork_blocks =
+        {
+            0,        // Homestead
+            0,        // Tangerine Whistle
+            0,        // Spurious Dragon
+            0,        // Byzantium
+            0,        // Constantinople
+            0,        // Petersburg
+            0,        // Istanbul
+            //0,        // Berlin
+            //0,        // London
+            //1735371,  // Merge Netsplit
+        }
+};
+
 inline constexpr ChainConfig kTrustLocalConfig{ // for local testnet
     .chain_id = 25555,
     .seal_engine = SealEngineType::kTrust,
