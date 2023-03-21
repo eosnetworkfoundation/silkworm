@@ -535,6 +535,19 @@ evmc_tx_context EvmHost::get_tx_context() const noexcept {
 }
 
 evmc::bytes32 EvmHost::get_block_hash(int64_t n) const noexcept {
+
+    if(evm_.config().seal_engine == SealEngineType::kTrust) {
+        uint8_t buffer[1+8+8];
+        buffer[0] = 0x00;
+        intx::le::unsafe::store<uint64_t>(buffer+1,   static_cast<uint64_t>(n));
+        intx::le::unsafe::store<uint64_t>(buffer+1+8, evm_.config().chain_id);
+        auto block_hash = silkpre_sha256_run(buffer, sizeof(buffer));
+        evmc::bytes32 res;
+        memcpy(res.bytes, block_hash.data, 32);
+        free(block_hash.data);
+        return res;
+    }
+
     const uint64_t base_number{evm_.block_.header.number};
     const uint64_t new_size{base_number - static_cast<uint64_t>(n)};
     assert(new_size <= 256);
