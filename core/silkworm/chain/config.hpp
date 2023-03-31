@@ -246,7 +246,6 @@ inline constexpr ChainConfig kSepoliaConfig{
     .terminal_total_difficulty = 17000000000000000,
 };
 
-inline constexpr evmc::bytes32 kEOSEVMGenesisHash{0x0000000000000000000000000000000000000000000000000000000000000000_bytes32};
 inline constexpr ChainConfig kEOSEVM{
     .chain_id = 17777,
     .seal_engine = SealEngineType::kTrust,
