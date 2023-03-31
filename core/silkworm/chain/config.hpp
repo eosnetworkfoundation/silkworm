@@ -265,8 +265,8 @@ inline constexpr ChainConfig kEOSEVM{
         }
 };
 
-inline constexpr ChainConfig kTrustConfig2{
-    .chain_id = 15556,
+inline constexpr ChainConfig kTrustConfig{
+    .chain_id = 15555,
     .seal_engine = SealEngineType::kTrust,
     .evmc_fork_blocks =
         {

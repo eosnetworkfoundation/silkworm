@@ -30,7 +30,7 @@ static const std::vector<std::pair<std::string, const ChainConfig*>> kKnownChain
     {"goerli", &kGoerliConfig},
     {"sepolia", &kSepoliaConfig},
     {"eosevm", &kEOSEVM},
-    {"trust2", &kTrustConfig2},
+    {"trust", &kTrustConfig},
     {"trust3", &kTrustConfig3},
     {"trustlocal", &kTrustLocalConfig}
 };
