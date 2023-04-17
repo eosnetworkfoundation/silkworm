@@ -268,9 +268,13 @@ evmc_result EVM::execute(const evmc_message& msg, ByteView code, const evmc::byt
     if (exo_evm) {
         EvmHost host{*this};
         return exo_evm->execute(exo_evm, &host.get_interface(), host.to_context(), rev, &msg, code.data(), code.size());
-    } else if (code_hash && advanced_analysis_cache) {
+    }
+#if not defined(ANTELOPE)
+    else if (code_hash && advanced_analysis_cache) {
         return execute_with_advanced_interpreter(rev, msg, code, *code_hash);
-    } else {
+    }
+#endif
+    else {
         // for one-off execution baseline interpreter is generally faster
         return execute_with_baseline_interpreter(rev, msg, code, code_hash);
     }
@@ -324,6 +328,7 @@ evmc_result EVM::execute_with_baseline_interpreter(evmc_revision rev, const evmc
     return res;
 }
 
+#if not defined(ANTELOPE)
 evmc_result EVM::execute_with_advanced_interpreter(evmc_revision rev, const evmc_message& msg, ByteView code,
                                                    const evmc::bytes32& code_hash) noexcept {
     assert(advanced_analysis_cache != nullptr);
@@ -344,6 +349,7 @@ evmc_result EVM::execute_with_advanced_interpreter(evmc_revision rev, const evmc
 
     return res;
 }
+#endif
 
 evmc_revision EVM::revision() const noexcept { return config().revision(block_.header.number); }
 
