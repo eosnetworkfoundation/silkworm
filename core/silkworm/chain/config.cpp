@@ -29,10 +29,10 @@ static const std::vector<std::pair<std::string, const ChainConfig*>> kKnownChain
     {"rinkeby", &kRinkebyConfig},
     {"goerli", &kGoerliConfig},
     {"sepolia", &kSepoliaConfig},
-    {"eosevm", &kEOSEVM},
-    {"trust", &kTrustConfig},
-    {"trust3", &kTrustConfig3},
-    {"trustlocal", &kTrustLocalConfig}
+    {"eosevm-mainnet", &kEOSEVMMainnetConfig},
+    {"eosevm-oldtestnet", &kEOSEVMOldTestnetConfig},
+    {"eosevm-testnet", &kEOSEVMTestnetConfig},
+    {"eosevm-localtestnet", &kEOSEVMLocalTestnetConfig}
 };
 
 constexpr const char* kTerminalTotalDifficulty{"terminalTotalDifficulty"};
