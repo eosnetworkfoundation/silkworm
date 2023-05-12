@@ -24,18 +24,31 @@ namespace silkworm::state {
 
 CreateDelta::CreateDelta(const evmc::address& address) noexcept : address_{address} {}
 
-void CreateDelta::revert(IntraBlockState& state) noexcept { state.objects_.erase(address_); }
+void CreateDelta::revert(IntraBlockState& state) noexcept {
+    if(is_reserved_address(address_))
+        state.reserved_objects_.erase(address_);
+    else
+        state.objects_.erase(address_);
+}
 
 UpdateDelta::UpdateDelta(const evmc::address& address, const Object& previous) noexcept
     : address_{address}, previous_{previous} {}
 
-void UpdateDelta::revert(IntraBlockState& state) noexcept { state.objects_[address_] = previous_; }
+void UpdateDelta::revert(IntraBlockState& state) noexcept {
+    if(is_reserved_address(address_))
+        state.reserved_objects_[address_] = previous_;
+    else
+        state.objects_[address_] = previous_;
+}
 
 UpdateBalanceDelta::UpdateBalanceDelta(const evmc::address& address, const intx::uint256& previous) noexcept
     : address_{address}, previous_{previous} {}
 
 void UpdateBalanceDelta::revert(IntraBlockState& state) noexcept {
-    state.objects_[address_].current->balance = previous_;
+    if(is_reserved_address(address_))
+        state.reserved_objects_[address_].current->balance = previous_;
+    else
+        state.objects_[address_].current->balance = previous_;
 }
 
 SuicideDelta::SuicideDelta(const evmc::address& address) noexcept : address_{address} {}
