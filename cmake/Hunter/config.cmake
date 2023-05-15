@@ -24,6 +24,23 @@ hunter_cmake_args(
         ABSL_RUN_TESTS=OFF
 )
 
+# Avoid -Werror to overcome GCC 12.1.0 bug breaking Google Benchmark build
+# https://github.com/google/benchmark/issues/1398
+# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105329
+hunter_config(
+  benchmark
+  VERSION 1.6.1
+  CMAKE_ARGS BENCHMARK_ENABLE_WERROR=OFF
+)
+
+hunter_config(
+  asio-grpc
+  VERSION 2.0.0
+  URL https://github.com/Tradias/asio-grpc/archive/refs/tags/v2.0.0.tar.gz
+  SHA1 a727806a5c93c811e8f73ecb1e733efc4739d5ff
+  CMAKE_ARGS ASIO_GRPC_USE_BOOST_CONTAINER=ON
+)
+
 hunter_config(
   Microsoft.GSL
   VERSION 4.0.0

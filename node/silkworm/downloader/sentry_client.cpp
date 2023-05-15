@@ -97,7 +97,7 @@ void SentryClient::hand_shake() {
     sentry::HandShakeReply reply = handshake_->reply();
 
     sentry::Protocol supported_protocol = reply.protocol();
-    if (supported_protocol != sentry::Protocol::ETH66) {
+    if (supported_protocol < sentry::Protocol::ETH66) {
         log::Critical("SentryClient") << "remote sentry do not support eth/66 protocol, stopping...";
         stop();
         throw SentryClientException("SentryClient exception, cause: sentry do not support eth/66 protocol");
@@ -111,12 +111,15 @@ void SentryClient::execution_loop() {
 
     while (!is_stopping()) {
         try {
+            connected_ = false;
             log::Info("SentryClient", {"remote", sentry_addr_}) << " connecting ...";
 
             // send current status of the chain
             hand_shake();
             set_status();
 
+            connected_ = true;
+            connected_.notify_all();
             log::Info("SentryClient", {"remote", sentry_addr_}) << " connected";
 
             // send a message subscription
@@ -148,8 +151,7 @@ void SentryClient::stats_receiving_loop() {
 
     while (!is_stopping()) {
         try {
-            while (!is_stopping() && !is_connected())
-                continue;
+            connected_.wait(false);
 
             // send a stats subscription
             auto rpc = std::make_shared<rpc::ReceivePeerStats>();

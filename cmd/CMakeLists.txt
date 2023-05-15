@@ -26,6 +26,8 @@ endif()
 add_subdirectory(test)
 
 if(NOT SILKWORM_CORE_ONLY)
+  # Benchmarks
+  add_subdirectory(benchmark)
 
   find_package(absl CONFIG REQUIRED)
   find_package(CLI11 CONFIG REQUIRED)
@@ -56,6 +58,12 @@ if(NOT SILKWORM_CORE_ONLY)
 
   add_executable(check_blockhashes check_blockhashes.cpp)
   target_link_libraries(check_blockhashes PRIVATE silkworm_node CLI11::CLI11)
+
+  add_executable(check_senders check_senders.cpp common.cpp)
+  target_link_libraries(check_senders PRIVATE silkworm_node silkworm-buildinfo CLI11::CLI11)
+
+  add_executable(snapshots snapshots.cpp common.cpp)
+  target_link_libraries(snapshots PRIVATE silkworm_node silkworm-buildinfo CLI11::CLI11 torrent-rasterbar)
 
   add_executable(downloader downloader.cpp common.cpp)
   target_link_libraries(downloader PRIVATE silkworm_node silkworm-buildinfo CLI11::CLI11)

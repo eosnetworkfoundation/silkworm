@@ -15,7 +15,9 @@
 ]]
 
 hunter_add_package(abseil)
-hunter_add_package(Boost COMPONENTS thread filesystem program_options date_time chrono iostreams test)
+hunter_add_package(Boost COMPONENTS container thread filesystem program_options date_time chrono iostreams test)
+hunter_add_package(asio-grpc)
+hunter_add_package(benchmark)
 hunter_add_package(CLI11)
 hunter_add_package(gRPC)
 hunter_add_package(OpenSSL)

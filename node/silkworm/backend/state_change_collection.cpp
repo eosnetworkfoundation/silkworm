@@ -19,8 +19,7 @@
 #include <silkworm/common/assert.hpp>
 #include <silkworm/common/base.hpp>
 #include <silkworm/common/log.hpp>
-#include <silkworm/rpc/conversion.hpp>
-#include <silkworm/rpc/util.hpp>
+#include <silkworm/rpc/common/conversion.hpp>
 
 namespace silkworm {
 
@@ -201,7 +200,7 @@ void StateChangeCollection::notify_batch(uint64_t pending_base_fee, uint64_t gas
 
     state_changes_.set_pendingblockbasefee(pending_base_fee);
     state_changes_.set_blockgaslimit(gas_limit);
-    state_changes_.set_databaseviewid(tx_id_);
+    state_changes_.set_stateversionid(tx_id_);
 
     std::unique_lock consumers_lock{consumers_mutex_};
     for (const auto& [_, batch_callback] : consumers_) {

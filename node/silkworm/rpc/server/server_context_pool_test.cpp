@@ -17,27 +17,14 @@
 #include "server_context_pool.hpp"
 
 #include <atomic>
-#include <memory>
 #include <stdexcept>
 #include <thread>
 
+#include <boost/asio/executor_work_guard.hpp>
 #include <catch2/catch.hpp>
-#include <grpc/grpc.h>
 
-#include <silkworm/common/base.hpp>
 #include <silkworm/common/log.hpp>
 #include <silkworm/test/log.hpp>
-
-// Factory function creating one null output stream (all characters are discarded)
-inline std::ostream& null_stream() {
-    static struct null_buf : public std::streambuf {
-        int overflow(int c) override { return c; }
-    } null_buf;
-    static struct null_strm : public std::ostream {
-        null_strm() : std::ostream(&null_buf) {}
-    } null_strm;
-    return null_strm;
-}
 
 namespace silkworm::rpc {
 
@@ -47,17 +34,18 @@ TEST_CASE("ServerContext", "[silkworm][rpc][server_context]") {
     grpc::ServerBuilder builder;
     std::unique_ptr<grpc::ServerCompletionQueue> scq = builder.AddCompletionQueue();
     grpc::ServerCompletionQueue* scq_ptr = scq.get();
-    ServerContext server_context{std::move(scq)};
+    ServerContext server_context{0, std::move(scq)};
 
     SECTION("ServerContext") {
-        CHECK(server_context.server_queue() == scq_ptr);
-        CHECK(server_context.client_queue() != nullptr);
-        CHECK(server_context.server_end_point() != nullptr);
-        CHECK(server_context.client_end_point() != nullptr);
+        CHECK(server_context.server_grpc_context() != nullptr);
+        CHECK(server_context.client_grpc_context() != nullptr);
+        CHECK(server_context.io_context() != nullptr);
+        CHECK(server_context.server_grpc_context()->get_completion_queue() == scq_ptr);
+        CHECK(server_context.client_grpc_context()->get_completion_queue() != nullptr);
     }
 
     SECTION("execute_loop") {
-        boost::asio::io_context::work work{*server_context.io_context()};
+        boost::asio::executor_work_guard work = boost::asio::make_work_guard(*server_context.io_context());
         std::atomic_bool context_thread_failed{false};
         std::thread context_thread{[&]() {
             try {
@@ -72,7 +60,7 @@ TEST_CASE("ServerContext", "[silkworm][rpc][server_context]") {
     }
 
     SECTION("stop") {
-        boost::asio::io_context::work work{*server_context.io_context()};
+        boost::asio::executor_work_guard work = boost::asio::make_work_guard(*server_context.io_context());
         std::thread context_thread{[&]() { server_context.execute_loop(); }};
         CHECK(!server_context.io_context()->stopped());
         server_context.stop();
@@ -84,7 +72,7 @@ TEST_CASE("ServerContext", "[silkworm][rpc][server_context]") {
 
     SECTION("print") {
         test::SetLogVerbosityGuard guard{log::Level::kNone};
-        CHECK_NOTHROW(null_stream() << server_context);
+        CHECK_NOTHROW(test::null_stream() << server_context);
     }
 }
 
@@ -120,10 +108,10 @@ TEST_CASE("ServerContextPool", "[silkworm][rpc][server_context]") {
         server_context_pool.add_context(std::move(queue_ptr2), WaitMode::blocking);
         CHECK(server_context_pool.num_contexts() == 2);
         auto& context1 = server_context_pool.next_context();
-        CHECK(context1.server_queue() == queue_raw_ptr1);
+        CHECK(context1.server_grpc_context()->get_completion_queue() == queue_raw_ptr1);
         CHECK(context1.io_context() != nullptr);
         auto& context2 = server_context_pool.next_context();
-        CHECK(context2.server_queue() == queue_raw_ptr2);
+        CHECK(context2.server_grpc_context()->get_completion_queue() == queue_raw_ptr2);
         CHECK(context2.io_context() != nullptr);
     }
 

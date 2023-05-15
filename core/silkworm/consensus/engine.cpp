@@ -21,6 +21,8 @@
 #include <silkpre/secp256k1n.hpp>
 
 #include <silkworm/chain/intrinsic_gas.hpp>
+#include <silkworm/chain/protocol_param.hpp>
+#include <silkworm/consensus/clique/engine.hpp>
 #include <silkworm/consensus/ethash/engine.hpp>
 #include <silkworm/consensus/merge/engine.hpp>
 #include <silkworm/consensus/noproof/engine.hpp>
@@ -30,12 +32,10 @@ namespace silkworm::consensus {
 
 void IEngine::finalize(IntraBlockState&, const Block&, evmc_revision) {}
 
-ValidationResult pre_validate_transaction(const Transaction& txn, uint64_t block_number, const ChainConfig& config,
+ValidationResult pre_validate_transaction(const Transaction& txn, const evmc_revision rev, const uint64_t chain_id,
                                           const std::optional<intx::uint256>& base_fee_per_gas) {
-    const evmc_revision rev{config.revision(block_number)};
-
     if (txn.chain_id.has_value()) {
-        if (rev < EVMC_SPURIOUS_DRAGON || txn.chain_id.value() != config.chain_id) {
+        if (rev < EVMC_SPURIOUS_DRAGON || txn.chain_id.value() != chain_id) {
             return ValidationResult::kWrongChainId;
         }
     }
@@ -68,7 +68,7 @@ ValidationResult pre_validate_transaction(const Transaction& txn, uint64_t block
         }
     }
 
-    const intx::uint128 g0{intrinsic_gas(txn, rev >= EVMC_HOMESTEAD, rev >= EVMC_ISTANBUL)};
+    const intx::uint128 g0{intrinsic_gas(txn, rev)};
     if (txn.gas_limit < g0) {
         return ValidationResult::kIntrinsicGas;
     }
@@ -76,6 +76,12 @@ ValidationResult pre_validate_transaction(const Transaction& txn, uint64_t block
     // EIP-2681: Limit account nonce to 2^64-1
     if (txn.nonce >= UINT64_MAX) {
         return ValidationResult::kNonceTooHigh;
+    }
+
+    // EIP-3860: Limit and meter initcode
+    const bool contract_creation{!txn.to};
+    if (rev >= EVMC_SHANGHAI && contract_creation && txn.data.size() > param::kMaxInitCodeSize) {
+        return ValidationResult::kMaxInitCodeSizeExceeded;
     }
 
     return ValidationResult::kOk;

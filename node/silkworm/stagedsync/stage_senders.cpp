@@ -262,6 +262,10 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
         log::Info(log_prefix_, {"op", "parallel_recover",
                                 "num_threads", std::to_string(std::thread::hardware_concurrency()), "max_batch_size", std::to_string(max_batch_size_)});
 
+        secp256k1_context* context = secp256k1_context_create(SILKPRE_SECP256K1_CONTEXT_FLAGS);
+        if (!context) throw std::runtime_error("Could not create elliptic curve context");
+        auto _ = gsl::finally([&]() { if (context) std::free(context); });
+
         BlockNum from{previous_progress + 1u};
 
         // Load canonical headers from db
@@ -450,7 +454,8 @@ Stage::Result Senders::add_to_batch(BlockNum block_num, std::vector<Transaction>
         return Stage::Result::kAborted;
     }
 
-    const evmc_revision rev{node_settings_->chain_config->revision(block_num)};
+    // We're only interested in revisions up to London, so it's OK to not detect time-based forks.
+    const evmc_revision rev{node_settings_->chain_config->revision(block_num, /*block_time=*/0)};
     const bool has_homestead{rev >= EVMC_HOMESTEAD};
     const bool has_spurious_dragon{rev >= EVMC_SPURIOUS_DRAGON};
     const bool has_berlin{rev >= EVMC_BERLIN};

@@ -89,7 +89,7 @@ commands:
       - run:
           name: "Ethereum consensus tests"
           working_directory: ~/build
-          no_output_timeout: 20m
+          no_output_timeout: 30m
           command: cmd/test/consensus --threads 4 # out of memory with 8 threads under thread sanitizer 
       - run:
           name: "Sentry unit tests"
@@ -104,21 +104,7 @@ jobs:
       CLANG_COVERAGE: OFF
       SANITIZE: thread
     docker:
-      - image: ethereum/cpp-build-env:17-gcc-11
-    resource_class: xlarge
-    steps:
-      - checkout_with_submodules
-      - build
-      - test
-
-  linux-gcc-10-debug:
-    environment:
-      TOOLCHAIN: cxx20
-      BUILD_TYPE: Debug
-      CLANG_COVERAGE: OFF
-      SANITIZE: OFF
-    docker:
-      - image: ethereum/cpp-build-env:17-gcc-10
+      - image: ethereum/cpp-build-env:18-gcc-11
     resource_class: xlarge
     steps:
       - checkout_with_submodules
@@ -147,7 +133,7 @@ jobs:
       CLANG_COVERAGE: OFF
       SANITIZE: address
     docker:
-      - image: ethereum/cpp-build-env:17-clang-13
+      - image: ethereum/cpp-build-env:18-clang-13
     resource_class: xlarge
     steps:
       - checkout_with_submodules
@@ -164,7 +150,7 @@ jobs:
       CLANG_COVERAGE: ON
       SANITIZE: OFF
     docker:
-      - image: ethereum/cpp-build-env:17-clang-13
+      - image: ethereum/cpp-build-env:18-clang-13
     resource_class: xlarge
     steps:
       - checkout_with_submodules
@@ -185,7 +171,7 @@ jobs:
       - run:
           name: "Ethereum consensus tests"
           working_directory: ~/build
-          no_output_timeout: 20m
+          no_output_timeout: 30m
           command: |
             cmd/test/consensus
             mv default.profraw consensus.profraw
@@ -252,13 +238,42 @@ jobs:
           working_directory: ~/build
           command: wasmer cmd/test/core_test
 
+  linux-default-build:
+    docker:
+      - image: ethereum/cpp-build-env:18-gcc-12
+    resource_class: xlarge
+    steps:
+      - checkout_with_submodules
+      - run:
+          name: "Install dependencies"
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y m4 texinfo bison
+      - restore_cache:
+          name: "Restore Hunter cache"
+          key: &cache-key hunter-{{ .Environment.CIRCLE_JOB }}-{{checksum "cmake/Hunter/config.cmake"}}-{{checksum "cmake/toolchain/base.cmake"}}-{{checksum "cmake/toolchain/cxx20.cmake"}}
+      - run:
+          name: "Cmake"
+          working_directory: ~/build
+          command: cmake ../project
+      - save_cache:
+          name: "Save Hunter cache"
+          key: *cache-key
+          paths:
+            - ~/.hunter
+      - run:
+          name: "Build"
+          working_directory: ~/build
+          command: make -j4 # each compiler job requires 4GB of RAM
+      - test
+
 workflows:
   version: 2
   silkworm:
     jobs:
-      - linux-gcc-10-debug
       - linux-gcc-12-release
       - linux-gcc-11-thread-sanitizer
       - linux-clang-13-coverage
       - linux-clang-13-address-sanitizer
       - linux-wasm-build
+      - linux-default-build

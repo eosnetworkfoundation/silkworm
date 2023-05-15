@@ -21,7 +21,7 @@
 namespace silkworm::sentry::common {
 
 struct Message {
-    uint8_t id;
+    uint8_t id{0};
     Bytes data;
 };
 
