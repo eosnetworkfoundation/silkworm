@@ -169,6 +169,23 @@ std::ostream& operator<<(std::ostream& out, const ChainConfig& obj) { return out
 
 #endif
 
+evmc_revision ChainConfig::revision(uint64_t block_number, uint64_t block_time) const noexcept {
+    if (cancun_time && block_time >= cancun_time) return EVMC_CANCUN;
+    if (shanghai_time && block_time >= shanghai_time) return EVMC_SHANGHAI;
+
+    if (london_block && block_number >= london_block) return EVMC_LONDON;
+    if (berlin_block && block_number >= berlin_block) return EVMC_BERLIN;
+    if (istanbul_block && block_number >= istanbul_block) return EVMC_ISTANBUL;
+    if (petersburg_block && block_number >= petersburg_block) return EVMC_PETERSBURG;
+    if (constantinople_block && block_number >= constantinople_block) return EVMC_CONSTANTINOPLE;
+    if (byzantium_block && block_number >= byzantium_block) return EVMC_BYZANTIUM;
+    if (spurious_dragon_block && block_number >= spurious_dragon_block) return EVMC_SPURIOUS_DRAGON;
+    if (tangerine_whistle_block && block_number >= tangerine_whistle_block) return EVMC_TANGERINE_WHISTLE;
+    if (homestead_block && block_number >= homestead_block) return EVMC_HOMESTEAD;
+
+    return EVMC_FRONTIER;
+}
+
 // TODO (Andrew) extend fork ID to time-triggered forks
 std::vector<BlockNum> ChainConfig::distinct_fork_numbers() const {
     std::set<BlockNum> ret;
