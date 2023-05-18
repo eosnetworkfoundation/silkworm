@@ -59,6 +59,7 @@ namespace detail {
 }  // namespace detail
 
 using boost::asio::multiple_exceptions;
+using boost::asio::experimental::make_parallel_group;
 
 /// Wait for one operation to succeed.
 /**
