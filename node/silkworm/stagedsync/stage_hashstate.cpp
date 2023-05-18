@@ -611,7 +611,8 @@ Stage::Result HashState::unwind_from_account_changeset(db::RWTxn& txn, BlockNum 
         db::Cursor source_changeset(txn, db::table::kAccountChangeSet);
         auto source_initial_key{db::block_key(expected_blocknum)};
         auto changeset_data{source_changeset.lower_bound(db::to_slice(source_initial_key),
-                                                         /*throw_notfound=*/true)};  // Initial record MUST be found
+                                                         /*throw_notfound=*/false)};  // A block can contain no accounts changes (no mining reward) in it
+                                                                                      // so we don't throw an exception in that case
 
         while (changeset_data.done) {
             reached_blocknum = endian::load_big_u64(db::from_slice(changeset_data.key).data());

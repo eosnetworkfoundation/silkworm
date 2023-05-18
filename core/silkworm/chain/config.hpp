@@ -246,7 +246,7 @@ inline constexpr ChainConfig kSepoliaConfig{
     .terminal_total_difficulty = 17000000000000000,
 };
 
-inline constexpr ChainConfig kEOSEVM{
+inline constexpr ChainConfig kEOSEVMMainnetConfig{
     .chain_id = 17777,
     .seal_engine = SealEngineType::kTrust,
     .evmc_fork_blocks =
@@ -264,7 +264,7 @@ inline constexpr ChainConfig kEOSEVM{
         }
 };
 
-inline constexpr ChainConfig kTrustConfig{
+inline constexpr ChainConfig kEOSEVMOldTestnetConfig{
     .chain_id = 15555,
     .seal_engine = SealEngineType::kTrust,
     .evmc_fork_blocks =
@@ -282,7 +282,7 @@ inline constexpr ChainConfig kTrustConfig{
         }
 };
 
-inline constexpr ChainConfig kTrustConfig3{
+inline constexpr ChainConfig kEOSEVMTestnetConfig{
     .chain_id = 15557,
     .seal_engine = SealEngineType::kTrust,
     .evmc_fork_blocks =
@@ -300,7 +300,7 @@ inline constexpr ChainConfig kTrustConfig3{
         }
 };
 
-inline constexpr ChainConfig kTrustLocalConfig{ // for local testnet
+inline constexpr ChainConfig kEOSEVMLocalTestnetConfig{
     .chain_id = 25555,
     .seal_engine = SealEngineType::kTrust,
     .evmc_fork_blocks =
