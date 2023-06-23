@@ -17,12 +17,26 @@
 #include "assert.hpp"
 
 #include <cstdlib>
+#ifndef ANTELOPE
 #include <iostream>
+#else
+#include <eosio/eosio.hpp>
+#endif
 
 namespace silkworm {
 void abort_due_to_assertion_failure(char const* expr, char const* file, long line) {
+    #ifndef ANTELOPE
     std::cerr << "Assert failed: " << expr << " "
               << "Source: " << file << ", line " << line;
     std::abort();
+    #else
+    std::string msg = "Assert failed: ";
+    msg += expr;
+    msg += "Source: ";
+    msg += file;
+    msg += ", line ";
+    msg += line;
+    eosio::check(false, msg.c_str());
+    #endif
 }
 }  // namespace silkworm

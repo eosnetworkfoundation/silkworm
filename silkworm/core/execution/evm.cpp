@@ -162,7 +162,7 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
         } else if (rev >= EVMC_LONDON && code_len > 0 && evm_res.output_data[0] == 0xEF) {
             // EIP-3541: Reject new contract code starting with the 0xEF byte
             evm_res.status_code = EVMC_CONTRACT_VALIDATION_FAILURE;
-        } else if (std::cmp_greater_equal(evm_res.gas_left, code_deploy_gas)) {
+        } else if (evm_res.gas_left >= 0 && static_cast<uint64_t>(evm_res.gas_left) >= code_deploy_gas) {
             evm_res.gas_left -= static_cast<int64_t>(code_deploy_gas);
             state_.set_code(contract_addr, {evm_res.output_data, evm_res.output_size});
         } else if (rev >= EVMC_HOMESTEAD) {
@@ -217,8 +217,8 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
         const uint8_t num{message.code_address.bytes[kAddressLength - 1]};
         const precompile::Contract& contract{precompile::kContracts[num]->contract};
         const ByteView input{message.input_data, message.input_size};
-        const uint64_t gas{contract.gas(input, rev)};
-        if (std::cmp_greater(gas, message.gas)) {
+        const int64_t gas{static_cast<int64_t>(contract.gas(input, rev))};
+        if (gas < 0 || gas > message.gas) {
             res.status_code = EVMC_OUT_OF_GAS;
         } else {
             const std::optional<Bytes> output{contract.run(input)};
@@ -484,6 +484,17 @@ evmc_tx_context EvmHost::get_tx_context() const noexcept {
 }
 
 evmc::bytes32 EvmHost::get_block_hash(int64_t n) const noexcept {
+    if(evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust) {
+        uint8_t buffer[1+8+8];
+        buffer[0] = 0x00;
+        intx::le::unsafe::store<uint64_t>(buffer+1,   static_cast<uint64_t>(n));
+        intx::le::unsafe::store<uint64_t>(buffer+1+8, evm_.config().chain_id);
+        auto block_hash = silkworm::precompile::sha256_run(ByteView(buffer));
+        evmc::bytes32 res;
+        memcpy(res.bytes, block_hash->data(), 32);
+        return res;
+    }
+
     assert(n >= 0);
     const uint64_t current_block_num{evm_.block_.header.number};
     assert(static_cast<uint64_t>(n) < current_block_num);

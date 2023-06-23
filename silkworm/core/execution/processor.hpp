@@ -46,10 +46,15 @@ class ExecutionProcessor {
     //! \pre RuleSet's validate_block_header & pre_validate_block_body must return kOk.
     [[nodiscard]] ValidationResult execute_and_write_block(std::vector<Receipt>& receipts) noexcept;
 
-    uint64_t available_gas() const noexcept;
-
     EVM& evm() noexcept { return evm_; }
     const EVM& evm() const noexcept { return evm_; }
+
+    // Added by ENF --v
+    IntraBlockState& state() noexcept { return state_; }
+
+    // ENF: moved from private so available by evm_contract::validate_transaction
+    uint64_t available_gas() const noexcept;
+    // Added by ENF --^
 
   private:
     /**

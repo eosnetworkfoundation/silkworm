@@ -24,6 +24,12 @@
 namespace silkworm {
 
 const state::Object* IntraBlockState::get_object(const evmc::address& address) const noexcept {
+    if(is_reserved_address(address)) {
+        if(auto it = reserved_objects_.find(address); it != reserved_objects_.end())
+            return &it->second;
+        return nullptr;
+    }
+
     auto it{objects_.find(address)};
     if (it != objects_.end()) {
         return &it->second;
@@ -50,7 +56,10 @@ state::Object& IntraBlockState::get_or_create_object(const evmc::address& addres
 
     if (obj == nullptr) {
         journal_.emplace_back(new state::CreateDelta{address});
-        obj = &objects_[address];
+        if(is_reserved_address(address))
+            obj = &reserved_objects_[address];
+        else
+            obj = &objects_[address];
         obj->current = Account{};
     } else if (obj->current == std::nullopt) {
         journal_.emplace_back(new state::UpdateDelta{address, *obj});
@@ -303,6 +312,24 @@ void IntraBlockState::set_storage(const evmc::address& address, const evmc::byte
 void IntraBlockState::write_to_db(uint64_t block_number) {
     db_.begin_block(block_number);
 
+    // We change the order in which accounts and storage objects are persisted.
+    // This allow us to clean the account storage when new incarnation is detected by the our state implementation.
+    // (useful for some tests cases)
+    for (const auto& [address, obj] : objects_) {
+        db_.update_account(address, obj.initial, obj.current);
+        if (!obj.current.has_value()) {
+            continue;
+        }
+        const auto& code_hash{obj.current->code_hash};
+        if (code_hash != kEmptyHash &&
+            (!obj.initial.has_value() || obj.initial->incarnation != obj.current->incarnation)) {
+            if (auto it{new_code_.find(code_hash)}; it != new_code_.end()) {
+                ByteView code_view{it->second.data(), it->second.size()};
+                db_.update_account_code(address, obj.current->incarnation, code_hash, code_view);
+            }
+        }
+    }
+
     for (const auto& [address, storage] : storage_) {
         auto it1{objects_.find(address)};
         if (it1 == objects_.end()) {
@@ -319,20 +346,6 @@ void IntraBlockState::write_to_db(uint64_t block_number) {
         }
     }
 
-    for (const auto& [address, obj] : objects_) {
-        db_.update_account(address, obj.initial, obj.current);
-        if (!obj.current.has_value()) {
-            continue;
-        }
-        const auto& code_hash{obj.current->code_hash};
-        if (code_hash != kEmptyHash &&
-            (!obj.initial.has_value() || obj.initial->incarnation != obj.current->incarnation)) {
-            if (auto it{new_code_.find(code_hash)}; it != new_code_.end()) {
-                ByteView code_view{it->second.data(), it->second.size()};
-                db_.update_account_code(address, obj.current->incarnation, code_hash, code_view);
-            }
-        }
-    }
 }
 
 IntraBlockState::Snapshot IntraBlockState::take_snapshot() const noexcept {
@@ -358,6 +371,15 @@ void IntraBlockState::finalize_transaction() {
         }
         storage.current.clear();
     }
+}
+
+void IntraBlockState::reset() {
+    clear_journal_and_substate();
+    objects_.clear();
+    storage_.clear();
+    existing_code_.clear();
+    new_code_.clear();
+    reserved_objects_.clear();
 }
 
 void IntraBlockState::clear_journal_and_substate() {

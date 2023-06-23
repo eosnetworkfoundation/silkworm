@@ -32,7 +32,7 @@ struct AccessListEntry {
     evmc::address account{};
     std::vector<evmc::bytes32> storage_keys{};
 
-    friend bool operator==(const AccessListEntry&, const AccessListEntry&) = default;
+    friend bool operator==(const AccessListEntry&, const AccessListEntry&);
 };
 
 // EIP-2718 transaction type
@@ -73,7 +73,7 @@ struct UnsignedTransaction {
 
     void encode_for_signing(Bytes& into) const;
 
-    friend bool operator==(const UnsignedTransaction&, const UnsignedTransaction&) = default;
+    friend bool operator==(const UnsignedTransaction&, const UnsignedTransaction&);
 };
 
 struct Transaction : public UnsignedTransaction {

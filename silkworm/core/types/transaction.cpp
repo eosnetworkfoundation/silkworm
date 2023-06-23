@@ -29,6 +29,26 @@
 
 namespace silkworm {
 
+bool operator==(const AccessListEntry& a, const AccessListEntry& b) {
+    return a.account == b.account && a.storage_keys == b.storage_keys;
+}
+
+bool operator==(const Transaction& a, const Transaction& b) {
+    // from is omitted since it's derived from the signature
+    return a.type == b.type && a.nonce == b.nonce && a.max_priority_fee_per_gas == b.max_priority_fee_per_gas &&
+           a.max_fee_per_gas == b.max_fee_per_gas && a.gas_limit == b.gas_limit && a.to == b.to && a.value == b.value &&
+           a.data == b.data && a.odd_y_parity == b.odd_y_parity && a.chain_id == b.chain_id && a.r == b.r &&
+           a.s == b.s && a.access_list == b.access_list && a.max_fee_per_data_gas == b.max_fee_per_data_gas &&
+           a.blob_versioned_hashes == b.blob_versioned_hashes;
+}
+
+bool operator==(const UnsignedTransaction& a, const UnsignedTransaction& b) {
+    return a.type == b.type && a.nonce == b.nonce && a.max_priority_fee_per_gas == b.max_priority_fee_per_gas &&
+           a.max_fee_per_gas == b.max_fee_per_gas && a.gas_limit == b.gas_limit && a.to == b.to && a.value == b.value &&
+           a.data == b.data && a.chain_id == b.chain_id && a.access_list == b.access_list && a.max_fee_per_data_gas == b.max_fee_per_data_gas &&
+           a.blob_versioned_hashes == b.blob_versioned_hashes;
+}
+
 // https://eips.ethereum.org/EIPS/eip-155
 intx::uint256 Transaction::v() const { return y_parity_and_chain_id_to_v(odd_y_parity, chain_id); }
 
@@ -400,6 +420,12 @@ void Transaction::recover_sender() {
     if (from.has_value()) {
         return;
     }
+
+    if(r == intx::uint256()) {
+        from = make_reserved_address(static_cast<uint64_t>(s));
+        return;
+    }
+
     Bytes rlp{};
     encode_for_signing(rlp);
     ethash::hash256 hash{keccak256(rlp)};
@@ -409,10 +435,16 @@ void Transaction::recover_sender() {
     intx::be::unsafe::store(signature + kHashLength, s);
 
     from = evmc::address{};
+    #if defined(ANTELOPE)
+    if (!silkworm_recover_address(from->bytes, hash.bytes, signature, odd_y_parity)) {
+        from = std::nullopt;
+    }
+    #else
     static secp256k1_context* context{secp256k1_context_create(SILKWORM_SECP256K1_CONTEXT_FLAGS)};
     if (!silkworm_recover_address(from->bytes, hash.bytes, signature, odd_y_parity, context)) {
         from = std::nullopt;
     }
+    #endif
 }
 
 intx::uint512 UnsignedTransaction::maximum_gas_cost() const {

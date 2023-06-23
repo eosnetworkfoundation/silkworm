@@ -347,8 +347,9 @@ void HistoryIndex::collect_bitmaps_from_changeset(db::RWTxn& txn, const db::MapC
 
     auto start_key{db::block_key(from + 1)};
     auto source = txn.ro_cursor_dup_sort(source_config);
-    auto source_data{storage ? source->lower_bound(db::to_slice(start_key), false)
-                             : source->find(db::to_slice(start_key), false)};
+    //auto source_data{storage ? source->lower_bound(db::to_slice(start_key), false)
+    //                         : source->find(db::to_slice(start_key), false)};
+    auto source_data{source->lower_bound(db::to_slice(start_key), false)};
     while (source_data) {
         auto source_data_key_view{db::from_slice(source_data.key)};
         reached_block_number = endian::load_big_u64(source_data_key_view.data());
@@ -418,13 +419,14 @@ std::map<Bytes, bool> HistoryIndex::collect_unique_keys_from_changeset(
 
     auto start_key{db::block_key(expected_block_number)};
     auto source = txn.ro_cursor_dup_sort(source_config);
-    auto source_data{storage ? source->lower_bound(db::to_slice(start_key), false)
-                             : source->find(db::to_slice(start_key), false)};
+    //auto source_data{storage ? source->lower_bound(db::to_slice(start_key), false)
+    //                         : source->find(db::to_slice(start_key), false)};
+    auto source_data{source->lower_bound(db::to_slice(start_key), false)};
 
     while (source_data) {
         auto source_data_key_view{db::from_slice(source_data.key)};
         reached_block_number = endian::load_big_u64(source_data_key_view.data());
-        check_block_sequence(expected_block_number, reached_block_number);
+        //check_block_sequence(expected_block_number, reached_block_number);
         if (reached_block_number > max_block_number) break;
         source_data_key_view.remove_prefix(sizeof(BlockNum));
 

@@ -129,11 +129,17 @@ ValidationResult ExecutionProcessor::execute_block_no_post_validation(std::vecto
     receipts.resize(block.transactions.size());
     auto receipt_it{receipts.begin()};
     for (const auto& txn : block.transactions) {
+        if(is_reserved_address(*txn.from)) {
+            //must mirror contract's initial state of reserved address
+            state_.set_balance(*txn.from, txn.value + intx::uint256(txn.gas_limit) * txn.max_fee_per_gas);
+            state_.set_nonce(*txn.from, txn.nonce);
+        }
         const ValidationResult err{protocol::validate_transaction(txn, state_, available_gas())};
         if (err != ValidationResult::kOk) {
             return err;
         }
         execute_transaction(txn, *receipt_it);
+        state_.reset_reserved_objects();
         ++receipt_it;
     }
 
@@ -153,11 +159,11 @@ ValidationResult ExecutionProcessor::execute_and_write_block(std::vector<Receipt
 
     const auto& header{evm_.block().header};
 
-    if (cumulative_gas_used_ != header.gas_used) {
+    if (evm_.config().protocol_rule_set != protocol::RuleSetType::kTrust && cumulative_gas_used_ != header.gas_used) {
         return ValidationResult::kWrongBlockGas;
     }
 
-    if (evm_.revision() >= EVMC_BYZANTIUM) {
+    if (evm_.config().protocol_rule_set != protocol::RuleSetType::kTrust && evm_.revision() >= EVMC_BYZANTIUM) {
         static constexpr auto kEncoder = [](Bytes& to, const Receipt& r) { rlp::encode(to, r); };
         evmc::bytes32 receipt_root{trie::root_hash(receipts, kEncoder)};
         if (receipt_root != header.receipts_root) {
@@ -169,7 +175,7 @@ ValidationResult ExecutionProcessor::execute_and_write_block(std::vector<Receipt
     for (const Receipt& receipt : receipts) {
         join(bloom, receipt.bloom);
     }
-    if (bloom != header.logs_bloom) {
+    if (evm_.config().protocol_rule_set != protocol::RuleSetType::kTrust && bloom != header.logs_bloom) {
         return ValidationResult::kWrongLogsBloom;
     }
 

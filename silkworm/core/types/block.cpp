@@ -23,6 +23,19 @@
 
 namespace silkworm {
 
+bool operator==(const BlockHeader& a, const BlockHeader& b) {
+    return a.parent_hash == b.parent_hash && a.ommers_hash == b.ommers_hash && a.beneficiary == b.beneficiary &&
+           a.state_root == b.state_root && a.transactions_root == b.transactions_root &&
+           a.receipts_root == b.receipts_root && a.logs_bloom == b.logs_bloom && a.difficulty == b.difficulty &&
+           a.number == b.number && a.gas_limit == b.gas_limit && a.gas_used == b.gas_used &&
+           a.timestamp == b.timestamp && a.extra_data == b.extra_data && a.prev_randao == b.prev_randao &&
+           a.nonce == b.nonce && a.base_fee_per_gas == b.base_fee_per_gas;
+}
+
+bool operator==(const BlockBody& a, const BlockBody& b) {
+    return a.transactions == b.transactions && a.ommers == b.ommers;
+}
+
 BlockNum height(const BlockId& b) { return b.number; }
 
 evmc::bytes32 BlockHeader::hash(bool for_sealing, bool exclude_extra_data_sig) const {
