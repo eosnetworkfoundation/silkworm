@@ -19,12 +19,33 @@
 #include <string.h>
 
 #include <ethash/keccak.h>
+#ifndef ANTELOPE
 #include <secp256k1_ecdh.h>
 #include <secp256k1_recovery.h>
+#else
+__attribute__((eosio_wasm_import))
+int32_t k1_recover( const char* sig, uint32_t sig_len, const char* dig, uint32_t dig_len, char* pub, uint32_t pub_len);
+#endif
 
 //! \brief Tries recover public key used for message signing.
 //! \return An optional Bytes. Should it has no value the recovery has failed
 //! This is different from recover_address as the whole 64 bytes are returned.
+#ifdef ANTELOPE
+static bool recover(uint8_t public_key[65], const uint8_t message[32], const uint8_t signature[64], bool odd_y_parity) {
+
+    uint8_t vrs[65];
+    vrs[0] = odd_y_parity ? 1 : 0;
+    vrs[0] += (27 + 4);
+    memcpy(&vrs[1], signature, 64);
+
+    int32_t res = k1_recover((const char*)vrs, 65, (const char*)message, 32, (char *)public_key, 65);
+    if(res) {
+        return false;
+    }
+
+    return true;
+}
+#else
 static bool recover(uint8_t public_key[65], const uint8_t message[32], const uint8_t signature[64], bool odd_y_parity,
                     secp256k1_context* context) {
     secp256k1_ecdsa_recoverable_signature sig;
@@ -41,6 +62,7 @@ static bool recover(uint8_t public_key[65], const uint8_t message[32], const uin
     secp256k1_ec_pubkey_serialize(context, public_key, &key_len, &pub_key, SECP256K1_EC_UNCOMPRESSED);
     return true;
 }
+#endif
 
 //! Tries extract address from recovered public key
 //! \param [in] public_key: The recovered public key
@@ -54,7 +76,15 @@ static bool public_key_to_address(uint8_t out[20], const uint8_t public_key[65])
     memcpy(out, &key_hash.bytes[12], 20);
     return true;
 }
-
+#ifdef ANTELOPE
+bool silkworm_recover_address(uint8_t out[20], const uint8_t message[32], const uint8_t signature[64], bool odd_y_parity) {
+    uint8_t public_key[65];
+    if (!recover(public_key, message, signature, odd_y_parity)) {
+        return false;
+    }
+    return public_key_to_address(out, public_key);
+}
+#else
 bool silkworm_recover_address(uint8_t out[20], const uint8_t message[32], const uint8_t signature[64], bool odd_y_parity,
                               secp256k1_context* context) {
     uint8_t public_key[65];
@@ -63,3 +93,4 @@ bool silkworm_recover_address(uint8_t out[20], const uint8_t message[32], const 
     }
     return public_key_to_address(out, public_key);
 }
+#endif

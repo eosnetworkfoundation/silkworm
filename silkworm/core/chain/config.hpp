@@ -24,7 +24,10 @@
 
 #include <evmc/evmc.h>
 #include <intx/intx.hpp>
+
+#if not defined(ANTELOPE)
 #include <nlohmann/json.hpp>
+#endif
 
 #include <silkworm/core/common/util.hpp>
 
@@ -38,6 +41,7 @@ namespace protocol {
         kEthash,
         kClique,
         kAuRa,
+        kTrust,
     };
 
 }  // namespace protocol
@@ -87,7 +91,9 @@ struct ChainConfig {
     [[nodiscard]] std::vector<uint64_t> distinct_fork_points() const;
 
     //! \brief Return the JSON representation of this object
+    #if not defined(ANTELOPE)
     [[nodiscard]] nlohmann::json to_json() const noexcept;
+    #endif
 
     /*Sample JSON input:
     {
@@ -106,12 +112,66 @@ struct ChainConfig {
     */
     //! \brief Try parse a JSON object into strongly typed ChainConfig
     //! \remark Should this return std::nullopt the parsing has failed
+    #if not defined(ANTELOPE)
     static std::optional<ChainConfig> from_json(const nlohmann::json& json) noexcept;
+    #endif
 
-    friend bool operator==(const ChainConfig&, const ChainConfig&) = default;
+    friend bool operator==(const ChainConfig&, const ChainConfig&);
 };
 
 std::ostream& operator<<(std::ostream& out, const ChainConfig& obj);
+
+inline constexpr ChainConfig kEOSEVMMainnetConfig{
+    .chain_id = 17777,
+    .protocol_rule_set = protocol::RuleSetType::kTrust,
+    .homestead_block = 0,
+    .dao_block = 0,
+    .tangerine_whistle_block = 0,
+    .spurious_dragon_block = 0,
+    .byzantium_block = 0,
+    .constantinople_block = 0,
+    .petersburg_block = 0,
+    .istanbul_block = 0,
+};
+
+inline constexpr ChainConfig kEOSEVMOldTestnetConfig{
+    .chain_id = 15555,
+    .protocol_rule_set = protocol::RuleSetType::kTrust,
+    .homestead_block = 0,
+    .dao_block = 0,
+    .tangerine_whistle_block = 0,
+    .spurious_dragon_block = 0,
+    .byzantium_block = 0,
+    .constantinople_block = 0,
+    .petersburg_block = 0,
+    .istanbul_block = 0,
+};
+
+inline constexpr ChainConfig kEOSEVMTestnetConfig{
+    .chain_id = 15557,
+    .protocol_rule_set = protocol::RuleSetType::kTrust,
+    .homestead_block = 0,
+    .dao_block = 0,
+    .tangerine_whistle_block = 0,
+    .spurious_dragon_block = 0,
+    .byzantium_block = 0,
+    .constantinople_block = 0,
+    .petersburg_block = 0,
+    .istanbul_block = 0,
+};
+
+inline constexpr ChainConfig kEOSEVMLocalTestnetConfig{
+    .chain_id = 25555,
+    .protocol_rule_set = protocol::RuleSetType::kTrust,
+    .homestead_block = 0,
+    .dao_block = 0,
+    .tangerine_whistle_block = 0,
+    .spurious_dragon_block = 0,
+    .byzantium_block = 0,
+    .constantinople_block = 0,
+    .petersburg_block = 0,
+    .istanbul_block = 0,
+};
 
 inline constexpr evmc::bytes32 kMainnetGenesisHash{0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32};
 inline constexpr ChainConfig kMainnetConfig{

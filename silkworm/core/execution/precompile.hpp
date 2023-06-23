@@ -96,7 +96,9 @@ inline constexpr std::optional<SupportedContract> kContracts[]{
     std::nullopt,                                                                  // 0x11
     std::nullopt,                                                                  // 0x12
     std::nullopt,                                                                  // 0x13
+    #ifndef ANTELOPE
     SupportedContract{{point_evaluation_gas, point_evaluation_run}, EVMC_CANCUN},  // 0x14
+    #endif
 };
 
 [[nodiscard]] bool is_precompile(const evmc::address&, evmc_revision) noexcept;

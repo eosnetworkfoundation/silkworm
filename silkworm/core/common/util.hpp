@@ -21,6 +21,7 @@
 #include <optional>
 #include <string_view>
 #include <vector>
+#include <endian.h>
 
 #include <ethash/keccak.hpp>
 #include <intx/intx.hpp>
@@ -84,7 +85,7 @@ size_t prefix_length(ByteView a, ByteView b);
 inline ethash::hash256 keccak256(ByteView view) { return ethash::keccak256(view.data(), view.size()); }
 
 //! \brief Create an intx::uint256 from a string supporting both fixed decimal and scientific notation
-template <UnsignedIntegral Int>
+template <typename Int, std::enable_if_t<UnsignedIntegral<Int>, int> = 1>
 inline constexpr Int from_string_sci(const char* str) {
     auto s = str;
     auto m = Int{};
@@ -92,7 +93,7 @@ inline constexpr Int from_string_sci(const char* str) {
     int num_digits = 0;
     int num_decimal_digits = 0;
     bool count_decimals{false};
-    char c;
+    char c=0;
     while ((c = *s++)) {
         if (c == '.') {
             count_decimals = true;
@@ -136,5 +137,35 @@ inline constexpr Int from_string_sci(const char* str) {
 }
 
 float to_float(const intx::uint256&) noexcept;
+
+inline std::optional<uint64_t> extract_reserved_address(const evmc::address& addr) {
+    constexpr uint8_t reserved_address_prefix[] = {0xbb, 0xbb, 0xbb, 0xbb,
+                                                   0xbb, 0xbb, 0xbb, 0xbb,
+                                                   0xbb, 0xbb, 0xbb, 0xbb};
+
+    if(!std::equal(std::begin(reserved_address_prefix), std::end(reserved_address_prefix), static_cast<evmc::bytes_view>(addr).begin()))
+        return std::nullopt;
+    uint64_t reserved;
+    memcpy(&reserved, static_cast<evmc::bytes_view>(addr).data()+sizeof(reserved_address_prefix), sizeof(reserved));
+    return be64toh(reserved);
+}
+
+inline bool is_reserved_address(const evmc::address& addr) {
+    return extract_reserved_address(addr) != std::nullopt;
+}
+
+inline evmc::address make_reserved_address(uint64_t account) {
+    return evmc_address({0xbb, 0xbb, 0xbb, 0xbb,
+                         0xbb, 0xbb, 0xbb, 0xbb,
+                         0xbb, 0xbb, 0xbb, 0xbb,
+                         static_cast<uint8_t>(account >> 56),
+                         static_cast<uint8_t>(account >> 48),
+                         static_cast<uint8_t>(account >> 40),
+                         static_cast<uint8_t>(account >> 32),
+                         static_cast<uint8_t>(account >> 24),
+                         static_cast<uint8_t>(account >> 16),
+                         static_cast<uint8_t>(account >> 8),
+                         static_cast<uint8_t>(account >> 0)});
+}
 
 }  // namespace silkworm

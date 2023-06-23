@@ -40,6 +40,8 @@ class Node {
     Node(const Node& other) = default;
     Node& operator=(const Node& other) = default;
 
+    friend bool operator==(const Node&, const Node&);
+
     [[nodiscard]] uint16_t state_mask() const { return state_mask_; }
     [[nodiscard]] uint16_t tree_mask() const { return tree_mask_; }
     [[nodiscard]] uint16_t hash_mask() const { return hash_mask_; }
@@ -49,8 +51,6 @@ class Node {
     [[nodiscard]] const std::optional<evmc::bytes32>& root_hash() const { return root_hash_; }
 
     void set_root_hash(const std::optional<evmc::bytes32>& root_hash);
-
-    friend bool operator==(const Node&, const Node&) = default;
 
     //! \see Erigon's MarshalTrieNodeTyped
     [[nodiscard]] Bytes encode_for_storage() const;

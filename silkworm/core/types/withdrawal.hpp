@@ -27,7 +27,7 @@ struct Withdrawal {
     evmc::address address{};
     uint64_t amount{0};  // in GWei
 
-    friend bool operator==(const Withdrawal&, const Withdrawal&) = default;
+    friend bool operator==(const Withdrawal&, const Withdrawal&);
 };
 
 namespace rlp {

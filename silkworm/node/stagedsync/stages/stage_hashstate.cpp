@@ -435,12 +435,15 @@ Stage::Result HashState::hash_from_account_changeset(db::RWTxn& txn, BlockNum pr
         auto source_changeset = txn.ro_cursor_dup_sort(db::table::kAccountChangeSet);
         auto source_plainstate = txn.ro_cursor_dup_sort(db::table::kPlainState);
         auto changeset_data{
-            source_changeset->find(db::to_slice(source_initial_key),  // Initial record MUST be found because
-                                   /*throw_notfound=*/true)};         // there is at least 1 change per block
-                                                                      // (the miner reward)
+	    // Original comment: Initial record MUST be found because there is at least 1 change per block the miner reward)
+            // Our comment: A block can contain no accounts changes (no mining reward) in it so we don't throw an exception in that case
+            source_changeset->find(db::to_slice(source_initial_key),
+                                   /*throw_notfound=*/false)};
+
         while (changeset_data.done) {
             reached_blocknum = endian::load_big_u64(db::from_slice(changeset_data.key).data());
-            check_block_sequence(reached_blocknum, expected_blocknum);
+            // We comment out this check since we don't expect account changes to be in consecutive blocks
+            // check_block_sequence(reached_blocknum, expected_blocknum);
             if (reached_blocknum > to) {
                 break;
             }
@@ -623,11 +626,14 @@ Stage::Result HashState::unwind_from_account_changeset(db::RWTxn& txn, BlockNum 
 
         auto source_changeset = txn.ro_cursor_dup_sort(db::table::kAccountChangeSet);
         auto source_initial_key{db::block_key(expected_blocknum)};
+        // Original comment: Initial record MUST be found
+        // Our comment: A block can contain no accounts changes (no mining reward) in it so we don't throw an exception in that case
         auto changeset_data{source_changeset->lower_bound(db::to_slice(source_initial_key),
-                                                          /*throw_notfound=*/true)};  // Initial record MUST be found
+                                                          /*throw_notfound=*/false)};
 
         while (changeset_data.done) {
             reached_blocknum = endian::load_big_u64(db::from_slice(changeset_data.key).data());
+            // We comment out this check since we don't expect account changes to be in consecutive blocks
             check_block_sequence(reached_blocknum, expected_blocknum);
             if (reached_blocknum > previous_progress) {
                 break;
@@ -710,7 +716,7 @@ Stage::Result HashState::unwind_from_storage_changeset(db::RWTxn& txn, BlockNum 
 
         auto source_changeset = txn.ro_cursor_dup_sort(db::table::kStorageChangeSet);
         auto source_initial_key{db::block_key(to + 1)};
-        auto changeset_data{source_changeset->lower_bound(db::to_slice(source_initial_key), /*throw_notfound=*/true)};
+        auto changeset_data{source_changeset->lower_bound(db::to_slice(source_initial_key), /*throw_notfound=*/false)};
 
         while (changeset_data.done) {
             auto changeset_key_view{db::from_slice(changeset_data.key)};

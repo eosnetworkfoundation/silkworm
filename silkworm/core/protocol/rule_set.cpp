@@ -20,6 +20,7 @@
 #include "ethash_rule_set.hpp"
 #include "merge_rule_set.hpp"
 #include "no_proof_rule_set.hpp"
+#include "trust_rule_set.hpp"
 
 namespace silkworm::protocol {
 
@@ -31,6 +32,8 @@ static RuleSetPtr pre_merge_rule_set(const ChainConfig& chain_config) {
             return std::make_unique<NoProofRuleSet>(chain_config);
         case RuleSetType::kClique:
             return std::make_unique<CliqueRuleSet>(chain_config);
+        case RuleSetType::kTrust:
+            return std::make_unique<TrustRuleSet>(chain_config);
         default:
             return nullptr;
     }

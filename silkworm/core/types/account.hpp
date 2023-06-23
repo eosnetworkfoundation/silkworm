@@ -51,7 +51,7 @@ struct Account {
     [[nodiscard]] static tl::expected<uint64_t, DecodingError> incarnation_from_encoded_storage(
         ByteView encoded_payload) noexcept;
 
-    friend bool operator==(const Account&, const Account&) = default;
+    friend bool operator==(const Account&, const Account&);
 };
 
 }  // namespace silkworm

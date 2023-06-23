@@ -104,6 +104,7 @@ class IntraBlockState {
 
     // See Section 6.1 "Substate" of the Yellow Paper
     void clear_journal_and_substate();
+    void reset();
 
     void add_log(const Log& log) noexcept;
 
@@ -111,6 +112,9 @@ class IntraBlockState {
     const std::vector<Log>& logs() const noexcept { return logs_; }
 
     const FlatHashSet<evmc::address>& touched() const noexcept { return touched_; }
+
+    const FlatHashMap<evmc::address, state::Object>& reserved_objects() const noexcept { return reserved_objects_; }
+    void reset_reserved_objects() { reserved_objects_.clear(); }
 
   private:
     friend class state::CreateDelta;
@@ -135,6 +139,8 @@ class IntraBlockState {
 
     mutable FlatHashMap<evmc::address, state::Object> objects_;
     mutable FlatHashMap<evmc::address, state::Storage> storage_;
+
+    mutable FlatHashMap<evmc::address, state::Object> reserved_objects_;
 
     mutable FlatHashMap<evmc::bytes32, ByteView> existing_code_;
     FlatHashMap<evmc::bytes32, std::vector<uint8_t>> new_code_;

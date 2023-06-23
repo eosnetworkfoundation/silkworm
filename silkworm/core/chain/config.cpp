@@ -28,9 +28,15 @@ static const std::vector<std::pair<std::string, const ChainConfig*>> kKnownChain
     {"mainnet", &kMainnetConfig},
     {"goerli", &kGoerliConfig},
     {"sepolia", &kSepoliaConfig},
+    {"eosevm-mainnet", &kEOSEVMMainnetConfig},
+    {"eosevm-oldtestnet", &kEOSEVMOldTestnetConfig},
+    {"eosevm-testnet", &kEOSEVMTestnetConfig},
+    {"eosevm-localtestnet", &kEOSEVMLocalTestnetConfig}
 };
 
 constexpr const char* kTerminalTotalDifficulty{"terminalTotalDifficulty"};
+
+#if not defined(ANTELOPE)
 
 static inline void member_to_json(nlohmann::json& json, const std::string& key, const std::optional<uint64_t>& source) {
     if (source.has_value()) {
@@ -60,6 +66,9 @@ nlohmann::json ChainConfig::to_json() const noexcept {
             break;
         case protocol::RuleSetType::kAuRa:
             ret.emplace("aura", empty_object);
+            break;
+        case protocol::RuleSetType::kTrust:
+            ret.emplace("trust", empty_object);
             break;
         default:
             break;
@@ -109,6 +118,8 @@ std::optional<ChainConfig> ChainConfig::from_json(const nlohmann::json& json) no
         config.protocol_rule_set = protocol::RuleSetType::kClique;
     } else if (json.contains("aura")) {
         config.protocol_rule_set = protocol::RuleSetType::kAuRa;
+    } else if (json.contains("trust")) {
+        config.protocol_rule_set = protocol::RuleSetType::kTrust;
     } else {
         config.protocol_rule_set = protocol::RuleSetType::kNoProof;
     }
@@ -151,6 +162,12 @@ std::optional<ChainConfig> ChainConfig::from_json(const nlohmann::json& json) no
 
     return config;
 }
+
+bool operator==(const ChainConfig& a, const ChainConfig& b) { return a.to_json() == b.to_json(); }
+
+std::ostream& operator<<(std::ostream& out, const ChainConfig& obj) { return out << obj.to_json(); }
+
+#endif
 
 evmc_revision ChainConfig::revision(uint64_t block_number, uint64_t block_time) const noexcept {
     if (cancun_time && block_time >= cancun_time) return EVMC_CANCUN;
@@ -214,8 +231,6 @@ std::vector<uint64_t> ChainConfig::distinct_fork_points() const {
 
     return points;
 }
-
-std::ostream& operator<<(std::ostream& out, const ChainConfig& obj) { return out << obj.to_json(); }
 
 std::optional<std::pair<const std::string, const ChainConfig*>> lookup_known_chain(const uint64_t chain_id) noexcept {
     auto it{

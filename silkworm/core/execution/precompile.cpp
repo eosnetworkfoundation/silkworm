@@ -14,15 +14,53 @@
    limitations under the License.
 */
 
+#if defined(ANTELOPE)
+#include <eosio/eosio.hpp>
+#include <eosio/crypto.hpp>
+#include <silkworm/core/common/endian.hpp>
+#endif
+
 #include "precompile.hpp"
 
+#if not defined(ANTELOPE)
 #include <gmp.h>
+#include <bit>
+#endif
 
 #include <algorithm>
-#include <bit>
 #include <cstring>
 #include <limits>
 
+#include <silkworm/core/crypto/ecdsa.h>
+#include <silkworm/core/crypto/secp256k1n.hpp>
+#include <silkworm/core/types/hash.hpp>
+
+#if defined(ANTELOPE)
+namespace eosio {
+   namespace internal_use_do_not_use {
+    extern "C" {
+      __attribute__((eosio_wasm_import))
+      int32_t alt_bn128_add( const char* op1, uint32_t op1_len, const char* op2, uint32_t op2_len, char* result, uint32_t result_len);
+
+      __attribute__((eosio_wasm_import))
+      int32_t alt_bn128_mul( const char* g1, uint32_t g1_len, const char* scalar, uint32_t scalar_len, char* result, uint32_t result_len);
+
+      __attribute__((eosio_wasm_import))
+      int32_t alt_bn128_pair( const char* pairs, uint32_t pairs_len);
+
+      __attribute__((eosio_wasm_import))
+      int32_t mod_exp( const char* base, uint32_t base_len, const char* exp, uint32_t exp_len, const char* mod, uint32_t mod_len, char* result, uint32_t result_len);
+
+      __attribute__((eosio_wasm_import))
+      int32_t blake2_f( uint32_t rounds, const char* state, uint32_t state_len, const char* msg, uint32_t msg_len,
+                  const char* t0_offset, uint32_t t0_len, const char* t1_offset, uint32_t t1_len, int32_t final, char* result, uint32_t result_len);
+
+      __attribute__((eosio_wasm_import))
+      void sha3( const char* data, uint32_t data_len, char* hash, uint32_t hash_len, int32_t keccak );
+   }
+  }
+}
+#else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wshadow"
@@ -35,12 +73,10 @@
 
 #include <silkworm/core/common/endian.hpp>
 #include <silkworm/core/crypto/blake2b.h>
-#include <silkworm/core/crypto/ecdsa.h>
 #include <silkworm/core/crypto/kzg.hpp>
 #include <silkworm/core/crypto/rmd160.h>
-#include <silkworm/core/crypto/secp256k1n.hpp>
 #include <silkworm/core/crypto/sha256.h>
-#include <silkworm/core/types/hash.hpp>
+#endif
 
 namespace silkworm::precompile {
 
@@ -70,10 +106,16 @@ std::optional<Bytes> ecrec_run(ByteView input) noexcept {
     }
 
     Bytes out(32, 0);
+    #if defined(ANTELOPE)
+    if (!silkworm_recover_address(&out[12], &d[0], &d[64], v != 27)) {
+        return Bytes{};
+    }
+    #else
     static secp256k1_context* context{secp256k1_context_create(SILKWORM_SECP256K1_CONTEXT_FLAGS)};
     if (!silkworm_recover_address(&out[12], &d[0], &d[64], v != 27, context)) {
         return Bytes{};
     }
+    #endif
     return out;
 }
 
@@ -83,7 +125,12 @@ uint64_t sha256_gas(ByteView input, evmc_revision) noexcept {
 
 std::optional<Bytes> sha256_run(ByteView input) noexcept {
     Bytes out(32, 0);
+    #if defined(ANTELOPE)
+    auto res = eosio::sha256((const char*)input.data(), input.length()).extract_as_byte_array();
+    memcpy(out.data(), res.data(), 32);
+    #else
     silkworm_sha256(out.data(), input.data(), input.length(), /*use_cpu_extensions=*/true);
+    #endif
     return out;
 }
 
@@ -94,7 +141,12 @@ uint64_t rip160_gas(ByteView input, evmc_revision) noexcept {
 std::optional<Bytes> rip160_run(ByteView input) noexcept {
     Bytes out(32, 0);
     SILKWORM_ASSERT(input.length() <= std::numeric_limits<uint32_t>::max());
+    #if defined(ANTELOPE)
+    auto res = eosio::ripemd160((const char*)input.data(), input.length()).extract_as_byte_array();
+    memcpy(&out[12], res.data(), res.size());
+    #else
     silkworm_rmd160(&out[12], input.data(), static_cast<uint32_t>(input.length()));
+    #endif
     return out;
 }
 
@@ -204,7 +256,20 @@ std::optional<Bytes> expmod_run(ByteView input_view) noexcept {
     }
 
     right_pad(input, static_cast<size_t>(base_len + exponent_len + modulus_len));
+    #if defined(ANTELOPE)
+    auto base_data     = (const char*)input.data();
+    auto exponent_data = base_data + base_len;
+    auto modulus_data  = exponent_data + exponent_len;
 
+    Bytes out(static_cast<size_t>(modulus_len), 0);
+
+    auto err = eosio::internal_use_do_not_use::mod_exp(base_data, base_len, exponent_data, exponent_len, modulus_data, modulus_len, (char*)out.data(), modulus_len);
+    if(err < 0) {
+        return std::nullopt;
+    }
+
+    return out;
+    #else
     mpz_t base;
     mpz_init(base);
     if (base_len) {
@@ -249,8 +314,10 @@ std::optional<Bytes> expmod_run(ByteView input_view) noexcept {
     mpz_clear(base);
 
     return out;
+    #endif
 }
 
+#if not defined(ANTELOPE)
 // Utility functions for zkSNARK related precompiled contracts.
 // See Yellow Paper, Appendix E "Precompiled Contracts", as well as
 // EIP-196: Precompiled contracts for addition and scalar multiplication on the elliptic curve alt_bn128
@@ -366,6 +433,7 @@ static Bytes encode_g1_element(libff::alt_bn128_G1 p) noexcept {
     std::reverse(out.begin(), out.end());
     return out;
 }
+#endif
 
 uint64_t bn_add_gas(ByteView, evmc_revision rev) noexcept {
     return rev >= EVMC_ISTANBUL ? 150 : 500;
@@ -374,7 +442,18 @@ uint64_t bn_add_gas(ByteView, evmc_revision rev) noexcept {
 std::optional<Bytes> bn_add_run(ByteView input_view) noexcept {
     Bytes input{input_view};
     right_pad(input, 128);
+    #if defined(ANTELOPE)
+    auto op1_data = (const char*)input.data();
+    auto op2_data = op1_data + 64;
 
+    Bytes out(64, 0);
+    auto err = eosio::internal_use_do_not_use::alt_bn128_add( op1_data, 64, op2_data, 64, (char *)out.data(), 64);
+    if(err < 0) {
+        return std::nullopt;
+    }
+
+    return out;
+    #else
     init_libff();
 
     std::optional<libff::alt_bn128_G1> x{decode_g1_element(input.data())};
@@ -389,6 +468,7 @@ std::optional<Bytes> bn_add_run(ByteView input_view) noexcept {
 
     libff::alt_bn128_G1 sum{*x + *y};
     return encode_g1_element(sum);
+    #endif
 }
 
 uint64_t bn_mul_gas(ByteView, evmc_revision rev) noexcept {
@@ -399,6 +479,18 @@ std::optional<Bytes> bn_mul_run(ByteView input_view) noexcept {
     Bytes input{input_view};
     right_pad(input, 96);
 
+    #if defined(ANTELOPE)
+    auto point_data  = (const char*)input.data();
+    auto scalar_data = point_data + 64;
+
+    Bytes out(64, 0);
+    auto err = eosio::internal_use_do_not_use::alt_bn128_mul( point_data, 64, scalar_data, 32, (char *)out.data(), 64);
+    if(err < 0) {
+        return std::nullopt;
+    }
+
+    return out;
+    #else
     init_libff();
 
     std::optional<libff::alt_bn128_G1> x{decode_g1_element(input.data())};
@@ -410,6 +502,7 @@ std::optional<Bytes> bn_mul_run(ByteView input_view) noexcept {
 
     libff::alt_bn128_G1 product{n * *x};
     return encode_g1_element(product);
+    #endif
 }
 
 static constexpr size_t kSnarkvStride{192};
@@ -425,6 +518,18 @@ std::optional<Bytes> snarkv_run(ByteView input) noexcept {
     }
     size_t k{input.length() / kSnarkvStride};
 
+    #if defined(ANTELOPE)
+    auto err = eosio::internal_use_do_not_use::alt_bn128_pair( (const char*)input.data(), input.length());
+    if(err < 0) {
+        return std::nullopt;
+    }
+
+    Bytes out(32, 0);
+    if (err == 0) {
+        out[31] = 1;
+    }
+    return out;
+    #else
     init_libff();
     using namespace libff;
 
@@ -453,6 +558,7 @@ std::optional<Bytes> snarkv_run(ByteView input) noexcept {
         out[31] = 1;
     }
     return out;
+    #endif
 }
 
 uint64_t blake2_f_gas(ByteView input, evmc_revision) noexcept {
@@ -472,6 +578,20 @@ std::optional<Bytes> blake2_f_run(ByteView input) noexcept {
         return std::nullopt;
     }
 
+    #if defined(ANTELOPE)
+    auto rounds    = silkworm::endian::load_big_u32(input.data());
+    auto state     = (const char *)input.data() + 4;
+    auto message   = state + 64;
+    auto t0_offset = message + 128;
+    auto t1_offset = t0_offset + 8;
+
+    Bytes out(64, 0);
+    auto err = eosio::internal_use_do_not_use::blake2_f(rounds, state, 64, message, 128, t0_offset, 8, t1_offset, 8, (bool)f, (char *)out.data(), 64);
+    if(err < 0) {
+        return std::nullopt;
+    }
+    return out;
+    #else
     SilkwormBlake2bState state{};
     if (f) {
         state.f[0] = std::numeric_limits<uint64_t>::max();
@@ -492,12 +612,14 @@ std::optional<Bytes> blake2_f_run(ByteView input) noexcept {
     Bytes out(8 * 8, 0);
     std::memcpy(&out[0], &state.h[0], 8 * 8);
     return out;
+    #endif
 }
 
 uint64_t point_evaluation_gas(ByteView, evmc_revision) noexcept {
     return 50000;
 }
 
+#ifndef ANTELOPE
 // https://eips.ethereum.org/EIPS/eip-4844#point-evaluation-precompile
 std::optional<Bytes> point_evaluation_run(ByteView input) noexcept {
     if (input.length() != 192) {
@@ -522,6 +644,7 @@ std::optional<Bytes> point_evaluation_run(ByteView input) noexcept {
         "0000000000000000000000000000000000000000000000000000000000001000"
         "73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
 }
+#endif
 
 bool is_precompile(const evmc::address& address, evmc_revision rev) noexcept {
     static_assert(std::size(kContracts) < 256);

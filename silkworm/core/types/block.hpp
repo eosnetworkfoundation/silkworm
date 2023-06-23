@@ -86,7 +86,7 @@ struct BlockHeader {
     //! \see https://eips.ethereum.org/EIPS/eip-4844#gas-accounting
     [[nodiscard]] std::optional<intx::uint256> data_gas_price() const;
 
-    friend bool operator==(const BlockHeader&, const BlockHeader&) = default;
+    friend bool operator==(const BlockHeader&, const BlockHeader&);
 };
 
 struct BlockBody {
@@ -94,12 +94,13 @@ struct BlockBody {
     std::vector<BlockHeader> ommers;
     std::optional<std::vector<Withdrawal>> withdrawals{std::nullopt};
 
-    friend bool operator==(const BlockBody&, const BlockBody&) = default;
+    friend bool operator==(const BlockBody&, const BlockBody&);
 };
 
 struct Block : public BlockBody {
     BlockHeader header;
 
+    bool irreversible{false};
     void recover_senders();
 };
 
