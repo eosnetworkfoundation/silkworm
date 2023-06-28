@@ -38,15 +38,21 @@
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/core/types/transaction.hpp>
 #include <silkworm/silkrpc/core/rawdb/accessors.hpp>
-#include <silkworm/silkrpc/core/remote_state.hpp>  // to be removed
+#include <silkworm/silkrpc/core/state_reader.hpp>
 
 namespace silkworm::rpc {
 
 struct ExecutionResult {
-    int64_t error_code;
+    std::optional<int64_t> error_code;
     uint64_t gas_left;
     Bytes data;
-    std::optional<std::string> pre_check_error{std::nullopt};
+    std::optional<std::string> pre_check_error;
+
+    bool success() const {
+        return ((error_code == std::nullopt || *error_code == evmc_status_code::EVMC_SUCCESS) && pre_check_error == std::nullopt);
+    }
+
+    std::string error_message(bool full_error = true) const;
 };
 
 constexpr int kCacheSize = 32000;
@@ -83,24 +89,10 @@ class EVMExecutor {
                                            bool gas_bailout = false);
     static std::string get_error_message(int64_t error_code, const Bytes& error_data, bool full_error = true);
 
-    EVMExecutor(const silkworm::ChainConfig& config, boost::asio::thread_pool& workers, silkworm::State& remote_state)
-        : config_(config),
-          workers_{workers},
-          state_{nullptr},
-          state1_{remote_state},
-          ibs_state_{state1_},
-          rule_set_(protocol::rule_set_factory(config)) {
-        SILKWORM_ASSERT(rule_set_);
-        if (!has_service<AnalysisCacheService>(workers_)) {
-            make_service<AnalysisCacheService>(workers_);
-        }
-    }
-
     EVMExecutor(const silkworm::ChainConfig& config, boost::asio::thread_pool& workers, std::shared_ptr<silkworm::State>& state)
         : config_(config),
           workers_{workers},
           state_{state},
-          state1_{*state_},
           ibs_state_{*state_},
           rule_set_(protocol::rule_set_factory(config)) {
         SILKWORM_ASSERT(rule_set_);
@@ -113,9 +105,7 @@ class EVMExecutor {
     EVMExecutor(const EVMExecutor&) = delete;
     EVMExecutor& operator=(const EVMExecutor&) = delete;
 
-    boost::asio::awaitable<ExecutionResult> call(const silkworm::Block& block, const silkworm::Transaction& txn, Tracers tracers = {},
-                                                 bool refund = true, bool gas_bailout = false);
-    ExecutionResult call_sync(const silkworm::Block& block, const silkworm::Transaction& txn, Tracers tracers = {}, bool refund = true, bool gas_bailout = false);
+    ExecutionResult call(const silkworm::Block& block, const silkworm::Transaction& txn, Tracers tracers = {}, bool refund = true, bool gas_bailout = false);
     void reset();
 
   private:
@@ -126,7 +116,6 @@ class EVMExecutor {
     const silkworm::ChainConfig& config_;
     boost::asio::thread_pool& workers_;
     std::shared_ptr<silkworm::State> state_;
-    silkworm::State& state1_;
     IntraBlockState ibs_state_;
     protocol::RuleSetPtr rule_set_;
 };

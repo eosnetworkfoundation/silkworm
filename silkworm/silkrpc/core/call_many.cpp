@@ -70,7 +70,7 @@ CallManyResult CallExecutor::executes_all_bundles(const silkworm::ChainConfig* c
             txn.recover_sender();
         }
 
-        auto exec_result = executor.call_sync(block, txn);
+        auto exec_result = executor.call(block, txn);
 
         if ((clock_time::since(start_time) / 1000000) > timeout) {
             std::ostringstream oss;
@@ -110,7 +110,7 @@ CallManyResult CallExecutor::executes_all_bundles(const silkworm::ChainConfig* c
         for (const auto& call : bundle.transactions) {
             silkworm::Transaction txn{call.to_transaction()};
 
-            auto call_execution_result = executor.call_sync(blockContext.block, txn);
+            auto call_execution_result = executor.call(blockContext.block, txn);
 
             if (call_execution_result.pre_check_error) {
                 result.error = call_execution_result.pre_check_error;
@@ -128,7 +128,7 @@ CallManyResult CallExecutor::executes_all_bundles(const silkworm::ChainConfig* c
             if (call_execution_result.error_code == evmc_status_code::EVMC_SUCCESS) {
                 reply["value"] = "0x" + silkworm::to_hex(call_execution_result.data);
             } else {
-                const auto error_message = EVMExecutor::get_error_message(call_execution_result.error_code, call_execution_result.data);
+                const auto error_message = call_execution_result.error_message();
                 if (call_execution_result.data.empty()) {
                     reply["error"] = error_message;
                 } else {

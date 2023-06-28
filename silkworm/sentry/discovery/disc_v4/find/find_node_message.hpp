@@ -29,6 +29,8 @@ struct FindNodeMessage {
 
     [[nodiscard]] Bytes rlp_encode() const;
     [[nodiscard]] static FindNodeMessage rlp_decode(ByteView data);
+
+    static const uint8_t kId;
 };
 
 }  // namespace silkworm::sentry::discovery::disc_v4::find

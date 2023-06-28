@@ -26,9 +26,10 @@
 #include <silkworm/node/db/tables.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
 #include <silkworm/silkrpc/test/context_test_base.hpp>
+#include <silkworm/silkrpc/test/dummy_transaction.hpp>
 #include <silkworm/silkrpc/test/mock_block_cache.hpp>
+#include <silkworm/silkrpc/test/mock_cursor.hpp>
 #include <silkworm/silkrpc/test/mock_database_reader.hpp>
-#include <silkworm/silkrpc/test/mock_transaction.hpp>
 #include <silkworm/silkrpc/types/transaction.hpp>
 
 namespace silkworm::rpc::debug {
@@ -69,7 +70,6 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute precompiled") {
     static Bytes kPlainStateValue1{
         *silkworm::from_hex("0f010203ed03e8010520f1885eda54b7a053318cd41e2093220dab15d65381b1157a3633a83bfd5c9239")};
 
-    test::MockTransaction tnx;
     test::MockBlockCache cache;
     test::MockDatabaseReader db_reader;
     boost::asio::thread_pool workers{1};
@@ -122,7 +122,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute precompiled") {
         silkworm::Block block{};
         block.header.number = 10'336'006;
 
-        DebugExecutor executor{db_reader, tnx, cache, workers};
+        std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+        test::DummyTransaction tx{0, mock_cursor};
+        DebugExecutor executor{db_reader, cache, workers, tx};
 
         stream.open_object();
         spawn_and_wait(executor.execute(stream, block, call));
@@ -231,7 +233,6 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 1") {
     static Bytes kPlainStateKey1{*silkworm::from_hex("e0a2bd4258d2768837baa26a28fe71dc079f84c7")};
     static Bytes kPlainStateKey2{*silkworm::from_hex("52728289eba496b6080d57d0250a90663a07e556")};
 
-    test::MockTransaction tnx;
     test::MockBlockCache cache;
     test::MockDatabaseReader db_reader;
     boost::asio::thread_pool workers{1};
@@ -270,7 +271,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 1") {
         silkworm::Block block{};
         block.header.number = block_number;
 
-        DebugExecutor executor{db_reader, tnx, cache, workers};
+        std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+        test::DummyTransaction tx{0, mock_cursor};
+        DebugExecutor executor{db_reader, cache, workers, tx};
 
         stream.open_object();
         spawn_and_wait(executor.execute(stream, block, call));
@@ -329,7 +332,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 1") {
         silkworm::Block block{};
         block.header.number = block_number;
 
-        DebugExecutor executor{db_reader, tnx, cache, workers};
+        std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+        test::DummyTransaction tx{0, mock_cursor};
+        DebugExecutor executor{db_reader, cache, workers, tx};
 
         stream.open_object();
         spawn_and_wait(executor.execute(stream, block, call));
@@ -436,7 +441,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 1") {
         block.header.number = block_number;
 
         DebugConfig config{false, false, true};
-        DebugExecutor executor{db_reader, tnx, cache, workers, config};
+        std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+        test::DummyTransaction tx{0, mock_cursor};
+        DebugExecutor executor{db_reader, cache, workers, tx, config};
 
         stream.open_object();
         spawn_and_wait(executor.execute(stream, block, call));
@@ -534,7 +541,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 1") {
         block.header.number = block_number;
 
         DebugConfig config{false, true, false};
-        DebugExecutor executor{db_reader, tnx, cache, workers, config};
+        std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+        test::DummyTransaction tx{0, mock_cursor};
+        DebugExecutor executor{db_reader, cache, workers, tx, config};
 
         stream.open_object();
         spawn_and_wait(executor.execute(stream, block, call));
@@ -637,7 +646,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 1") {
         block.header.number = block_number;
 
         DebugConfig config{true, false, false};
-        DebugExecutor executor{db_reader, tnx, cache, workers, config};
+        std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+        test::DummyTransaction tx{0, mock_cursor};
+        DebugExecutor executor{db_reader, cache, workers, tx, config};
 
         stream.open_object();
         spawn_and_wait(executor.execute(stream, block, call));
@@ -741,7 +752,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 1") {
         block.header.number = block_number;
 
         DebugConfig config{true, true, true};
-        DebugExecutor executor{db_reader, tnx, cache, workers, config};
+        std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+        test::DummyTransaction tx{0, mock_cursor};
+        DebugExecutor executor{db_reader, cache, workers, tx, config};
 
         stream.open_object();
         spawn_and_wait(executor.execute(stream, block, call));
@@ -832,7 +845,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 1") {
         block.header.number = block_number;
 
         DebugConfig config{true, true, true};
-        DebugExecutor executor{db_reader, tnx, cache, workers, config};
+        std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+        test::DummyTransaction tx{0, mock_cursor};
+        DebugExecutor executor{db_reader, cache, workers, tx, config};
 
         stream.open_object();
         spawn_and_wait(executor.execute(stream, block, call));
@@ -975,7 +990,6 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 2") {
     static Bytes kAccountChangeSetSubkey3{*silkworm::from_hex("0000000000000000000000000000000000000000")};
     static Bytes kAccountChangeSetValue3{*silkworm::from_hex("02094165832d46fa1082db")};
 
-    test::MockTransaction tnx;
     test::MockBlockCache cache;
     test::MockDatabaseReader db_reader;
     boost::asio::thread_pool workers{1};
@@ -1036,7 +1050,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call 2") {
         silkworm::Block block{};
         block.header.number = block_number;
 
-        DebugExecutor executor{db_reader, tnx, cache, workers};
+        std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+        test::DummyTransaction tx{0, mock_cursor};
+        DebugExecutor executor{db_reader, cache, workers, tx};
 
         stream.open_object();
         spawn_and_wait(executor.execute(stream, block, call));
@@ -1122,7 +1138,6 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call with error") {
     static Bytes kAccountChangeSetSubkey2{*silkworm::from_hex("0000000000000000000000000000000000000000")};
     static Bytes kAccountChangeSetValue2{*silkworm::from_hex("020944ed67f28fd50bb8e9")};
 
-    test::MockTransaction tnx;
     test::MockBlockCache cache;
     test::MockDatabaseReader db_reader;
     boost::asio::thread_pool workers{1};
@@ -1190,7 +1205,9 @@ TEST_CASE_METHOD(DebugExecutorTest, "DebugExecutor::execute call with error") {
     silkworm::Block block{};
     block.header.number = block_number;
 
-    DebugExecutor executor{db_reader, tnx, cache, workers};
+    std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
+    test::DummyTransaction tx{0, mock_cursor};
+    DebugExecutor executor{db_reader, cache, workers, tx};
 
     stream.open_object();
     spawn_and_wait(executor.execute(stream, block, call));
