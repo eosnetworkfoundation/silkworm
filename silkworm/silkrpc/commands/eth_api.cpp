@@ -1110,6 +1110,7 @@ awaitable<void> EthereumRpcApi::handle_eth_call(const nlohmann::json& request, s
         const auto [block_number, is_latest_block] = co_await core::get_block_number(block_id, tx_database, /*latest_required=*/true);
         const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
         silkworm::Transaction txn{call.to_transaction()};
+        if(!txn.from.has_value()) txn.from = evmc::address{0};
 
         const core::rawdb::DatabaseReader& db_reader =
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database);
@@ -1289,17 +1290,17 @@ awaitable<void> EthereumRpcApi::handle_eth_create_access_list(const nlohmann::js
 
         auto tracer = std::make_shared<AccessListTracer>(*call.from, to);
 
-        Tracers tracers{tracer};
         bool access_lists_match{false};
         do {
             const auto txn = call.to_transaction();
             tracer->reset_access_list();
 
+            Tracers tracers{tracer};
             const auto execution_result = co_await EVMExecutor::call(
                 *chain_config_ptr, workers_, block_with_hash->block, txn, [&](auto& io_executor, auto block_num) {
                     return tx->create_state(io_executor, db_reader, block_num);
                 },
-                tracers, /* refund */ true, /* gasBailout */ false);
+                std::move(tracers), /* refund */ true, /* gasBailout */ false);
 
             if (execution_result.pre_check_error) {
                 reply = make_json_error(request["id"], -32000, execution_result.pre_check_error.value());

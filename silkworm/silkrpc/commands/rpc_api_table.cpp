@@ -114,7 +114,7 @@ void RpcApiTable::add_eth_handlers() {
     method_handlers_[http::method::k_eth_chainId] = &commands::RpcApi::handle_eth_chain_id;
     method_handlers_[http::method::k_eth_protocolVersion] = &commands::RpcApi::handle_eth_protocol_version;
     method_handlers_[http::method::k_eth_syncing] = &commands::RpcApi::handle_eth_syncing;
-    method_handlers_[http::method::k_eth_gasPrice] = &commands::RpcApi::handle_eth_gas_price;
+    //method_handlers_[http::method::k_eth_gasPrice] = &commands::RpcApi::handle_eth_gas_price;
     method_handlers_[http::method::k_eth_getBlockByHash] = &commands::RpcApi::handle_eth_get_block_by_hash;
     method_handlers_[http::method::k_eth_getBlockByNumber] = &commands::RpcApi::handle_eth_get_block_by_number;
     method_handlers_[http::method::k_eth_getBlockTransactionCountByHash] = &commands::RpcApi::handle_eth_get_block_transaction_count_by_hash;
@@ -143,8 +143,8 @@ void RpcApiTable::add_eth_handlers() {
     method_handlers_[http::method::k_eth_getFilterLogs] = &commands::RpcApi::handle_eth_get_filter_logs;
     method_handlers_[http::method::k_eth_getFilterChanges] = &commands::RpcApi::handle_eth_get_filter_changes;
     method_handlers_[http::method::k_eth_uninstallFilter] = &commands::RpcApi::handle_eth_uninstall_filter;
-    method_handlers_[http::method::k_eth_sendRawTransaction] = &commands::RpcApi::handle_eth_send_raw_transaction;
-    method_handlers_[http::method::k_eth_sendTransaction] = &commands::RpcApi::handle_eth_send_transaction;
+    //method_handlers_[http::method::k_eth_sendRawTransaction] = &commands::RpcApi::handle_eth_send_raw_transaction;
+    //method_handlers_[http::method::k_eth_sendTransaction] = &commands::RpcApi::handle_eth_send_transaction;
     method_handlers_[http::method::k_eth_signTransaction] = &commands::RpcApi::handle_eth_sign_transaction;
     method_handlers_[http::method::k_eth_getProof] = &commands::RpcApi::handle_eth_get_proof;
     method_handlers_[http::method::k_eth_mining] = &commands::RpcApi::handle_eth_mining;

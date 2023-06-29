@@ -86,6 +86,7 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
 
                 ExecutionResult result{evmc_status_code::EVMC_SUCCESS};
                 silkworm::Transaction transaction{call.to_transaction()};
+                if(!transaction.from.has_value()) transaction.from = evmc::address{0};
                 while (lo + 1 < hi) {
                     auto mid = (hi + lo) / 2;
                     transaction.gas_limit = mid;

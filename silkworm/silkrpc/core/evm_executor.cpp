@@ -180,7 +180,7 @@ uint64_t EVMExecutor::refund_gas(const EVM& evm, const silkworm::Transaction& tx
 }
 
 void EVMExecutor::reset() {
-    ibs_state_.clear_journal_and_substate();
+    ibs_state_.reset();
 }
 
 std::optional<std::string> EVMExecutor::pre_check(const EVM& evm, const silkworm::Transaction& txn, const intx::uint256& base_fee_per_gas, const intx::uint128& g0) {

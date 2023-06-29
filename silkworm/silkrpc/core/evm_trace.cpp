@@ -1262,7 +1262,7 @@ awaitable<std::vector<TraceCallResult>> TraceCallExecutor::trace_block_transacti
 
                     tracers.push_back(ibs_tracer);
 
-                    auto execution_result = executor.call(block, transaction, tracers, /*refund=*/true, /*gas_bailout=*/true);
+                    auto execution_result = executor.call(block, transaction, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
                     if (execution_result.pre_check_error) {
                         result.pre_check_error = execution_result.pre_check_error.value();
                     } else {
@@ -1333,7 +1333,7 @@ awaitable<TraceManyCallResult> TraceCallExecutor::trace_calls(const silkworm::Bl
                     }
                     tracers.push_back(ibs_tracer);
 
-                    auto execution_result = executor.call(block, transaction, tracers, /*refund=*/true, /*gas_bailout=*/true);
+                    auto execution_result = executor.call(block, transaction, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
 
                     if (execution_result.pre_check_error) {
                         result.pre_check_error = "first run for txIndex " + std::to_string(index) + " error: " + execution_result.pre_check_error.value();
@@ -1387,7 +1387,7 @@ boost::asio::awaitable<TraceDeployResult> TraceCallExecutor::trace_deploy_transa
                         transaction.recover_sender();
                     }
 
-                    executor.call(block, transaction, tracers, /*refund=*/true, /*gas_bailout=*/true);
+                    executor.call(block, transaction, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
                     executor.reset();
 
                     if (create_tracer->found()) {
@@ -1452,7 +1452,7 @@ boost::asio::awaitable<TraceEntriesResult> TraceCallExecutor::trace_transaction_
 
                 Tracers tracers{entry_tracer};
 
-                executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, tracers, /*refund=*/true, /*gas_bailout=*/true);
+                executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
 
                 boost::asio::post(current_executor, [entry_tracer, self = std::move(self)]() mutable {
                     self.complete(entry_tracer);
@@ -1482,7 +1482,7 @@ boost::asio::awaitable<std::string> TraceCallExecutor::trace_transaction_error(c
                 EVMExecutor executor{*chain_config_ptr, workers_, curr_state};
                 Tracers tracers{};
 
-                auto execution_result = executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, tracers, /*refund=*/true, /*gas_bailout=*/true);
+                auto execution_result = executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
 
                 std::string result = "0x";
                 if (execution_result.error_code != evmc_status_code::EVMC_SUCCESS) {

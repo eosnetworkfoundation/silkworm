@@ -371,7 +371,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream, const silkworm::Blo
                     stream.open_array();
 
                     Tracers tracers{debug_tracer};
-                    const auto execution_result = executor.call(block, txn, tracers, /* refund */ false, /* gasBailout */ false);
+                    const auto execution_result = executor.call(block, txn, std::move(tracers), /* refund */ false, /* gasBailout */ false);
 
                     debug_tracer->flush_logs();
                     stream.close_array();
@@ -435,7 +435,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream, uint64_t block_numb
                 stream.open_array();
 
                 Tracers tracers{debug_tracer};
-                const auto execution_result = executor.call(block, transaction, tracers);
+                const auto execution_result = executor.call(block, transaction, std::move(tracers));
 
                 debug_tracer->flush_logs();
                 stream.close_array();
@@ -527,7 +527,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream,
                         auto debug_tracer = std::make_shared<debug::DebugTracer>(stream, config_);
                         Tracers tracers{debug_tracer};
 
-                        const auto execution_result = executor.call(blockContext.block, txn, tracers, /* refund */ false, /* gasBailout */ false);
+                        const auto execution_result = executor.call(blockContext.block, txn, std::move(tracers), /* refund */ false, /* gasBailout */ false);
 
                         debug_tracer->flush_logs();
                         stream.close_array();
