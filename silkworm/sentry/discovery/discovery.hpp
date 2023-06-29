@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -33,6 +34,8 @@ class Discovery {
   public:
     explicit Discovery(
         std::vector<common::EnodeUrl> peer_urls,
+        bool with_dynamic_discovery,
+        const std::filesystem::path& data_dir_path,
         std::function<common::EccKeyPair()> node_key,
         uint16_t disc_v4_port);
     ~Discovery();
