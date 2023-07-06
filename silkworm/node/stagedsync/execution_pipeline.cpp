@@ -212,7 +212,7 @@ Stage::Result ExecutionPipeline::forward(db::RWTxn& cycle_txn, BlockNum target_h
 
             if (stage_result != Stage::Result::kSuccess) { /* clang-format off */
                 auto result_description = std::string(magic_enum::enum_name<Stage::Result>(stage_result));
-                log::Error(get_log_prefix(), {"op", "Forward", "returned", });
+                log::Error(get_log_prefix(), {"op", "Forward", "returned", result_description});
                 log::Error("ExecPipeline") << "Forward interrupted due to stage " << current_stage_->first << " failure";
                 return stage_result;
             } /* clang-format on */

@@ -168,4 +168,8 @@ inline evmc::address make_reserved_address(uint64_t account) {
                          static_cast<uint8_t>(account >> 0)});
 }
 
+inline bool is_special_signature(const intx::uint256& r, const intx::uint256& s) {
+    return r == 0 && s <= std::numeric_limits<uint64_t>::max();
+}
+
 }  // namespace silkworm

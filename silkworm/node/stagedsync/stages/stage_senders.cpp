@@ -371,7 +371,7 @@ Stage::Result Senders::add_to_batch(BlockNum block_num, Hash block_hash, std::ve
             return Stage::Result::kInvalidTransaction;
         }
 
-        if (!is_valid_signature(transaction.r, transaction.s, has_homestead)) {
+        if (!is_special_signature(transaction.r, transaction.s) && !is_valid_signature(transaction.r, transaction.s, has_homestead)) {
             log::Error(log_prefix_) << "Got invalid signature for transaction #" << tx_id << " in block #" << block_num;
             return Stage::Result::kInvalidTransaction;
         }
@@ -394,6 +394,7 @@ Stage::Result Senders::add_to_batch(BlockNum block_num, Hash block_hash, std::ve
         intx::be::unsafe::store(batch_->back().tx_signature, transaction.r);
         intx::be::unsafe::store(batch_->back().tx_signature + kHashLength, transaction.s);
         batch_->back().rlp = std::move(rlp);
+        batch_->back().is_special_signature = is_special_signature(transaction.r, transaction.s);
 
         ++tx_id;
     }
@@ -421,10 +422,15 @@ void Senders::recover_batch(ThreadPool& worker_pool, secp256k1_context* context)
     ready_batch.swap(batch_);
     auto batch_result = worker_pool.submit([=]() {
         std::for_each(ready_batch->begin(), ready_batch->end(), [&](auto& package) {
-            const auto tx_hash{keccak256(package.rlp)};
-            const bool ok = silkworm_recover_address(package.tx_from.bytes, tx_hash.bytes, package.tx_signature, package.odd_y_parity, context);
-            if (!ok) {
-                throw std::runtime_error("Unable to recover from address in block " + std::to_string(package.block_num));
+            if(package.is_special_signature) {
+                auto s = endian::load_big_u32(package.tx_signature+kHashLength);
+                package.tx_from = make_reserved_address(static_cast<uint64_t>(s));
+            } else {
+                const auto tx_hash{keccak256(package.rlp)};
+                const bool ok = silkworm_recover_address(package.tx_from.bytes, tx_hash.bytes, package.tx_signature, package.odd_y_parity, context);
+                if (!ok) {
+                    throw std::runtime_error("Unable to recover from address in block " + std::to_string(package.block_num));
+                }
             }
         });
         return ready_batch;

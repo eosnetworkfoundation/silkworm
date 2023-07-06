@@ -40,6 +40,7 @@ struct AddressRecovery {
     uint8_t tx_signature[64]{};  // Signature of the transaction
     evmc::address tx_from;       // Recovered sender address
     Bytes rlp;                   // RLP representation of the transaction
+    bool is_special_signature{false};
 };
 
 using AddressRecoveryBatch = std::vector<AddressRecovery>;
