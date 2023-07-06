@@ -227,13 +227,13 @@ void Daemon::add_private_services() {
             database = std::make_unique<ethdb::kv::RemoteDatabase>(grpc_context, grpc_channel);
         }
         auto backend{std::make_unique<rpc::ethbackend::RemoteBackEnd>(io_context, grpc_channel, grpc_context)};
-        //auto tx_pool{std::make_unique<txpool::TransactionPool>(io_context, grpc_channel, grpc_context)};
-        //auto miner{std::make_unique<txpool::Miner>(io_context, grpc_channel, grpc_context)};
+        auto tx_pool{std::make_unique<txpool::TransactionPool>(io_context, grpc_channel, grpc_context)};
+        auto miner{std::make_unique<txpool::Miner>(io_context, grpc_channel, grpc_context)};
 
         add_private_service<ethdb::Database>(io_context, std::move(database));
         add_private_service<rpc::ethbackend::BackEnd>(io_context, std::move(backend));
-        //add_private_service(io_context, std::move(tx_pool));
-        //add_private_service(io_context, std::move(miner));
+        add_private_service(io_context, std::move(tx_pool));
+        add_private_service(io_context, std::move(miner));
     }
 }
 
@@ -268,8 +268,8 @@ DaemonChecklist Daemon::run_checklist() {
 
     const auto kv_protocol_check{wait_for_kv_protocol_check(core_service_channel)};
     const auto ethbackend_protocol_check{wait_for_ethbackend_protocol_check(core_service_channel)};
-    //const auto mining_protocol_check{wait_for_mining_protocol_check(core_service_channel)};
-    //const auto txpool_protocol_check{wait_for_txpool_protocol_check(core_service_channel)};
+    const auto mining_protocol_check{wait_for_mining_protocol_check(core_service_channel)};
+    const auto txpool_protocol_check{wait_for_txpool_protocol_check(core_service_channel)};
     DaemonChecklist checklist{{kv_protocol_check, ethbackend_protocol_check}};
     return checklist;
 }
