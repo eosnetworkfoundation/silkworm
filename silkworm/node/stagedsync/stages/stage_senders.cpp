@@ -285,6 +285,7 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
         // auto transactions_cursor = txn.ro_cursor(db::table::kBlockTransactions);
 
         uint64_t total_collected_senders{0};
+        collected_senders_ = 0;
 
         // Start from first block and read all in sequence
         for (auto current_block_num = start_block_num; current_block_num <= target_block_num; ++current_block_num) {
@@ -476,6 +477,7 @@ void Senders::collect_senders(std::shared_ptr<AddressRecoveryBatch>& batch) {
             }
             key = db::block_key(package.block_num, package.hash.bytes);
             value.clear();
+            block_num = package.block_num;
         }
         value.append(package.tx_from.bytes, sizeof(evmc::address));
     }
