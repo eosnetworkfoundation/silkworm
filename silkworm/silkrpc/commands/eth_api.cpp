@@ -1664,6 +1664,13 @@ awaitable<void> EthereumRpcApi::handle_eth_get_logs(const nlohmann::json& reques
         co_return;
     }
 
+    if (params[0].contains("topics") && !params[0]["topics"].is_array()) {
+        auto error_msg = "invalid eth_getLogs params. topics should be an array.";
+        SILK_ERROR << error_msg << "\n";
+        make_glaze_json_error(reply, request["id"], 100, error_msg);
+        co_return;
+    }
+
     auto filter = params[0].get<Filter>();
     SILK_DEBUG << "filter: " << filter;
 
