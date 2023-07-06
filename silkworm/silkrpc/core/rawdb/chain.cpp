@@ -204,9 +204,10 @@ boost::asio::awaitable<silkworm::BlockBody> read_body(const DatabaseReader& read
         if (stored_body.txn_count == 0) {
             co_return BlockBody{{}, std::move(stored_body.ommers), std::move(stored_body.withdrawals)};
         }
-        // 1 system txn at the beginning of block and 1 at the end
-        SILK_DEBUG << "base_txn_id: " << stored_body.base_txn_id + 1 << " txn_count: " << stored_body.txn_count - 2;
-        auto transactions = co_await read_canonical_transactions(reader, stored_body.base_txn_id + 1, stored_body.txn_count - 2);
+        // original comment: 1 system txn at the beginning of block and 1 at the end
+        SILK_DEBUG << "base_txn_id: " << stored_body.base_txn_id << " txn_count: " << stored_body.txn_count;
+        // auto transactions = co_await read_canonical_transactions(reader, stored_body.base_txn_id + 1, stored_body.txn_count - 2);
+        auto transactions = co_await read_canonical_transactions(reader, stored_body.base_txn_id, stored_body.txn_count);
         if (!transactions.empty()) {
             const auto senders = co_await read_senders(reader, block_hash, block_number);
             if (senders.size() == transactions.size()) {
