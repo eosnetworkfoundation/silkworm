@@ -41,9 +41,10 @@ std::string ExecutionResult::error_message(bool full_error) const {
         return *pre_check_error;
     }
     if (error_code) {
+        if(error_code == EVMC_SUCCESS) return "success";
         return silkworm::rpc::EVMExecutor::get_error_message(*error_code, data, full_error);
     }
-    return "";
+    return "n/a";
 }
 
 static Bytes build_abi_selector(const std::string& signature) {
@@ -149,6 +150,7 @@ std::string EVMExecutor::get_error_message(int64_t error_code, const Bytes& erro
             error_message = "out of memory";
             break;
         default:
+            SILK_DEBUG << "EVMExecutor::get_error_message (default) " << error_code;
             error_message = "unknown error code";
     }
 
@@ -232,6 +234,12 @@ ExecutionResult EVMExecutor::call(
 
     SILKWORM_ASSERT(txn.from.has_value());
     ibs_state_.access_account(*txn.from);
+
+    if(silkworm::is_reserved_address(*txn.from)) {
+        //must mirror contract's initial state of reserved address
+        ibs_state_.set_balance(*txn.from, txn.value + intx::uint256(txn.gas_limit) * txn.max_fee_per_gas);
+        ibs_state_.set_nonce(*txn.from, txn.nonce);
+    }
 
     const evmc_revision rev{evm.revision()};
     const intx::uint256 base_fee_per_gas{evm.block().header.base_fee_per_gas.value_or(0)};
