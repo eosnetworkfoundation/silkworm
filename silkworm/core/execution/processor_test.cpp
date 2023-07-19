@@ -387,4 +387,107 @@ TEST_CASE("Empty suicide beneficiary") {
     CHECK(!state.read_account(suicide_beneficiary));
 }
 
+TEST_CASE("EVM Call hook") {
+
+    Block block{};
+    block.header.number = 100;
+    block.header.gas_limit = 0x7fffffff;
+    block.header.beneficiary = 0xbbbbbbbbbbbbbbbbbbbbbbbb0000000000000000_address;
+
+    evmc::address caller{0x834e9b529ac9fa63b39a06f8d8c9b0d6791fa5df_address};
+    uint64_t nonce{3};
+
+    /*
+    // SPDX-License-Identifier: GPL-3.0
+    pragma solidity >=0.7.0 <0.9.0;
+    contract Recursive {
+        event Call(uint256 _value);
+        function start(uint256 _depth) public {
+            emit Call(_depth);
+            if( _depth == 0 )
+                return;
+            Recursive(this).start(_depth-1);
+        }
+    }
+    */
+    Bytes code{*from_hex(
+        "608060405234801561001057600080fd5b50610232806100206000396000f3fe608060405234"
+        "801561001057600080fd5b506004361061002b5760003560e01c806395805dad14610030575b"
+        "600080fd5b61004a60048036038101906100459190610142565b61004c565b005b7ff84df193"
+        "bb49c064bf1e234bd59df0c2a313cac2b206d8dc62dfc812a1b84fa58160405161007b919061"
+        "017e565b60405180910390a16000810315610104573073ffffffffffffffffffffffffffffff"
+        "ffffffffff166395805dad6001836100b591906101c8565b6040518263ffffffff1660e01b81"
+        "526004016100d1919061017e565b600060405180830381600087803b1580156100eb57600080"
+        "fd5b505af11580156100ff573d6000803e3d6000fd5b505050505b50565b600080fd5b600081"
+        "9050919050565b61011f8161010c565b811461012a57600080fd5b50565b6000813590506101"
+        "3c81610116565b92915050565b60006020828403121561015857610157610107565b5b600061"
+        "01668482850161012d565b91505092915050565b6101788161010c565b82525050565b600060"
+        "2082019050610193600083018461016f565b92915050565b7f4e487b71000000000000000000"
+        "00000000000000000000000000000000000000600052601160045260246000fd5b60006101d3"
+        "8261010c565b91506101de8361010c565b92508282039050818111156101f6576101f5610199"
+        "565b5b9291505056fea2646970667358221220dd3582a5d0cc9f3fc7818bf67fe1833fd59321"
+        "b5e0c69cc7af71e8332df84d3e64736f6c63430008110033"
+    )};
+
+    InMemoryState state;
+    auto rule_set{protocol::rule_set_factory(kEOSEVMMainnetConfig)};
+    ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig};
+
+    Transaction txn{
+        {.nonce = nonce,
+         .max_priority_fee_per_gas = 150 * kGiga,
+         .max_fee_per_gas = 150 * kGiga,
+         .gas_limit = 1'000'000,
+         .data = code
+        },
+        false,  // odd_y_parity
+        1,      // r
+        1,      // s
+    };
+
+    processor.evm().state().add_to_balance(caller, kEther*100);
+    processor.evm().state().set_nonce(caller, nonce);
+    txn.from = caller;
+
+    Receipt receipt1;
+    processor.execute_transaction(txn, receipt1);
+    CHECK(receipt1.success);
+
+    // Call the newly created contract
+    txn.nonce = nonce + 1;
+    txn.to = create_address(caller, nonce);
+    txn.data = *from_hex("0x95805dad0000000000000000000000000000000000000000000000000000000000000004"); //Call start(4)
+    txn.gas_limit = 1'000'000;
+
+    Receipt receipt2;
+    std::vector<Bytes> call_data;
+    processor.set_evm_call_hook([&](const evmc_message& msg, const evmc::Result& res){
+        CHECK(res.status_code == EVMC_SUCCESS);
+        call_data.push_back(Bytes{msg.input_data, msg.input_size});
+    });
+
+    processor.execute_transaction(txn, receipt2);
+    CHECK(receipt2.success);
+
+    CHECK(call_data.size()==5);
+    for(size_t i=0; i<5; i++) {
+        CHECK(call_data[i] == *from_hex("0x95805dad000000000000000000000000000000000000000000000000000000000000000" + std::to_string(i)));
+    }
+
+
+    // Call reserved address
+    txn.nonce = nonce + 1;
+    txn.to = 0xbbbbbbbbbbbbbbbbbbbbbbbb0000000000000000_address;
+    txn.data = *from_hex("0xB0CA");
+    txn.gas_limit = 1'000'000;
+
+    Receipt receipt3;
+    call_data.clear();
+
+    processor.execute_transaction(txn, receipt3);
+    CHECK(receipt3.success);
+    CHECK(call_data.size()==1);
+    CHECK(call_data[0] == *from_hex("0xB0CA"));
+}
+
 }  // namespace silkworm

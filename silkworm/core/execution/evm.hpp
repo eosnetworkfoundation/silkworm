@@ -64,6 +64,8 @@ using EvmTracers = std::vector<std::reference_wrapper<EvmTracer>>;
 
 using AnalysisCache = lru_cache<evmc::bytes32, std::shared_ptr<evmone::baseline::CodeAnalysis>>;
 
+using HookFunction = std::function<void(const evmc_message&, const evmc::Result&)>;
+
 class EVM {
   public:
     // Not copyable nor movable
@@ -97,6 +99,10 @@ class EVM {
 
     evmc::address beneficiary;  // block.header.beneficiary by default; may be overridden for Clique
 
+    void set_call_hook(std::optional<HookFunction> hook) {
+      hook_ = hook;
+    }
+
   private:
     friend class EvmHost;
 
@@ -120,6 +126,7 @@ class EVM {
     EvmTracers tracers_;
 
     evmc_vm* evm1_{nullptr};
+    std::optional<HookFunction> hook_;
 };
 
 class EvmHost : public evmc::Host {

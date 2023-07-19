@@ -23,6 +23,8 @@
 #include <memory>
 #include <utility>
 
+#include <gsl/util>
+
 #include <ethash/keccak.hpp>
 #include <evmone/evmone.h>
 #include <evmone/tracing.hpp>
@@ -191,6 +193,10 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
 
 evmc::Result EVM::call(const evmc_message& message) noexcept {
     evmc::Result res{EVMC_SUCCESS, message.gas};
+
+    auto at_exit = gsl::finally([&] {
+        if(hook_) { (*hook_)(message, res); }
+    });
 
     const auto value{intx::be::load<intx::uint256>(message.value)};
     if (message.kind != EVMC_DELEGATECALL && state_.get_balance(message.sender) < value) {

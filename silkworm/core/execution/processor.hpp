@@ -54,6 +54,7 @@ class ExecutionProcessor {
 
     // ENF: moved from private so available by evm_contract::validate_transaction
     uint64_t available_gas() const noexcept;
+    void set_evm_call_hook(HookFunction hook) { evm_.set_call_hook(hook); }
     // Added by ENF --^
 
   private:
