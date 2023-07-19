@@ -634,7 +634,7 @@ Stage::Result HashState::unwind_from_account_changeset(db::RWTxn& txn, BlockNum 
         while (changeset_data.done) {
             reached_blocknum = endian::load_big_u64(db::from_slice(changeset_data.key).data());
             // We comment out this check since we don't expect account changes to be in consecutive blocks
-            check_block_sequence(reached_blocknum, expected_blocknum);
+            // check_block_sequence(reached_blocknum, expected_blocknum);
             if (reached_blocknum > previous_progress) {
                 break;
             }
