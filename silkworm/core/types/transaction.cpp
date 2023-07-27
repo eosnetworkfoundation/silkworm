@@ -422,7 +422,15 @@ void Transaction::recover_sender() {
     }
 
     if(r == intx::uint256()) {
-        from = make_reserved_address(static_cast<uint64_t>(s));
+        // s contains a regular evm_address if padded with '1's
+        // otherwise it's an eos name
+        if (s >> kAddressLength * 8 == (~intx::uint256(0)) >> kAddressLength * 8) {
+            from = evmc::address{};
+            intx::be::trunc(from->bytes, s);
+        } 
+        else {
+            from = make_reserved_address(static_cast<uint64_t>(s));
+        }
         return;
     }
 
