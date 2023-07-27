@@ -195,7 +195,14 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
     evmc::Result res{EVMC_SUCCESS, message.gas};
 
     auto at_exit = gsl::finally([&] {
-        if(hook_) { (*hook_)(message, res); }
+        if(res.status_code == EVMC_SUCCESS && message_filter_ && (*message_filter_)(message)) {
+            state_.add_filtered_message(FilteredMessage{
+                .sender   = message.sender,
+                .receiver = message.recipient,
+                .value    = message.value,
+                .data     = silkworm::Bytes{message.input_data, message.input_size}
+            });
+        }
     });
 
     const auto value{intx::be::load<intx::uint256>(message.value)};
