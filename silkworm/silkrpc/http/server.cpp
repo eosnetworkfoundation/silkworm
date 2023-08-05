@@ -83,21 +83,25 @@ boost::asio::awaitable<void> Server::run() {
             SILK_DEBUG << "Server::run accepting using io_context " << &io_context_ << "...";
 
             std::shared_ptr<Connection> new_connection;
+            bool no_descriptors_error = false;
             try {
                 new_connection = std::make_shared<Connection>(io_context_, rpc_api_, handler_table_, jwt_secret_);
                 co_await acceptor_.async_accept(new_connection->socket(), boost::asio::use_awaitable);
             } catch (const boost::system::system_error& se) {
                 if (se.code() == boost::asio::error::no_descriptors) {
-                    SILK_WARN << "Server::run too many open connections";
-                    boost::asio::steady_timer timer(acceptor_.get_executor());
-                    timer.expires_after(boost::asio::chrono::milliseconds(100));
-                    co_await timer.async_wait(boost::asio::use_awaitable);
-                    continue;
+                    no_descriptors_error = true;
                 } else {
                     throw;
                 }
             }
 
+            if(no_descriptors_error == true) {
+               SILK_WARN << "Server::run too many open connections";
+               boost::asio::steady_timer timer(acceptor_.get_executor());
+               timer.expires_after(boost::asio::chrono::milliseconds(100));
+               co_await timer.async_wait(boost::asio::use_awaitable);
+               continue;
+            }
 
             if (!acceptor_.is_open()) {
                 SILK_TRACE << "Server::run returning...";
