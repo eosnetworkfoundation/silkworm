@@ -421,8 +421,8 @@ void Transaction::recover_sender() {
         return;
     }
 
-    if(r == intx::uint256()) {
-        from = make_reserved_address(static_cast<uint64_t>(s));
+    if(is_special_signature(r, s)) {
+        from = decode_special_signature(s);
         return;
     }
 

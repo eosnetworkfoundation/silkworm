@@ -425,7 +425,7 @@ void Senders::recover_batch(ThreadPool& worker_pool, secp256k1_context* context)
         std::for_each(ready_batch->begin(), ready_batch->end(), [&](auto& package) {
             if(package.is_special_signature) {
                 auto s = endian::load_big_u32(package.tx_signature+kHashLength);
-                package.tx_from = make_reserved_address(static_cast<uint64_t>(s));
+                package.tx_from = decode_special_signature(s);
             } else {
                 const auto tx_hash{keccak256(package.rlp)};
                 const bool ok = silkworm_recover_address(package.tx_from.bytes, tx_hash.bytes, package.tx_signature, package.odd_y_parity, context);
