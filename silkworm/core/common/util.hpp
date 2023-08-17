@@ -168,8 +168,24 @@ inline evmc::address make_reserved_address(uint64_t account) {
                          static_cast<uint8_t>(account >> 0)});
 }
 
+inline evmc::address decode_special_signature(const intx::uint256& s) {
+    // Assumen already tested by is_special_signature()
+    if (s <= std::numeric_limits<uint64_t>::max()) {
+        return make_reserved_address(static_cast<uint64_t>(s));
+    }
+    else {
+        evmc::address from = evmc::address{};
+        intx::be::trunc(from.bytes, s);
+        return from;
+    } 
+}
+
 inline bool is_special_signature(const intx::uint256& r, const intx::uint256& s) {
-    return r == 0 && s <= std::numeric_limits<uint64_t>::max();
+    // s contains a regular evm_address if padded with '1's
+    // otherwise it should be an eos name
+    return r == 0 && 
+            (s <= std::numeric_limits<uint64_t>::max() || 
+            s >> kAddressLength * 8 == (~intx::uint256(0)) >> kAddressLength * 8);
 }
 
 }  // namespace silkworm
