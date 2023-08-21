@@ -30,6 +30,13 @@
 
 namespace silkworm {
 
+struct FilteredMessage {
+  evmc::address   sender;
+  evmc::address   receiver;
+  evmc_uint256be  value;
+  silkworm::Bytes data;
+};
+
 class IntraBlockState {
   public:
     class Snapshot {
@@ -45,6 +52,7 @@ class IntraBlockState {
 
         size_t journal_size_{0};
         size_t log_size_{0};
+        size_t filtered_messages_size_{0};
     };
 
     // Not copyable nor movable
@@ -107,9 +115,13 @@ class IntraBlockState {
     void reset();
 
     void add_log(const Log& log) noexcept;
+    void add_filtered_message(const FilteredMessage& msg) noexcept;
 
     std::vector<Log>& logs() noexcept { return logs_; }
     const std::vector<Log>& logs() const noexcept { return logs_; }
+
+    std::vector<FilteredMessage>& filtered_messages() noexcept { return filtered_messages_; }
+    const std::vector<FilteredMessage>& filtered_messages() const noexcept { return filtered_messages_; }
 
     const FlatHashSet<evmc::address>& touched() const noexcept { return touched_; }
 
@@ -150,6 +162,7 @@ class IntraBlockState {
     // substate
     FlatHashSet<evmc::address> self_destructs_;
     std::vector<Log> logs_;
+    std::vector<FilteredMessage> filtered_messages_;
     FlatHashSet<evmc::address> touched_;
     // EIP-2929 substate
     FlatHashSet<evmc::address> accessed_addresses_;

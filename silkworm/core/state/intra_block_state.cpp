@@ -352,6 +352,7 @@ IntraBlockState::Snapshot IntraBlockState::take_snapshot() const noexcept {
     IntraBlockState::Snapshot snapshot;
     snapshot.journal_size_ = journal_.size();
     snapshot.log_size_ = logs_.size();
+    snapshot.filtered_messages_size_ = filtered_messages_.size();
     return snapshot;
 }
 
@@ -361,6 +362,7 @@ void IntraBlockState::revert_to_snapshot(const IntraBlockState::Snapshot& snapsh
     }
     journal_.resize(snapshot.journal_size_);
     logs_.resize(snapshot.log_size_);
+    filtered_messages_.resize(snapshot.filtered_messages_size_);
 }
 
 void IntraBlockState::finalize_transaction() {
@@ -388,6 +390,7 @@ void IntraBlockState::clear_journal_and_substate() {
     // and the substate
     self_destructs_.clear();
     logs_.clear();
+    filtered_messages_.clear();
     touched_.clear();
     // EIP-2929
     accessed_addresses_.clear();
@@ -395,5 +398,6 @@ void IntraBlockState::clear_journal_and_substate() {
 }
 
 void IntraBlockState::add_log(const Log& log) noexcept { logs_.push_back(log); }
+void IntraBlockState::add_filtered_message(const FilteredMessage& msg) noexcept { filtered_messages_.push_back(msg); }
 
 }  // namespace silkworm
