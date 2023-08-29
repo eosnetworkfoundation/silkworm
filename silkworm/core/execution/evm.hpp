@@ -64,6 +64,8 @@ using EvmTracers = std::vector<std::reference_wrapper<EvmTracer>>;
 
 using AnalysisCache = lru_cache<evmc::bytes32, std::shared_ptr<evmone::baseline::CodeAnalysis>>;
 
+using FilterFunction = std::function<bool(const evmc_message&)>;
+
 class EVM {
   public:
     // Not copyable nor movable
@@ -97,6 +99,10 @@ class EVM {
 
     evmc::address beneficiary;  // block.header.beneficiary by default; may be overridden for Clique
 
+    void set_message_filter(std::optional<FilterFunction> message_filter) {
+      message_filter_ = message_filter;
+    }
+
   private:
     friend class EvmHost;
 
@@ -120,6 +126,7 @@ class EVM {
     EvmTracers tracers_;
 
     evmc_vm* evm1_{nullptr};
+    std::optional<FilterFunction> message_filter_;
 };
 
 class EvmHost : public evmc::Host {
