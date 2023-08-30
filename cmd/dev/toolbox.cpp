@@ -22,6 +22,7 @@
 #include <regex>
 #include <stdexcept>
 #include <string>
+#include <list>
 
 #include <CLI/CLI.hpp>
 #include <absl/container/btree_map.h>
@@ -48,6 +49,8 @@
 #include <silkworm/node/db/prune_mode.hpp>
 #include <silkworm/node/db/stages.hpp>
 #include <silkworm/node/stagedsync/stages/stage_interhashes/trie_cursor.hpp>
+
+#include "jsonfile/types.hpp"
 
 namespace fs = std::filesystem;
 using namespace silkworm;
@@ -1462,6 +1465,70 @@ void do_trie_root(db::EnvConfig& config) {
     }
 }
 
+void do_dump_state(db::EnvConfig& config, const std::string& evm_state_file_name) {
+    if (!config.exclusive) {
+        throw std::runtime_error("Function requires exclusive access to database");
+    }
+
+    auto env{silkworm::db::open_env(config)};
+    db::ROTxn txn(env);
+
+    db::PooledCursor accounts(txn, db::table::kPlainState);
+    auto data{accounts.to_first(/*throw_notfound=*/false)};
+
+    std::list<evm_json_file::account> jaccounts;
+    std::optional<evm_json_file::account> current_account;
+
+    while (data) {
+        auto key{db::from_slice(data.key)};
+        auto value{db::from_slice(data.value)};
+
+        if(key.size() == 20) {
+            if(current_account) {
+                jaccounts.push_back(*current_account);
+            }
+            current_account = evm_json_file::account{};
+            const auto account{Account::from_encoded_storage(value)};
+            success_or_throw(account);
+            memcpy(current_account->address.data(), key.data(), 20);
+            current_account->nonce = account->nonce;
+            intx::be::unsafe::store<intx::uint256>(current_account->balance.data(), account->balance);
+            if(account->code_hash != kEmptyHash) {
+                evm_json_file::b32 code_hash;
+                memcpy(code_hash.data(), account->code_hash.bytes, 32);
+                current_account->code_hash = code_hash;
+            }
+        } else if(key.size() == 28) {
+            evm_json_file::b20 address;
+            memcpy(address.data(), key.data(), 20);
+            if(current_account.has_value() && address == current_account->address) {
+                //encarnation check??
+                SILKWORM_ASSERT(value.size() <= 64);
+                evm_json_file::storage s;
+                memcpy(s.key.data(), value.data(), 32);
+                value.remove_prefix(32);
+                memset(s.value.data(), 0, 32);
+                memcpy(s.value.data()+(32-value.size()), value.data(), value.size());
+                current_account->slots.push_back(s);
+            } else {
+                //dump somewhere else?
+                std::cout << to_hex(db::from_slice(data.key)) << ":" << to_hex(db::from_slice(data.value)) << std::endl;
+            }
+        } else {
+            SILKWORM_ASSERT(false);
+        }
+        data = accounts.to_next(/*throw_notfound=*/false);
+    }
+
+    if(current_account) {
+        jaccounts.push_back(*current_account);
+    }
+
+    auto outfile = std::ofstream(evm_state_file_name, (std::ios::out | std::ios::binary));
+    outfile << jaccounts << std::endl;
+    outfile.close();
+}
+
 void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
     if (!config.exclusive) {
         throw std::runtime_error("Function requires exclusive access to database");
@@ -1781,6 +1848,12 @@ int main(int argc, char* argv[]) {
     auto cmd_reset_to_download_keep_senders_opt =
         cmd_reset_to_download->add_flag("--keep-senders", "Keep the recovered transaction senders");
 
+    // Dump state
+    auto cmd_dump_state =
+        app_main.add_subcommand("dump-state", "Dump EVM state (eos-evm)");
+
+    auto cmd_dump_state_out_file_opt = cmd_dump_state->add_option("--out-file", "Output file")->default_val("silkworm-evm-state.json");
+
     /*
      * Parse arguments and validate
      */
@@ -1875,6 +1948,8 @@ int main(int argc, char* argv[]) {
             do_trie_root(src_config);
         } else if (*cmd_reset_to_download) {
             do_reset_to_download(src_config, static_cast<bool>(*cmd_reset_to_download_keep_senders_opt));
+        } else if (*cmd_dump_state) {
+            do_dump_state(src_config, cmd_dump_state_out_file_opt->as<std::string>());
         }
 
         return 0;
