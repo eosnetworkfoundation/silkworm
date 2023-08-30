@@ -424,7 +424,7 @@ void Senders::recover_batch(ThreadPool& worker_pool, secp256k1_context* context)
     auto batch_result = worker_pool.submit([=]() {
         std::for_each(ready_batch->begin(), ready_batch->end(), [&](auto& package) {
             if(package.is_special_signature) {
-                auto s = endian::load_big_u32(package.tx_signature+kHashLength);
+                const auto s = intx::be::unsafe::load<intx::uint256>(&package.tx_signature[32]);
                 package.tx_from = decode_special_signature(s);
             } else {
                 const auto tx_hash{keccak256(package.rlp)};
