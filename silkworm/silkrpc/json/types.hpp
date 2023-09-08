@@ -132,14 +132,14 @@ void to_quantity(std::span<char> hex_bytes, intx::uint256 number);
 void to_quantity(std::span<char> hex_bytes, silkworm::ByteView bytes);
 void to_hex(std::span<char> hex_bytes, silkworm::ByteView bytes);
 
-nlohmann::json make_json_content(uint32_t id);
-nlohmann::json make_json_content(uint32_t id, const nlohmann::json& result);
-nlohmann::json make_json_error(uint32_t id, int code, const std::string& message);
-nlohmann::json make_json_error(uint32_t id, const RevertError& error);
+nlohmann::json make_json_content(const nlohmann::json& id);
+nlohmann::json make_json_content(const nlohmann::json& id, const nlohmann::json& result);
+nlohmann::json make_json_error(const nlohmann::json& id, int code, const std::string& message);
+nlohmann::json make_json_error(const nlohmann::json& id, const RevertError& error);
 
 // GLAZE
-void make_glaze_json_error(std::string& reply, uint32_t id, int error_id, const std::string& message);
-void make_glaze_json_error(std::string& reply, uint32_t id, const RevertError& error);
+void make_glaze_json_error(std::string& reply, const nlohmann::json& id, int error_id, const std::string& message);
+void make_glaze_json_error(std::string& reply, const nlohmann::json& id, const RevertError& error);
 
 }  // namespace silkworm::rpc
 
