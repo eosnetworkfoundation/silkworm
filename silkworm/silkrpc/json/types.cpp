@@ -36,7 +36,7 @@ namespace glz::detail
       template <auto Opts>
       static void op(const nlohmann::json& value, auto&&... args) noexcept
       {
-         write<json>::op<Opts>(value.get<std::string>(), args...);
+         write<json>::op<Opts>(value.dump(), args...);
       }
    };
 }
