@@ -56,9 +56,9 @@ class RequestHandler {
 
     boost::asio::awaitable<void> handle_request_and_create_reply(const nlohmann::json& request_json, http::Reply& reply);
 
-    boost::asio::awaitable<void> handle_request(uint32_t request_id,
+    boost::asio::awaitable<void> handle_request(const nlohmann::json& request_id,
                                                 commands::RpcApiTable::HandleMethod handler, const nlohmann::json& request_json, http::Reply& reply);
-    boost::asio::awaitable<void> handle_request(uint32_t request_id,
+    boost::asio::awaitable<void> handle_request(const nlohmann::json& request_id,
                                                 commands::RpcApiTable::HandleMethodGlaze handler, const nlohmann::json& request_json, http::Reply& reply);
     boost::asio::awaitable<void> handle_request(commands::RpcApiTable::HandleStream handler, const nlohmann::json& request_json);
     boost::asio::awaitable<void> do_write(http::Reply& reply);

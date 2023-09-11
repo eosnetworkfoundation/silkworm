@@ -55,7 +55,7 @@ boost::asio::awaitable<void> RequestHandler::handle(const http::Request& request
                 reply.content = "\n";
                 reply.status = http::StatusType::ok;
             } else {
-                const auto request_id = request_json["id"].get<uint32_t>();
+                const auto request_id = request_json["id"];
                 const auto error = co_await is_request_authorized(request);
                 if (error.has_value()) {
                     reply.content = make_json_error(request_id, 403, error.value()).dump() + "\n";
@@ -74,7 +74,7 @@ boost::asio::awaitable<void> RequestHandler::handle(const http::Request& request
                     reply.content = "\n";
                     reply.status = http::StatusType::ok;
                 } else {
-                    auto request_id = item_json["id"].get<uint32_t>();
+                    auto request_id = item_json["id"];
                     const auto error = co_await is_request_authorized(request);
                     if (error.has_value()) {
                         reply.content = make_json_error(request_id, 403, error.value()).dump() + "\n";
@@ -101,7 +101,7 @@ boost::asio::awaitable<void> RequestHandler::handle(const http::Request& request
 }
 
 boost::asio::awaitable<void> RequestHandler::handle_request_and_create_reply(const nlohmann::json& request_json, http::Reply& reply) {
-    const auto request_id = request_json["id"].get<uint32_t>();
+    const auto request_id = request_json["id"];
     if (!request_json.contains("method")) {
         reply.content = make_json_error(request_id, -32600, "invalid request").dump();
         reply.status = http::StatusType::bad_request;
@@ -138,7 +138,7 @@ boost::asio::awaitable<void> RequestHandler::handle_request_and_create_reply(con
     co_return;
 }
 
-boost::asio::awaitable<void> RequestHandler::handle_request(uint32_t request_id, commands::RpcApiTable::HandleMethodGlaze handler, const nlohmann::json& request_json, http::Reply& reply) {
+boost::asio::awaitable<void> RequestHandler::handle_request(const nlohmann::json& request_id, commands::RpcApiTable::HandleMethodGlaze handler, const nlohmann::json& request_json, http::Reply& reply) {
     try {
         std::string reply_json;
         reply_json.reserve(2048);
@@ -158,7 +158,7 @@ boost::asio::awaitable<void> RequestHandler::handle_request(uint32_t request_id,
     co_return;
 }
 
-boost::asio::awaitable<void> RequestHandler::handle_request(uint32_t request_id, commands::RpcApiTable::HandleMethod handler, const nlohmann::json& request_json, http::Reply& reply) {
+boost::asio::awaitable<void> RequestHandler::handle_request(const nlohmann::json& request_id, commands::RpcApiTable::HandleMethod handler, const nlohmann::json& request_json, http::Reply& reply) {
     try {
         nlohmann::json reply_json;
         co_await (rpc_api_.*handler)(request_json, reply_json);
