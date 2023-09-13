@@ -24,7 +24,7 @@
 #include <gmock/gmock.h>
 #include <grpcpp/server_builder.h>
 
-#include <silkworm/infra/test/log.hpp>
+#include <silkworm/infra/test_util/log.hpp>
 #include <silkworm/interfaces/remote/ethbackend.grpc.pb.h>
 #include <silkworm/interfaces/remote/kv.grpc.pb.h>
 #include <silkworm/interfaces/txpool/mining.grpc.pb.h>
@@ -46,7 +46,7 @@ using testing::SetArgPointee;
 #ifndef SILKWORM_SANITIZE
 TEST_CASE("write protocol version to ostream", "[silkrpc][protocol][version]") {
     const ProtocolVersion v{1, 0, 0};
-    CHECK_NOTHROW(silkworm::test::null_stream() << v);
+    CHECK_NOTHROW(silkworm::test_util::null_stream() << v);
 }
 
 TEST_CASE("ETHBACKEND protocol version error", "[silkrpc][protocol][wait_for_ethbackend_protocol_check]") {
@@ -97,7 +97,7 @@ TEST_CASE("ETHBACKEND protocol version match", "[silkrpc][protocol][wait_for_eth
     std::unique_ptr<::remote::ETHBACKEND::StubInterface> stub{std::make_unique<::remote::FixIssue24351_MockETHBACKENDStub>()};
     types::VersionReply reply;
     reply.set_major(3);
-    reply.set_minor(2);
+    reply.set_minor(3);
 
     EXPECT_CALL(*dynamic_cast<::remote::FixIssue24351_MockETHBACKENDStub*>(stub.get()), Version(_, _, _)).WillOnce(DoAll(SetArgPointee<2>(reply), Return(grpc::Status::OK)));
     const auto version_result{wait_for_ethbackend_protocol_check(stub)};
@@ -111,7 +111,7 @@ TEST_CASE("ETHBACKEND protocol version with server stub", "[silkrpc][protocol][w
       public:
         ::grpc::Status Version(::grpc::ServerContext*, const ::google::protobuf::Empty*, ::types::VersionReply* response) override {
             response->set_major(3);
-            response->set_minor(2);
+            response->set_minor(3);
             response->set_patch(0);
             return ::grpc::Status::OK;
         }

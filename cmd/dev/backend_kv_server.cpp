@@ -31,9 +31,7 @@
 #include <silkworm/infra/common/directories.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/concurrency/awaitable_wait_for_one.hpp>
-#include <silkworm/infra/concurrency/context_pool_settings.hpp>
 #include <silkworm/infra/grpc/client/client_context_pool.hpp>
-#include <silkworm/infra/grpc/common/util.hpp>
 #include <silkworm/node/backend/ethereum_backend.hpp>
 #include <silkworm/node/backend/remote/backend_kv_server.hpp>
 #include <silkworm/node/db/access_layer.hpp>
@@ -113,11 +111,11 @@ int parse_command_line(int argc, char* argv[], CLI::App& app, StandaloneBackEndK
     return 0;
 }
 
-std::shared_ptr<silkworm::sentry::api::api_common::SentryClient> make_sentry_client(
+std::shared_ptr<silkworm::sentry::api::SentryClient> make_sentry_client(
     const NodeSettings& node_settings,
     rpc::ClientContextPool& context_pool,
     db::ROAccess db_access) {
-    std::shared_ptr<silkworm::sentry::api::api_common::SentryClient> sentry_client;
+    std::shared_ptr<silkworm::sentry::api::SentryClient> sentry_client;
 
     db::EthStatusDataProvider eth_status_data_provider{db_access, node_settings.chain_config.value()};
 
@@ -133,7 +131,7 @@ std::shared_ptr<silkworm::sentry::api::api_common::SentryClient> make_sentry_cli
             remote_sentry_client,
             eth_status_data_provider.to_factory_function());
     } else {
-        std::vector<std::shared_ptr<silkworm::sentry::api::api_common::SentryClient>> clients;
+        std::vector<std::shared_ptr<silkworm::sentry::api::SentryClient>> clients;
 
         for (const auto& address_uri : node_settings.remote_sentry_addresses) {
             // remote client
@@ -175,7 +173,6 @@ int main(int argc, char* argv[]) {
         // Initialize logging with custom settings
         log::init(log_settings);
         log::set_thread_name("bekv_server");
-        rpc::Grpc2SilkwormLogGuard log_guard;
 
         const auto node_name{get_node_name_from_build_info(silkworm_get_buildinfo())};
         SILK_LOG << "BackEndKvServer build info: " << node_name;
@@ -188,7 +185,7 @@ int main(int argc, char* argv[]) {
         SILK_INFO << "BackEndKvServer MDBX max readers: " << database_env.max_readers();
 
         // Read chain config from database (this allows for custom config)
-        db::ROTxn ro_txn{database_env};
+        db::ROTxnManaged ro_txn{database_env};
         node_settings.chain_config = db::read_chain_config(ro_txn);
         if (!node_settings.chain_config.has_value()) {
             throw std::runtime_error("invalid chain config in database");
@@ -224,10 +221,10 @@ int main(int argc, char* argv[]) {
         constexpr silkworm::BlockNum kStartBlock{100'000'000};
         constexpr uint64_t kGasLimit{30'000'000};
 
-        boost::asio::awaitable<void> tasks;
+        Task<void> tasks;
         if (settings.simulate_state_changes) {
             using namespace boost::asio::experimental::awaitable_operators;
-            auto state_changes_simulator = [&]() -> boost::asio::awaitable<void> {
+            auto state_changes_simulator = [&]() -> Task<void> {
                 auto run = [&]() {
                     boost::system::error_code ec;
                     while (ec != boost::asio::error::operation_aborted) {
@@ -243,14 +240,14 @@ int main(int argc, char* argv[]) {
                 auto stop = [&state_changes_timer]() {
                     state_changes_timer.cancel();
                 };
-                co_await concurrency::async_thread(std::move(run), std::move(stop));
+                co_await concurrency::async_thread(std::move(run), std::move(stop), "state-c-sim");
             };
-            tasks = state_changes_simulator() && server.async_run();
+            tasks = state_changes_simulator() && server.async_run("bekv-server");
         } else {
-            tasks = server.async_run();
+            tasks = server.async_run("bekv-server");
         }
 
-        ShutdownSignal shutdown_signal{context_pool.next_io_context()};
+        ShutdownSignal shutdown_signal{context_pool.next_io_context().get_executor()};
 
         // Go!
         auto run_future = boost::asio::co_spawn(

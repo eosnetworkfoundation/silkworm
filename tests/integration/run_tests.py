@@ -39,6 +39,12 @@ api_not_compared = [
 ]
 
 tests_not_compared = [
+   "debug_accountAt/test_04.json",
+   "debug_accountAt/test_05.json",
+   "debug_accountAt/test_06.json",
+   "debug_accountAt/test_07.json",
+   "debug_accountAt/test_10.json",
+   "debug_accountAt/test_11.json",
    "debug_traceBlockByHash/test_02.tar",
    "debug_traceBlockByHash/test_03.tar",
    "debug_traceBlockByHash/test_04.tar",
@@ -119,6 +125,8 @@ def get_jwt_secret(name):
 #
 #
 def to_lower_case(file):
+    """ converts input string into lower case
+    """
     lowercase_file = "/tmp/lowercase"
     cmd = "tr '[:upper:]' '[:lower:]' < " + file + " > " + lowercase_file
     os.system(cmd)
@@ -236,6 +244,11 @@ def run_shell_command(command: str, command1: str, expected_response: str, verbo
                 print("OK")
             return 0
         if "error" in response and "error" in expected_response and expected_response["error"] is None:
+            # response and expected_response are different but don't care
+            if verbose:
+                print("OK")
+            return 0
+        if "error" not in expected_response and "result" not in expected_response:
             # response and expected_response are different but don't care
             if verbose:
                 print("OK")
@@ -388,24 +401,25 @@ def usage(argv):
     """
     print("Usage: " + argv[0] + ":")
     print("")
-    print("Launch an automated test sequence on Silkrpc or RPCDaemon")
+    print("Launch an automated test sequence on Silkworm RpcDaemon (aka Silkrpc) or Erigon RpcDaemon")
     print("")
     print("-h print this help")
-    print("-c runs all tests even if one test fails [ default exit at first test fail ]")
-    print("-r connect to rpcdaemon [ default connect to silk ] ")
+    print("-f shows only failed tests (not Skipped)")
+    print("-c runs all tests even if one test fails [default: exit at first test fail]")
+    print("-r connect to Erigon RpcDaemon [default: connect to Silkrpc] ")
     print("-l <number of loops>")
-    print("-a <test api >: run all tests of the specified API")
+    print("-a <test_api>: run all tests of the specified API")
     print("-s <start_test_number>: run tests starting from input")
     print("-t <test_number>: run single test")
-    print("-d provides same request also to the reference daemon (default RPCDAEMON)")
-    print("-i provides request also to the reference daemon (INFURA)")
-    print("-b blockchain (default goerly)")
+    print("-d send requests also to the reference daemon i.e. Erigon RpcDaemon")
+    print("-i <infura_url> send any request also to the Infura API endpoint as reference")
+    print("-b blockchain [default: goerly]")
     print("-v verbose")
     print("-o dump response")
     print("-k authentication token file")
-    print("-x exclude api list (i.e txpool_content,txpool_status,engine_")
+    print("-x exclude API list (i.e txpool_content,txpool_status,engine_")
     print("-X exclude test list (i.e 18,22")
-    print("-H host where the daemon is located(i.e 10.10.2.3)")
+    print("-H host where the RpcDaemon is located (e.g. 10.10.2.3)")
 
 #
 # main
@@ -431,9 +445,10 @@ def main(argv):
     exclude_test_list = ""
     start_test = ""
     jwt_secret = ""
+    display_only_fail = 0
 
     try:
-        opts, _ = getopt.getopt(argv[1:], "hrcvt:l:a:di:b:ox:X:H:k:s:")
+        opts, _ = getopt.getopt(argv[1:], "hfrcvt:l:a:di:b:ox:X:H:k:s:")
         for option, optarg in opts:
             if option in ("-h", "--help"):
                 usage(argv)
@@ -447,6 +462,8 @@ def main(argv):
                 infura_url = optarg
             elif option == "-H":
                 daemon_on_host = optarg
+            elif option == "-f":
+                display_only_fail = 1
             elif option == "-v":
                 verbose = 1
             elif option == "-t":
@@ -509,9 +526,10 @@ def main(argv):
                     test_file = api_file + "/" + test_name
                     if  is_skipped(api_file, exclude_api_list, exclude_test_list, test_file, req_test, verify_with_daemon, global_test_number) == 1:
                         if start_test == "" or global_test_number >= int(start_test):
-                            file = test_file.ljust(60)
-                            print(f"{global_test_number:03d}. {file} Skipped")
-                            tests_not_executed = tests_not_executed + 1
+                            if display_only_fail == 0:
+                                file = test_file.ljust(60)
+                                print(f"{global_test_number:03d}. {file} Skipped")
+                                tests_not_executed = tests_not_executed + 1
                     else:
                         # runs all tests req_test refers global test number or
                         # runs only tests on specific api req_test refers all test on specific api

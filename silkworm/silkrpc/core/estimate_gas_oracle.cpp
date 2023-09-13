@@ -27,7 +27,7 @@
 
 namespace silkworm::rpc {
 
-boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call& call, const silkworm::Block& block) {
+Task<intx::uint256> EstimateGasOracle::estimate_gas(const Call& call, const silkworm::Block& block) {
     SILK_DEBUG << "EstimateGasOracle::estimate_gas called";
 
     auto block_number = block.header.number;
@@ -40,8 +40,12 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
         hi = call.gas.value();
     } else {
         const auto header = co_await block_header_provider_(block_number);
-        hi = header.gas_limit;
-        SILK_DEBUG << "Evaluate HI with gas in block " << header.gas_limit;
+        if (!header) {
+            throw EstimateGasException{-1, "invalid header"};
+        }
+
+        hi = header->gas_limit;
+        SILK_DEBUG << "Evaluate HI with gas in block " << header->gas_limit;
     }
 
     intx::uint256 gas_price = call.gas_price.value_or(0);
@@ -81,7 +85,7 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
     auto exec_result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(ExecutionResult)>(
         [&](auto&& self) {
             boost::asio::post(workers_, [&, self = std::move(self)]() mutable {
-                auto state = transaction_.create_state(this_executor, tx_database_, block_number);
+                auto state = transaction_.create_state(this_executor, tx_database_, storage_, block_number);
                 EVMExecutor executor{config_, workers_, state};
 
                 ExecutionResult result{evmc_status_code::EVMC_SUCCESS};

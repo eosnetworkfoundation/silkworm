@@ -16,10 +16,12 @@
 
 #include "execution_pipeline.hpp"
 
-#include <boost/format.hpp>
+#include <absl/strings/str_format.h>
 #include <magic_enum.hpp>
 
+#include <silkworm/infra/common/asio_timer.hpp>
 #include <silkworm/infra/common/environment.hpp>
+#include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/node/stagedsync/stages/stage_blockhashes.hpp>
 #include <silkworm/node/stagedsync/stages/stage_bodies.hpp>
 #include <silkworm/node/stagedsync/stages/stage_execution.hpp>
@@ -46,19 +48,13 @@ class ExecutionPipeline::LogTimer : public Timer {
   public:
     LogTimer(ExecutionPipeline* pipeline)
         : Timer{
-              pipeline->node_settings_->asio_context,
+              pipeline->node_settings_->asio_context.get_executor(),
               pipeline->node_settings_->sync_loop_log_interval_seconds * 1'000,
-              [this] { return execute(); },
-              true},
-          pipeline_{pipeline} {
-        start();
-    }
+              [this] { return expired(); },
+              /*.auto_start=*/true},
+          pipeline_{pipeline} {}
 
-    ~LogTimer() {
-        stop();
-    }
-
-    bool execute() {
+    bool expired() {
         if (pipeline_->is_stopping()) {
             log::Info(pipeline_->get_log_prefix()) << "stopping ...";
             return false;
@@ -155,12 +151,12 @@ void ExecutionPipeline::load_stages() {
                                     db::stages::kTxLookupKey,
                                     db::stages::kLogIndexKey,
                                     db::stages::kHistoryIndexKey,
-                                    db::stages::kHashStateKey,           // Needs to happen before unwinding Execution
+                                    db::stages::kHashStateKey,
                                     db::stages::kIntermediateHashesKey,  // Needs to happen after unwinding HashState
                                     db::stages::kExecutionKey,
                                     db::stages::kSendersKey,
                                     db::stages::kBlockBodiesKey,
-                                    db::stages::kBlockHashesKey,  // Decanonify block hashes
+                                    db::stages::kBlockHashesKey,  // De-canonify block hashes
                                     db::stages::kHeadersKey,
                                 });
 }
@@ -217,10 +213,10 @@ Stage::Result ExecutionPipeline::forward(db::RWTxn& cycle_txn, BlockNum target_h
                 return stage_result;
             } /* clang-format on */
 
-            auto stage_head_number_ = db::stages::read_stage_progress(cycle_txn, current_stage_->first);
-            if (stage_head_number_ != target_height) {
+            auto stage_head_number = db::stages::read_stage_progress(cycle_txn, current_stage_->first);
+            if (stage_head_number != target_height) {
                 throw std::logic_error("Sync pipeline: stage returned success with an height different from target=" +
-                                       to_string(target_height) + " reached= " + to_string(stage_head_number_));
+                                       to_string(target_height) + " reached= " + to_string(stage_head_number));
             }
 
             auto [_, stage_duration] = stages_stop_watch.lap();
@@ -358,11 +354,10 @@ Stage::Result ExecutionPipeline::prune(db::RWTxn& cycle_txn) {
 }
 
 std::string ExecutionPipeline::get_log_prefix() const {
-    static std::string log_prefix_fmt{"[%u/%u %s]"};
-    return boost::str(boost::format(log_prefix_fmt) %
-                      current_stage_number_ %
-                      current_stages_count_ %
-                      current_stage_->first);
+    return absl::StrFormat("[%u/%u %s]",
+                           current_stage_number_,
+                           current_stages_count_,
+                           current_stage_->first);
 }
 
 }  // namespace silkworm::stagedsync

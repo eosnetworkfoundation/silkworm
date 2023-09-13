@@ -19,7 +19,8 @@
 #include <string>
 #include <utility>
 
-#include <boost/asio/awaitable.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
+
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/use_future.hpp>
 #include <catch2/catch.hpp>
@@ -29,32 +30,18 @@
 #include <silkworm/core/common/base.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/grpc/client/client_context_pool.hpp>
-#include <silkworm/infra/test/log.hpp>
+#include <silkworm/infra/test_util/log.hpp>
 #include <silkworm/silkrpc/ethdb/transaction_database.hpp>
 #include <silkworm/silkrpc/json/types.hpp>
+#include <silkworm/silkrpc/storage/remote_chain_storage.hpp>
 #include <silkworm/silkrpc/test/api_test_base.hpp>
+#include <silkworm/silkrpc/test/mock_back_end.hpp>
 #include <silkworm/silkrpc/test/mock_cursor.hpp>
 
 namespace silkworm::rpc::commands {
 
 using Catch::Matchers::Message;
 using evmc::literals::operator""_bytes32;
-
-class BackEndMock : public ethbackend::BackEnd {  // NOLINT
-  public:
-    MOCK_METHOD((awaitable<evmc::address>), etherbase, ());
-    MOCK_METHOD((awaitable<uint64_t>), protocol_version, ());
-    MOCK_METHOD((awaitable<uint64_t>), net_version, ());
-    MOCK_METHOD((awaitable<std::string>), client_version, ());
-    MOCK_METHOD((awaitable<uint64_t>), net_peer_count, ());
-    MOCK_METHOD((awaitable<ExecutionPayloadAndValue>), engine_get_payload, (uint64_t));
-    MOCK_METHOD((awaitable<PayloadStatus>), engine_new_payload, (const ExecutionPayload&));
-    MOCK_METHOD((awaitable<ForkChoiceUpdatedReply>), engine_forkchoice_updated, (const ForkChoiceUpdatedRequest&));
-    MOCK_METHOD((awaitable<ExecutionPayloadBodies>), engine_get_payload_bodies_by_hash, (const std::vector<Hash>&));
-    MOCK_METHOD((awaitable<ExecutionPayloadBodies>), engine_get_payload_bodies_by_range, (BlockNum start, uint64_t count));
-    MOCK_METHOD((awaitable<NodeInfos>), engine_node_info, ());
-    MOCK_METHOD((awaitable<PeerInfos>), peers, ());
-};
 
 namespace {
     //! This dummy transaction just gives you the same cursor over and over again.
@@ -64,21 +51,25 @@ namespace {
 
         [[nodiscard]] uint64_t view_id() const override { return 0; }
 
-        awaitable<void> open() override { co_return; }
+        Task<void> open() override { co_return; }
 
-        awaitable<std::shared_ptr<ethdb::Cursor>> cursor(const std::string& /*table*/) override {
+        Task<std::shared_ptr<ethdb::Cursor>> cursor(const std::string& /*table*/) override {
             co_return cursor_;
         }
 
-        awaitable<std::shared_ptr<ethdb::CursorDupSort>> cursor_dup_sort(const std::string& /*table*/) override {
+        Task<std::shared_ptr<ethdb::CursorDupSort>> cursor_dup_sort(const std::string& /*table*/) override {
             co_return nullptr;
         }
 
-        std::shared_ptr<silkworm::State> create_state(boost::asio::any_io_executor&, const core::rawdb::DatabaseReader&, uint64_t) override {
+        std::shared_ptr<silkworm::State> create_state(boost::asio::any_io_executor&, const core::rawdb::DatabaseReader&, const ChainStorage&, BlockNum) override {
             return nullptr;
         }
 
-        awaitable<void> close() override { co_return; }
+        std::shared_ptr<ChainStorage> create_storage(const core::rawdb::DatabaseReader& db_reader, ethbackend::BackEnd* backend) override {
+            return std::make_shared<RemoteChainStorage>(db_reader, backend);
+        }
+
+        Task<void> close() override { co_return; }
 
       private:
         std::shared_ptr<ethdb::Cursor> cursor_;
@@ -89,7 +80,7 @@ namespace {
       public:
         explicit DummyDatabase(std::shared_ptr<ethdb::Cursor> cursor) : cursor_(std::move(cursor)) {}
 
-        awaitable<std::unique_ptr<ethdb::Transaction>> begin() override {
+        Task<std::unique_ptr<ethdb::Transaction>> begin() override {
             co_return std::make_unique<DummyTransaction>(cursor_);
         }
 
@@ -223,14 +214,12 @@ TEST_CASE_METHOD(EngineRpcApiTest, "EngineRpcApi::handle_engine_exchange_capabil
 }
 
 TEST_CASE("handle_engine_get_payload_v1 succeeds if request is expected payload", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
-    auto* backend = new BackEndMock;
-    EXPECT_CALL(*backend, engine_get_payload(1)).WillOnce(InvokeWithoutArgs([]() -> awaitable<ExecutionPayloadAndValue> {
+    const auto backend = std::make_unique<test::BackEndMock>();
+    EXPECT_CALL(*backend, engine_get_payload(1)).WillOnce(InvokeWithoutArgs([]() -> Task<ExecutionPayloadAndValue> {
         co_return ExecutionPayloadAndValue{ExecutionPayload{.number = 1}, 0};
     }));
-
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(backend);
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -244,7 +233,7 @@ TEST_CASE("handle_engine_get_payload_v1 succeeds if request is expected payload"
     cp.start();
     std::unique_ptr<ethdb::Database> database;
     // Initialise components
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -282,7 +271,7 @@ TEST_CASE("handle_engine_get_payload_v1 succeeds if request is expected payload"
 }
 
 TEST_CASE("handle_engine_get_payload_v1 fails with invalid amount of params", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -295,9 +284,9 @@ TEST_CASE("handle_engine_get_payload_v1 fails with invalid amount of params", "[
     ClientContextPool cp{1};
     cp.start();
     // Initialise components
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(new BackEndMock);
+    const auto backend = std::make_unique<test::BackEndMock>();
     std::unique_ptr<ethdb::Database> database;
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -323,17 +312,15 @@ TEST_CASE("handle_engine_get_payload_v1 fails with invalid amount of params", "[
 }
 
 TEST_CASE("handle_engine_new_payload_v1 succeeds if request is expected payload status", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
-    auto* backend = new BackEndMock;
-    EXPECT_CALL(*backend, engine_new_payload(testing::_)).WillOnce(InvokeWithoutArgs([]() -> awaitable<PayloadStatus> {
+    const auto backend = std::make_unique<test::BackEndMock>();
+    EXPECT_CALL(*backend, engine_new_payload(testing::_)).WillOnce(InvokeWithoutArgs([]() -> Task<PayloadStatus> {
         co_return PayloadStatus{
             .status = "INVALID",
             .latest_valid_hash = 0x0000000000000000000000000000000000000000000000000000000000000040_bytes32,
             .validation_error = "some error"};
     }));
-
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(backend);
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -362,7 +349,7 @@ TEST_CASE("handle_engine_new_payload_v1 succeeds if request is expected payload 
     cp.start();
     std::unique_ptr<ethdb::Database> database;
     // Initialise components
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -389,7 +376,7 @@ TEST_CASE("handle_engine_new_payload_v1 succeeds if request is expected payload 
 }
 
 TEST_CASE("handle_engine_new_payload_v1 fails with invalid amount of params", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -402,9 +389,9 @@ TEST_CASE("handle_engine_new_payload_v1 fails with invalid amount of params", "[
     ClientContextPool cp{1};
     cp.start();
     // Initialise components
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(new BackEndMock);
+    const auto backend = std::make_unique<test::BackEndMock>();
     std::unique_ptr<ethdb::Database> database;
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -430,10 +417,10 @@ TEST_CASE("handle_engine_new_payload_v1 fails with invalid amount of params", "[
 }
 
 TEST_CASE("handle_engine_forkchoice_updated_v1 succeeds only with forkchoiceState", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
-    auto* backend = new BackEndMock;
-    EXPECT_CALL(*backend, engine_forkchoice_updated(testing::_)).WillOnce(InvokeWithoutArgs([]() -> awaitable<ForkChoiceUpdatedReply> {
+    const auto backend = std::make_unique<test::BackEndMock>();
+    EXPECT_CALL(*backend, engine_forkchoice_updated(testing::_)).WillOnce(InvokeWithoutArgs([]() -> Task<ForkChoiceUpdatedReply> {
         co_return ForkChoiceUpdatedReply{
             .payload_status = PayloadStatus{
                 .status = "INVALID",
@@ -459,9 +446,8 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 succeeds only with forkchoiceStat
     ClientContextPool cp{1};
     cp.start();
     // Initialise components
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(backend);
     std::unique_ptr<ethdb::Database> database;
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -488,10 +474,10 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 succeeds only with forkchoiceStat
 }
 
 TEST_CASE("handle_engine_forkchoice_updated_v1 succeeds with both params", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
-    auto* backend = new BackEndMock;
-    EXPECT_CALL(*backend, engine_forkchoice_updated(testing::_)).WillOnce(InvokeWithoutArgs([]() -> awaitable<ForkChoiceUpdatedReply> {
+    const auto backend = std::make_unique<test::BackEndMock>();
+    EXPECT_CALL(*backend, engine_forkchoice_updated(testing::_)).WillOnce(InvokeWithoutArgs([]() -> Task<ForkChoiceUpdatedReply> {
         co_return ForkChoiceUpdatedReply{
             .payload_status = PayloadStatus{
                 .status = "INVALID",
@@ -522,9 +508,8 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 succeeds with both params", "[sil
     ClientContextPool cp{1};
     cp.start();
     // Initialise components
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(backend);
     std::unique_ptr<ethdb::Database> database;
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -551,10 +536,10 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 succeeds with both params", "[sil
 }
 
 TEST_CASE("handle_engine_forkchoice_updated_v1 succeeds with both params and second set to null", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
-    auto* backend = new BackEndMock;
-    EXPECT_CALL(*backend, engine_forkchoice_updated(testing::_)).WillOnce(InvokeWithoutArgs([]() -> awaitable<ForkChoiceUpdatedReply> {
+    const auto backend = std::make_unique<test::BackEndMock>();
+    EXPECT_CALL(*backend, engine_forkchoice_updated(testing::_)).WillOnce(InvokeWithoutArgs([]() -> Task<ForkChoiceUpdatedReply> {
         co_return ForkChoiceUpdatedReply{
             .payload_status = PayloadStatus{
                 .status = "INVALID",
@@ -581,9 +566,8 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 succeeds with both params and sec
     ClientContextPool cp{1};
     cp.start();
     // Initialise components
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(backend);
     std::unique_ptr<ethdb::Database> database;
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -610,7 +594,7 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 succeeds with both params and sec
 }
 
 TEST_CASE("handle_engine_forkchoice_updated_v1 fails with invalid amount of params", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -623,9 +607,9 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 fails with invalid amount of para
     ClientContextPool cp{1};
     cp.start();
     // Initialise components
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(new BackEndMock);
+    const auto backend = std::make_unique<test::BackEndMock>();
     std::unique_ptr<ethdb::Database> database;
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -651,9 +635,9 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 fails with invalid amount of para
 }
 
 TEST_CASE("handle_engine_forkchoice_updated_v1 fails with empty finalized block hash", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
-    auto* backend = new BackEndMock();
+    const auto backend = std::make_unique<test::BackEndMock>();
     nlohmann::json reply;
     nlohmann::json request = R"({
         "jsonrpc":"2.0",
@@ -671,9 +655,8 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 fails with empty finalized block 
     ClientContextPool cp{1};
     cp.start();
     // Initialise components
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(backend);
     std::unique_ptr<ethdb::Database> database;
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -697,9 +680,9 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 fails with empty finalized block 
 }
 
 TEST_CASE("handle_engine_forkchoice_updated_v1 fails with empty safe block hash", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
-    auto* backend = new BackEndMock();
+    const auto backend = std::make_unique<test::BackEndMock>();
     nlohmann::json reply;
     nlohmann::json request = R"({
         "jsonrpc":"2.0",
@@ -717,9 +700,8 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 fails with empty safe block hash"
     ClientContextPool cp{1};
     cp.start();
     // Initialise components
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr(backend);
     std::unique_ptr<ethdb::Database> database;
-    EngineRpcApi_ForTest rpc(database.get(), backend_ptr.get());
+    EngineRpcApi_ForTest rpc(database.get(), backend.get());
 
     // spawn routine
     auto result{boost::asio::co_spawn(
@@ -743,7 +725,7 @@ TEST_CASE("handle_engine_forkchoice_updated_v1 fails with empty safe block hash"
 }
 
 TEST_CASE("handle_engine_transition_configuration_v1 succeeds if EL configurations has the same request configuration", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     ClientContextPool context_pool{1};
     context_pool.start();
@@ -752,19 +734,19 @@ TEST_CASE("handle_engine_transition_configuration_v1 succeeds if EL configuratio
 
     const silkworm::Bytes block_number{*silkworm::from_hex("0000000000000000")};
     const silkworm::ByteView block_key{block_number};
-    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kBlockHash};
     }));
 
     const silkworm::Bytes genesis_block_hash{*silkworm::from_hex("0000000000000000000000000000000000000000000000000000000000000000")};
     const silkworm::ByteView genesis_block_key{genesis_block_hash};
-    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kChainConfig};
     }));
 
     std::unique_ptr<ethdb::Database> database_ptr = std::make_unique<DummyDatabase>(mock_cursor);
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr;
-    EngineRpcApi_ForTest rpc(database_ptr.get(), backend_ptr.get());
+    std::unique_ptr<ethbackend::BackEnd> backend;
+    EngineRpcApi_ForTest rpc(database_ptr.get(), backend.get());
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -802,7 +784,7 @@ TEST_CASE("handle_engine_transition_configuration_v1 succeeds if EL configuratio
 }
 
 TEST_CASE("handle_engine_transition_configuration_v1 succeeds and default terminal block number to zero if chain config doesn't specify it", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     ClientContextPool context_pool{1};
     context_pool.start();
@@ -811,19 +793,19 @@ TEST_CASE("handle_engine_transition_configuration_v1 succeeds and default termin
 
     const silkworm::Bytes block_number{*silkworm::from_hex("0000000000000000")};
     const silkworm::ByteView block_key{block_number};
-    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kBlockHash};
     }));
 
     const silkworm::Bytes genesis_block_hash{*silkworm::from_hex("0000000000000000000000000000000000000000000000000000000000000000")};
     const silkworm::ByteView genesis_block_key{genesis_block_hash};
-    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kChainConfigNoTerminalBlockNumber};
     }));
 
     std::unique_ptr<ethdb::Database> database_ptr = std::make_unique<DummyDatabase>(mock_cursor);
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr;
-    EngineRpcApi_ForTest rpc(database_ptr.get(), backend_ptr.get());
+    std::unique_ptr<ethbackend::BackEnd> backend;
+    EngineRpcApi_ForTest rpc(database_ptr.get(), backend.get());
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -861,7 +843,7 @@ TEST_CASE("handle_engine_transition_configuration_v1 succeeds and default termin
 }
 
 TEST_CASE("handle_engine_transition_configuration_v1 fails if incorrect terminal total difficulty", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     ClientContextPool context_pool{1};
     context_pool.start();
@@ -870,19 +852,19 @@ TEST_CASE("handle_engine_transition_configuration_v1 fails if incorrect terminal
 
     const silkworm::Bytes block_number{*silkworm::from_hex("0000000000000000")};
     const silkworm::ByteView block_key{block_number};
-    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kBlockHash};
     }));
 
     const silkworm::Bytes genesis_block_hash{*silkworm::from_hex("0000000000000000000000000000000000000000000000000000000000000000")};
     const silkworm::ByteView genesis_block_key{genesis_block_hash};
-    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kChainConfig};
     }));
 
     std::unique_ptr<ethdb::Database> database_ptr = std::make_unique<DummyDatabase>(mock_cursor);
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr;
-    EngineRpcApi_ForTest rpc(database_ptr.get(), backend_ptr.get());
+    std::unique_ptr<ethbackend::BackEnd> backend;
+    EngineRpcApi_ForTest rpc(database_ptr.get(), backend.get());
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -918,7 +900,7 @@ TEST_CASE("handle_engine_transition_configuration_v1 fails if incorrect terminal
 }
 
 TEST_CASE("handle_engine_transition_configuration_v1 fails if execution layer does not have terminal total difficulty", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     ClientContextPool context_pool{1};
     context_pool.start();
@@ -927,19 +909,19 @@ TEST_CASE("handle_engine_transition_configuration_v1 fails if execution layer do
 
     const silkworm::Bytes block_number{*silkworm::from_hex("0000000000000000")};
     const silkworm::ByteView block_key{block_number};
-    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kBlockHash};
     }));
 
     const silkworm::Bytes genesis_block_hash{*silkworm::from_hex("0000000000000000000000000000000000000000000000000000000000000000")};
     const silkworm::ByteView genesis_block_key{genesis_block_hash};
-    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kChainConfigNoTerminalTotalDifficulty};
     }));
 
     std::unique_ptr<ethdb::Database> database_ptr = std::make_unique<DummyDatabase>(mock_cursor);
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr;
-    EngineRpcApi_ForTest rpc(database_ptr.get(), backend_ptr.get());
+    std::unique_ptr<ethbackend::BackEnd> backend;
+    EngineRpcApi_ForTest rpc(database_ptr.get(), backend.get());
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -975,7 +957,7 @@ TEST_CASE("handle_engine_transition_configuration_v1 fails if execution layer do
 }
 
 TEST_CASE("handle_engine_transition_configuration_v1 fails if consensus layer sends wrong terminal total difficulty", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     ClientContextPool context_pool{1};
     context_pool.start();
@@ -984,19 +966,19 @@ TEST_CASE("handle_engine_transition_configuration_v1 fails if consensus layer se
 
     const silkworm::Bytes block_number{*silkworm::from_hex("0000000000000000")};
     const silkworm::ByteView block_key{block_number};
-    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kBlockHash};
     }));
 
     const silkworm::Bytes genesis_block_hash{*silkworm::from_hex("0000000000000000000000000000000000000000000000000000000000000000")};
     const silkworm::ByteView genesis_block_key{genesis_block_hash};
-    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kChainConfig};
     }));
 
     std::unique_ptr<ethdb::Database> database_ptr = std::make_unique<DummyDatabase>(mock_cursor);
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr;
-    EngineRpcApi_ForTest rpc(database_ptr.get(), backend_ptr.get());
+    std::unique_ptr<ethbackend::BackEnd> backend;
+    EngineRpcApi_ForTest rpc(database_ptr.get(), backend.get());
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -1032,7 +1014,7 @@ TEST_CASE("handle_engine_transition_configuration_v1 fails if consensus layer se
 }
 
 TEST_CASE("handle_engine_transition_configuration_v1 fails if consensus layer sends wrong terminal block hash", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     ClientContextPool context_pool{1};
     context_pool.start();
@@ -1041,19 +1023,19 @@ TEST_CASE("handle_engine_transition_configuration_v1 fails if consensus layer se
 
     const silkworm::Bytes block_number{*silkworm::from_hex("0000000000000000")};
     const silkworm::ByteView block_key{block_number};
-    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kBlockHash};
     }));
 
     const silkworm::Bytes genesis_block_hash{*silkworm::from_hex("0000000000000000000000000000000000000000000000000000000000000000")};
     const silkworm::ByteView genesis_block_key{genesis_block_hash};
-    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kChainConfig};
     }));
 
     std::unique_ptr<ethdb::Database> database_ptr = std::make_unique<DummyDatabase>(mock_cursor);
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr;
-    EngineRpcApi_ForTest rpc(database_ptr.get(), backend_ptr.get());
+    std::unique_ptr<ethbackend::BackEnd> backend;
+    EngineRpcApi_ForTest rpc(database_ptr.get(), backend.get());
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -1089,7 +1071,7 @@ TEST_CASE("handle_engine_transition_configuration_v1 fails if consensus layer se
 }
 
 TEST_CASE("handle_engine_transition_configuration_v1 succeeds w/o matching terminal block number", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     ClientContextPool context_pool{1};
     context_pool.start();
@@ -1098,19 +1080,19 @@ TEST_CASE("handle_engine_transition_configuration_v1 succeeds w/o matching termi
 
     const silkworm::Bytes block_number{*silkworm::from_hex("0000000000000000")};
     const silkworm::ByteView block_key{block_number};
-    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kBlockHash};
     }));
 
     const silkworm::Bytes genesis_block_hash{*silkworm::from_hex("0000000000000000000000000000000000000000000000000000000000000000")};
     const silkworm::ByteView genesis_block_key{genesis_block_hash};
-    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> awaitable<KeyValue> {
+    EXPECT_CALL(*mock_cursor, seek_exact(genesis_block_key)).WillOnce(InvokeWithoutArgs([&]() -> Task<KeyValue> {
         co_return KeyValue{silkworm::Bytes{}, kChainConfig};
     }));
 
     std::unique_ptr<ethdb::Database> database_ptr = std::make_unique<DummyDatabase>(mock_cursor);
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr;
-    EngineRpcApi_ForTest rpc(database_ptr.get(), backend_ptr.get());
+    std::unique_ptr<ethbackend::BackEnd> backend;
+    EngineRpcApi_ForTest rpc(database_ptr.get(), backend.get());
 
     nlohmann::json reply;
     nlohmann::json request = R"({
@@ -1147,7 +1129,7 @@ TEST_CASE("handle_engine_transition_configuration_v1 succeeds w/o matching termi
 }
 
 TEST_CASE("handle_engine_transition_configuration_v1 fails if incorrect params", "[silkworm][rpc][commands][engine_api]") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     ClientContextPool context_pool{1};
     context_pool.start();
@@ -1155,8 +1137,8 @@ TEST_CASE("handle_engine_transition_configuration_v1 fails if incorrect params",
     std::shared_ptr<test::MockCursor> mock_cursor = std::make_shared<test::MockCursor>();
 
     std::unique_ptr<ethdb::Database> database_ptr = std::make_unique<DummyDatabase>(mock_cursor);
-    std::unique_ptr<ethbackend::BackEnd> backend_ptr;
-    EngineRpcApi_ForTest rpc(database_ptr.get(), backend_ptr.get());
+    std::unique_ptr<ethbackend::BackEnd> backend;
+    EngineRpcApi_ForTest rpc(database_ptr.get(), backend.get());
 
     nlohmann::json reply;
     nlohmann::json request = R"({

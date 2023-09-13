@@ -36,12 +36,22 @@
 
 namespace silkworm::rpc::core {
 
-boost::asio::awaitable<DumpAccounts> AccountDumper::dump_accounts(BlockCache& cache, const BlockNumberOrHash& bnoh, const evmc::address& start_address, int16_t max_result,
-                                                                  bool exclude_code, bool exclude_storage) {
+Task<DumpAccounts> AccountDumper::dump_accounts(
+    BlockCache& cache,
+    const BlockNumberOrHash& bnoh,
+    ethbackend::BackEnd* backend,
+    const evmc::address& start_address,
+    int16_t max_result,
+    bool exclude_code,
+    bool exclude_storage) {
     DumpAccounts dump_accounts;
     ethdb::TransactionDatabase tx_database{transaction_};
+    const auto chain_storage = transaction_.create_storage(tx_database, backend);
 
-    const auto block_with_hash = co_await core::read_block_by_number_or_hash(cache, tx_database, bnoh);
+    const auto block_with_hash = co_await core::read_block_by_number_or_hash(cache, *chain_storage, tx_database, bnoh);
+    if (!block_with_hash) {
+        throw std::invalid_argument("dump_accounts: block not found");
+    }
     const auto block_number = block_with_hash->block.header.number;
 
     dump_accounts.root = block_with_hash->block.header.state_root;
@@ -76,8 +86,8 @@ boost::asio::awaitable<DumpAccounts> AccountDumper::dump_accounts(BlockCache& ca
     co_return dump_accounts;
 }
 
-boost::asio::awaitable<void> AccountDumper::load_accounts(ethdb::TransactionDatabase& tx_database,
-                                                          const std::vector<silkworm::KeyValue>& collected_data, DumpAccounts& dump_accounts, bool exclude_code) {
+Task<void> AccountDumper::load_accounts(ethdb::TransactionDatabase& tx_database,
+                                        const std::vector<silkworm::KeyValue>& collected_data, DumpAccounts& dump_accounts, bool exclude_code) {
     StateReader state_reader{tx_database};
     for (const auto& kv : collected_data) {
         const auto address = silkworm::to_evmc_address(kv.key);
@@ -108,7 +118,7 @@ boost::asio::awaitable<void> AccountDumper::load_accounts(ethdb::TransactionData
     co_return;
 }
 
-boost::asio::awaitable<void> AccountDumper::load_storage(uint64_t block_number, DumpAccounts& dump_accounts) {
+Task<void> AccountDumper::load_storage(BlockNum block_number, DumpAccounts& dump_accounts) {
     SILK_TRACE << "block_number " << block_number << " START";
     StorageWalker storage_walker{transaction_};
     evmc::bytes32 start_location{};

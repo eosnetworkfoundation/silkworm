@@ -92,11 +92,16 @@ constexpr const char* k_debug_accountRange{"debug_accountRange"};
 constexpr const char* k_debug_getModifiedAccountsByNumber{"debug_getModifiedAccountsByNumber"};
 constexpr const char* k_debug_getModifiedAccountsByHash{"debug_getModifiedAccountsByHash"};
 constexpr const char* k_debug_storageRangeAt{"debug_storageRangeAt"};
+constexpr const char* k_debug_accountAt{"debug_accountAt"};
 constexpr const char* k_debug_traceTransaction{"debug_traceTransaction"};
 constexpr const char* k_debug_traceCall{"debug_traceCall"};
 constexpr const char* k_debug_traceCallMany{"debug_traceCallMany"};
 constexpr const char* k_debug_traceBlockByNumber{"debug_traceBlockByNumber"};
 constexpr const char* k_debug_traceBlockByHash{"debug_traceBlockByHash"};
+constexpr const char* k_debug_getRawBlock{"debug_getRawBlock"};
+constexpr const char* k_debug_getRawHeader{"debug_getRawHeader"};
+constexpr const char* k_debug_getRawReceipts{"debug_getRawReceipts"};
+constexpr const char* k_debug_getRawTransaction{"debug_getRawTransaction"};
 
 constexpr const char* k_trace_call{"trace_call"};
 constexpr const char* k_trace_callMany{"trace_callMany"};
@@ -108,14 +113,18 @@ constexpr const char* k_trace_filter{"trace_filter"};
 constexpr const char* k_trace_get{"trace_get"};
 constexpr const char* k_trace_transaction{"trace_transaction"};
 
+constexpr const char* k_erigon_blockNumber{"erigon_blockNumber"};
+constexpr const char* k_erigon_cacheCheck{"erigon_cacheCheck"};
+constexpr const char* k_erigon_getBalanceChangesInBlock{"erigon_getBalanceChangesInBlock"};
 constexpr const char* k_erigon_getBlockByTimestamp{"erigon_getBlockByTimestamp"};
+constexpr const char* k_erigon_getBlockReceiptsByBlockHash{"erigon_getBlockReceiptsByBlockHash"};
 constexpr const char* k_erigon_getHeaderByHash{"erigon_getHeaderByHash"};
 constexpr const char* k_erigon_getHeaderByNumber{"erigon_getHeaderByNumber"};
+constexpr const char* k_erigon_getLatestLogs{"erigon_getLatestLogs"};
 constexpr const char* k_erigon_getLogsByHash{"erigon_getLogsByHash"};
 constexpr const char* k_erigon_forks{"erigon_forks"};
 constexpr const char* k_erigon_watchTheBurn{"erigon_watchTheBurn"};
 constexpr const char* k_erigon_cumulative_chain_traffic{"erigon_cumulativeChainTraffic"};
-constexpr const char* k_erigon_blockNumber{"erigon_blockNumber"};
 constexpr const char* k_erigon_nodeInfo{"erigon_nodeInfo"};
 
 constexpr const char* k_parity_getBlockReceipts{"parity_getBlockReceipts"};
@@ -146,5 +155,7 @@ constexpr const char* k_ots_getContractCreator{"ots_getContractCreator"};
 constexpr const char* k_ots_traceTransaction{"ots_traceTransaction"};
 constexpr const char* k_ots_getTransactionError{"ots_getTransactionError"};
 constexpr const char* k_ots_getInternalOperations{"ots_getInternalOperations"};
+constexpr const char* k_ots_search_transactions_after{"ots_searchTransactionsAfter"};
+constexpr const char* k_ots_search_transactions_before{"ots_searchTransactionsBefore"};
 
 }  // namespace silkworm::rpc::http::method

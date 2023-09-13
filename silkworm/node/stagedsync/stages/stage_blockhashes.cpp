@@ -37,6 +37,7 @@ Stage::Result BlockHashes::forward(db::RWTxn& txn) {
         // Check stage boundaries from previous execution and previous stage execution
         const auto previous_progress{get_progress(txn)};
         const auto headers_stage_progress{db::stages::read_stage_progress(txn, db::stages::kHeadersKey)};
+
         if (previous_progress == headers_stage_progress) {
             // Nothing to process
             operation_ = OperationType::None;
@@ -48,7 +49,6 @@ Stage::Result BlockHashes::forward(db::RWTxn& txn) {
                              "BlockHashes progress " + std::to_string(previous_progress) +
                                  " greater than Headers progress " + std::to_string(headers_stage_progress));
         }
-
         const BlockNum segment_width{headers_stage_progress - previous_progress};
         if (segment_width > db::stages::kSmallBlockSegmentWidth) {
             log::Info(log_prefix_,
@@ -61,7 +61,7 @@ Stage::Result BlockHashes::forward(db::RWTxn& txn) {
         collector_ = std::make_unique<etl::Collector>(node_settings_);
         collect_and_load(txn, previous_progress, headers_stage_progress);
         update_progress(txn, reached_block_num_);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const mdbx::exception& ex) {
         log::Error(log_prefix_,
@@ -112,7 +112,6 @@ Stage::Result BlockHashes::unwind(db::RWTxn& txn) {
             operation_ = OperationType::None;
             return ret;
         }
-
         const BlockNum segment_width{previous_progress - to};
         if (segment_width > db::stages::kSmallBlockSegmentWidth) {
             log::Info(log_prefix_,
@@ -125,7 +124,7 @@ Stage::Result BlockHashes::unwind(db::RWTxn& txn) {
         collector_ = std::make_unique<etl::Collector>(node_settings_);
         collect_and_load(txn, to, previous_progress);
         update_progress(txn, to);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const mdbx::exception& ex) {
         log::Error(log_prefix_,
@@ -168,6 +167,7 @@ std::vector<std::string> BlockHashes::get_log_progress() {
     }
     return {};
 }
+
 void BlockHashes::collect_and_load(db::RWTxn& txn, const BlockNum from, const BlockNum to) {
     using namespace std::chrono_literals;
     auto log_time{std::chrono::steady_clock::now()};

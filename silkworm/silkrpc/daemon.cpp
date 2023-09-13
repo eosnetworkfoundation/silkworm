@@ -31,6 +31,8 @@
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/concurrency/private_service.hpp>
 #include <silkworm/infra/concurrency/shared_service.hpp>
+#include <silkworm/node/db/access_layer.hpp>
+#include <silkworm/silkrpc/common/compatibility.hpp>
 #include <silkworm/silkrpc/ethbackend/remote_backend.hpp>
 #include <silkworm/silkrpc/ethdb/file/local_database.hpp>
 #include <silkworm/silkrpc/ethdb/kv/remote_database.hpp>
@@ -40,9 +42,6 @@ namespace silkworm::rpc {
 
 //! The maximum receive message in bytes for gRPC channels.
 constexpr auto kRpcMaxReceiveMessageSize{64 * 1024 * 1024};  // 64 MiB
-
-//! The path to 'chaindata' folder relative to Silkworm data directory.
-static constexpr const char kChaindataRelativePath[]{"/chaindata"};
 
 //! The maximum number of concurrent readers allowed for MDBX datastore.
 static constexpr const int kDatabaseMaxReaders{32000};
@@ -77,8 +76,8 @@ int Daemon::run(const DaemonSettings& settings, const DaemonInfo& info) {
 
     auto mdbx_ver{mdbx::get_version()};
     auto mdbx_bld{mdbx::get_build()};
-    SILK_LOG << "Silkrpc build info: " << info.build << " " << info.libraries;
-    SILK_LOG << "Silkrpc libmdbx version: " << mdbx_ver.git.describe << " build: " << mdbx_bld.target << " compiler: " << mdbx_bld.compiler;
+    SILK_INFO << "Silkrpc build info: " << info.build << " " << info.libraries;
+    SILK_INFO << "Silkrpc libmdbx version: " << mdbx_ver.git.describe << " build: " << mdbx_bld.target << " compiler: " << mdbx_bld.compiler;
 
     std::set_terminate([]() {
         try {
@@ -99,11 +98,11 @@ int Daemon::run(const DaemonSettings& settings, const DaemonInfo& info) {
 
     try {
         if (!settings.datadir) {
-            SILK_LOG << "Silkrpc launched with private address " << settings.private_api_addr << " using "
-                     << context_pool_settings.num_contexts << " contexts, " << settings.num_workers << " workers";
+            SILK_INFO << "Silkrpc launched with private address " << settings.private_api_addr << " using "
+                      << context_pool_settings.num_contexts << " contexts, " << settings.num_workers << " workers";
         } else {
-            SILK_LOG << "Silkrpc launched with datadir " << *settings.datadir << " using "
-                     << context_pool_settings.num_contexts << " contexts, " << settings.num_workers << " workers";
+            SILK_INFO << "Silkrpc launched with datadir " << *settings.datadir << " using "
+                      << context_pool_settings.num_contexts << " contexts, " << settings.num_workers << " workers";
         }
 
         // Create the one-and-only Silkrpc daemon
@@ -111,15 +110,15 @@ int Daemon::run(const DaemonSettings& settings, const DaemonInfo& info) {
 
         // Check protocol version compatibility with Core Services
         if (not settings.skip_protocol_check) {
-            SILK_LOG << "Checking protocol version compatibility with core services...";
+            SILK_INFO << "Checking protocol version compatibility with core services...";
 
             const auto checklist = rpc_daemon.run_checklist();
             for (const auto& protocol_check : checklist.protocol_checklist) {
-                SILK_LOG << protocol_check.result;
+                SILK_INFO << protocol_check.result;
             }
             checklist.success_or_throw();
         } else {
-            SILK_LOG << "Skip protocol version compatibility check with core services";
+            SILK_INFO << "Skip protocol version compatibility check with core services";
         }
 
         // Start execution context dedicated to handling termination signals
@@ -132,7 +131,7 @@ int Daemon::run(const DaemonSettings& settings, const DaemonInfo& info) {
             rpc_daemon.stop();
         });
 
-        SILK_LOG << "Starting ETH RPC API at " << settings.eth_end_point << " ENGINE RPC API at " << settings.engine_end_point;
+        SILK_INFO << "Starting ETH RPC API at " << settings.eth_end_point << " ENGINE RPC API at " << settings.engine_end_point;
 
         rpc_daemon.start();
 
@@ -173,7 +172,9 @@ ChannelFactory Daemon::make_channel_factory(const DaemonSettings& settings) {
     };
 }
 
-Daemon::Daemon(DaemonSettings settings, std::shared_ptr<mdbx::env_managed> chaindata_env)
+Daemon::Daemon(DaemonSettings settings,
+               std::shared_ptr<mdbx::env_managed> chaindata_env,
+               std::shared_ptr<snapshot::SnapshotRepository> snapshot_repository)
     : settings_(std::move(settings)),
       create_channel_{make_channel_factory(settings_)},
       context_pool_{settings_.context_pool_settings.num_contexts},
@@ -187,19 +188,39 @@ Daemon::Daemon(DaemonSettings settings, std::shared_ptr<mdbx::env_managed> chain
         jwt_secret_ = load_jwt_token(*settings_.jwt_secret_file);
     }
 
-    // Activate the local chaindata access (if required)
+    // Activate the local chaindata and snapshot access (if required)
     if (settings_.datadir) {
+        DataDirectory data_folder{*settings_.datadir};
+
         // Create a new local chaindata environment
         chaindata_env_ = std::make_shared<mdbx::env_managed>();
         silkworm::db::EnvConfig db_config{
-            .path = settings_.datadir->string() + kChaindataRelativePath,
+            .path = data_folder.chaindata().path().string(),
             .in_memory = true,
             .shared = true,
             .max_readers = kDatabaseMaxReaders};
         *chaindata_env_ = silkworm::db::open_env(db_config);
-    } else if (chaindata_env) {
-        // Use the existing chaindata environment
-        chaindata_env_ = std::move(chaindata_env);
+
+        // Create a new snapshot repository
+        snapshot::SnapshotSettings snapshot_settings{
+            .repository_dir = data_folder.snapshots().path(),
+        };
+        snapshot_repository_ = std::make_shared<snapshot::SnapshotRepository>(std::move(snapshot_settings));
+    } else {
+        if (chaindata_env) {
+            // Use the existing chaindata environment
+            chaindata_env_ = std::move(chaindata_env);
+        }
+        if (snapshot_repository) {
+            // Use the existing snapshot repository
+            snapshot_repository_ = std::move(snapshot_repository);
+        }
+    }
+
+    if (snapshot_repository_) {
+        snapshot_repository_->reopen_folder();
+
+        db::DataModel::set_snapshot_repository(snapshot_repository_.get());
     }
 
     // Create private and shared state in execution contexts
@@ -209,6 +230,9 @@ Daemon::Daemon(DaemonSettings settings, std::shared_ptr<mdbx::env_managed> chain
     // Create the unique KV state-changes stream feeding the state cache
     auto& context = context_pool_.next_context();
     state_changes_stream_ = std::make_unique<ethdb::kv::StateChangesStream>(context, kv_stub_.get());
+
+    // Set compatibility with Erigon RpcDaemon at JSON RPC level
+    compatibility::set_erigon_json_api_compatibility_required(settings_.erigon_json_rpc_compatibility);
 }
 
 void Daemon::add_private_services() {
@@ -255,11 +279,14 @@ void Daemon::add_shared_services() {
     }
 }
 
-void Daemon::add_backend_service(std::unique_ptr<ethbackend::BackEnd>&& backend) {
+void Daemon::add_backend_services(std::vector<std::unique_ptr<ethbackend::BackEnd>>&& backends) {
+    ensure(backends.size() == settings_.context_pool_settings.num_contexts,
+           "Daemon::add_backend_service: number of backends must be equal to the number of contexts");
+
     // Add the BackEnd state to each execution context
     for (std::size_t i{0}; i < settings_.context_pool_settings.num_contexts; ++i) {
         auto& io_context = context_pool_.next_io_context();
-        add_private_service<rpc::ethbackend::BackEnd>(io_context, std::move(backend));
+        add_private_service<rpc::ethbackend::BackEnd>(io_context, std::move(backends[i]));
     }
 }
 
@@ -281,12 +308,12 @@ void Daemon::start() {
         if (not settings_.eth_end_point.empty()) {
             rpc_services_.emplace_back(
                 std::make_unique<http::Server>(
-                    settings_.eth_end_point, settings_.eth_api_spec, ioc, worker_pool_, /*jwt_secret=*/std::nullopt));
+                    settings_.eth_end_point, settings_.eth_api_spec, ioc, worker_pool_, settings_.cors_domain, /*jwt_secret=*/std::nullopt));
         }
         if (not settings_.engine_end_point.empty()) {
             rpc_services_.emplace_back(
                 std::make_unique<http::Server>(
-                    settings_.engine_end_point, kDefaultEth2ApiSpec, ioc, worker_pool_, jwt_secret_));
+                    settings_.engine_end_point, kDefaultEth2ApiSpec, ioc, worker_pool_, settings_.cors_domain, jwt_secret_));
         }
     }
 

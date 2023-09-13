@@ -21,12 +21,12 @@
 #include <string>
 #include <utility>
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
-#include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/thread_pool.hpp>
+#include <tl/expected.hpp>
 
 #include <silkworm/silkrpc/commands/rpc_api.hpp>
 #include <silkworm/silkrpc/commands/rpc_api_table.hpp>
@@ -40,29 +40,42 @@ class RequestHandler {
     RequestHandler(boost::asio::ip::tcp::socket& socket,
                    commands::RpcApi& rpc_api,
                    const commands::RpcApiTable& rpc_api_table,
+                   const std::vector<std::string>& allowed_origins,
                    std::optional<std::string> jwt_secret)
         : rpc_api_{rpc_api},
           socket_{socket},
           rpc_api_table_(rpc_api_table),
-          jwt_secret_(std::move(jwt_secret)) {}
+          jwt_secret_(std::move(jwt_secret)),
+          allowed_origins_(allowed_origins) {}
 
     RequestHandler(const RequestHandler&) = delete;
     RequestHandler& operator=(const RequestHandler&) = delete;
 
-    boost::asio::awaitable<void> handle(const http::Request& request);
+    Task<void> handle(const http::Request& request);
+
+  protected:
+    Task<void> handle_request_and_create_reply(const nlohmann::json& request_json, http::Reply& reply);
 
   private:
-    boost::asio::awaitable<std::optional<std::string>> is_request_authorized(const http::Request& request);
+    using AuthorizationError = std::string;
+    using AuthorizationResult = tl::expected<void, AuthorizationError>;
+    AuthorizationResult is_request_authorized(const http::Request& request);
 
-    boost::asio::awaitable<void> handle_request_and_create_reply(const nlohmann::json& request_json, http::Reply& reply);
+    void set_cors(std::vector<Header>& headers);
 
-    boost::asio::awaitable<void> handle_request(const nlohmann::json& request_id,
-                                                commands::RpcApiTable::HandleMethod handler, const nlohmann::json& request_json, http::Reply& reply);
-    boost::asio::awaitable<void> handle_request(const nlohmann::json& request_id,
-                                                commands::RpcApiTable::HandleMethodGlaze handler, const nlohmann::json& request_json, http::Reply& reply);
-    boost::asio::awaitable<void> handle_request(commands::RpcApiTable::HandleStream handler, const nlohmann::json& request_json);
-    boost::asio::awaitable<void> do_write(http::Reply& reply);
-    boost::asio::awaitable<void> write_headers();
+    Task<void> handle_request(
+        const nlohmann::json& request_id,
+        commands::RpcApiTable::HandleMethod handler,
+        const nlohmann::json& request_json,
+        http::Reply& reply);
+    Task<void> handle_request(
+        const nlohmann::json& request_id,
+        commands::RpcApiTable::HandleMethodGlaze handler,
+        const nlohmann::json& request_json,
+        http::Reply& reply);
+    Task<void> handle_request(commands::RpcApiTable::HandleStream handler, const nlohmann::json& request_json);
+    Task<void> do_write(http::Reply& reply);
+    Task<void> write_headers();
 
     commands::RpcApi& rpc_api_;
 
@@ -71,6 +84,8 @@ class RequestHandler {
     const commands::RpcApiTable& rpc_api_table_;
 
     const std::optional<std::string> jwt_secret_;
+
+    const std::vector<std::string>& allowed_origins_;
 };
 
 }  // namespace silkworm::rpc::http

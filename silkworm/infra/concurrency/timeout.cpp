@@ -16,19 +16,18 @@
 
 #include "timeout.hpp"
 
-#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/this_coro.hpp>
 #include <boost/asio/use_awaitable.hpp>
-#include <boost/date_time/posix_time/posix_time_duration.hpp>
 #include <boost/system/errc.hpp>
 #include <boost/system/system_error.hpp>
 
 namespace silkworm::concurrency {
 
-boost::asio::awaitable<void> timeout(std::chrono::milliseconds duration) {
+Task<void> timeout(std::chrono::milliseconds duration) {
     auto executor = co_await boost::asio::this_coro::executor;
-    boost::asio::deadline_timer timer(executor);
-    timer.expires_from_now(boost::posix_time::milliseconds(duration.count()));
+    boost::asio::steady_timer timer(executor);
+    timer.expires_after(duration);
 
     try {
         co_await timer.async_wait(boost::asio::use_awaitable);

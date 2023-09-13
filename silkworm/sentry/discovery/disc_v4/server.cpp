@@ -31,17 +31,16 @@
 #include <silkworm/infra/concurrency/awaitable_wait_for_one.hpp>
 #include <silkworm/infra/concurrency/timeout.hpp>
 
-#include "disc_v4_common/packet_type.hpp"
+#include "common/packet_type.hpp"
 #include "message_codec.hpp"
 
 namespace silkworm::sentry::discovery::disc_v4 {
 
 using namespace boost::asio;
-using namespace disc_v4_common;
 
 class ServerImpl {
   public:
-    explicit ServerImpl(uint16_t port, std::function<common::EccKeyPair()> node_key, MessageHandler& handler)
+    explicit ServerImpl(uint16_t port, std::function<EccKeyPair()> node_key, MessageHandler& handler)
         : ip_(ip::address{ip::address_v4::any()}),
           port_(port),
           node_key_(std::move(node_key)),
@@ -99,19 +98,28 @@ class ServerImpl {
                             std::move(envelope->packet_hash));
                         break;
                     case PacketType::kPong:
-                        co_await handler_.on_pong(ping::PongMessage::rlp_decode(data));
+                        co_await handler_.on_pong(
+                            ping::PongMessage::rlp_decode(data),
+                            std::move(envelope->public_key));
                         break;
                     case PacketType::kFindNode:
-                        co_await handler_.on_find_node(find::FindNodeMessage::rlp_decode(data));
+                        co_await handler_.on_find_node(
+                            find::FindNodeMessage::rlp_decode(data),
+                            std::move(envelope->public_key),
+                            std::move(sender_endpoint));
                         break;
                     case PacketType::kNeighbors:
-                        co_await handler_.on_neighbors(find::NeighborsMessage::rlp_decode(data));
+                        co_await handler_.on_neighbors(
+                            find::NeighborsMessage::rlp_decode(data),
+                            std::move(envelope->public_key));
                         break;
                     case PacketType::kEnrRequest:
                         break;
                     case PacketType::kEnrResponse:
                         break;
                 }
+            } catch (const find::FindNodeMessage::DecodeTargetPublicKeyError& ex) {
+                log::Debug("sentry") << "disc_v4::Server received a bad message from " << sender_endpoint << " : " << ex.what();
             } catch (const DecodingException& ex) {
                 log::Warning("sentry") << "disc_v4::Server received a bad message from " << sender_endpoint << " : " << ex.what();
             }
@@ -121,13 +129,13 @@ class ServerImpl {
     template <class TMessage>
     Task<void> send_message(TMessage message, ip::udp::endpoint recipient) {
         auto packet_data = MessageCodec::encode(
-            common::Message{TMessage::kId, message.rlp_encode()},
+            Message{TMessage::kId, message.rlp_encode()},
             node_key_().private_key());
         co_await send_packet(std::move(packet_data), recipient);
     }
 
   private:
-    ip::udp::endpoint listen_endpoint() const {
+    [[nodiscard]] ip::udp::endpoint listen_endpoint() const {
         return ip::udp::endpoint{ip_, port_};
     }
 
@@ -136,18 +144,20 @@ class ServerImpl {
         using namespace concurrency::awaitable_wait_for_one;
 
         auto executor = co_await this_coro::executor;
-        ip::udp::socket socket{executor};
+        ip::udp::socket socket{executor, recipient.protocol()};
+        socket.set_option(ip::udp::socket::reuse_address(true));
+        socket.bind(listen_endpoint());
         co_await socket.async_connect(recipient, use_awaitable);
         co_await (socket.async_send(buffer(data), use_awaitable) || concurrency::timeout(1s));
     }
 
     boost::asio::ip::address ip_;
     uint16_t port_;
-    std::function<common::EccKeyPair()> node_key_;
+    std::function<EccKeyPair()> node_key_;
     MessageHandler& handler_;
 };
 
-Server::Server(uint16_t port, std::function<common::EccKeyPair()> node_key, MessageHandler& handler)
+Server::Server(uint16_t port, std::function<EccKeyPair()> node_key, MessageHandler& handler)
     : p_impl_(std::make_unique<ServerImpl>(port, std::move(node_key), handler)) {}
 
 Server::~Server() {

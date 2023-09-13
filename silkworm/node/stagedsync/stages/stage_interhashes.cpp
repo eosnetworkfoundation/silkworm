@@ -54,8 +54,7 @@ Stage::Result InterHashes::forward(db::RWTxn& txn) {
                              "InterHashes progress " + std::to_string(previous_progress) +
                                  " greater than HashState progress " + std::to_string(hashstate_stage_progress));
         }
-
-        BlockNum segment_width{hashstate_stage_progress - previous_progress};
+        const BlockNum segment_width{hashstate_stage_progress - previous_progress};
         if (segment_width > db::stages::kSmallBlockSegmentWidth) {
             log::Info(log_prefix_ + " begin",
                       {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
@@ -96,7 +95,7 @@ Stage::Result InterHashes::forward(db::RWTxn& txn) {
         success_or_throw(ret);
         throw_if_stopping();
         db::stages::write_stage_progress(txn, db::stages::kIntermediateHashesKey, hashstate_stage_progress);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -138,8 +137,7 @@ Stage::Result InterHashes::unwind(db::RWTxn& txn) {
             operation_ = OperationType::None;
             return Stage::Result::kSuccess;
         }
-
-        BlockNum segment_width{previous_progress - to};
+        const BlockNum segment_width{previous_progress - to};
         if (segment_width > db::stages::kSmallBlockSegmentWidth) {
             log::Info(log_prefix_ + " begin",
                       {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
@@ -176,7 +174,7 @@ Stage::Result InterHashes::unwind(db::RWTxn& txn) {
         success_or_throw(ret);
         throw_if_stopping();
         db::stages::write_stage_progress(txn, db::stages::kIntermediateHashesKey, to);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -440,7 +438,7 @@ Stage::Result InterHashes::regenerate_intermediate_hashes(db::RWTxn& txn, const 
         txn->clear_map(db::table::kTrieOfAccounts.name);
         log::Info(log_prefix_, {"clearing", db::table::kTrieOfStorage.name});
         txn->clear_map(db::table::kTrieOfStorage.name);
-        txn.commit();
+        txn.commit_and_renew();
 
         account_collector_ = std::make_unique<etl::Collector>(node_settings_);
         storage_collector_ = std::make_unique<etl::Collector>(node_settings_);

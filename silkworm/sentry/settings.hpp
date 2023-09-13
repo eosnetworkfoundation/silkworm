@@ -49,11 +49,14 @@ struct Settings {
 
     std::filesystem::path data_dir_path;
 
+    uint64_t network_id{1};
+
     std::optional<std::variant<std::filesystem::path, Bytes>> node_key;
 
-    std::vector<common::EnodeUrl> static_peers;
+    std::vector<EnodeUrl> static_peers;
+    std::vector<EnodeUrl> bootnodes;
 
-    bool no_discover{true};
+    bool no_discover{false};
 
     size_t max_peers{100};
 };

@@ -26,9 +26,8 @@
 #include <tuple>
 #include <vector>
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
-#include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/thread_pool.hpp>
@@ -50,6 +49,7 @@ class Server {
                     const std::string& api_spec,
                     boost::asio::io_context& io_context,
                     boost::asio::thread_pool& workers,
+                    std::vector<std::string> allowed_origins,
                     std::optional<std::string> jwt_secret);
 
     void start();
@@ -59,7 +59,7 @@ class Server {
   private:
     static std::tuple<std::string, std::string> parse_endpoint(const std::string& tcp_end_point);
 
-    boost::asio::awaitable<void> run();
+    Task<void> run();
 
     //! The JSON RPC API implementation
     commands::RpcApi rpc_api_;
@@ -72,6 +72,9 @@ class Server {
 
     //! The acceptor used to listen for incoming TCP connections
     boost::asio::ip::tcp::acceptor acceptor_;
+
+    //! The list of allowed origins for CORS
+    std::vector<std::string> allowed_origins_;
 
     //! The JSON Web Token (JWT) secret for secure channel communication
     std::optional<std::string> jwt_secret_;

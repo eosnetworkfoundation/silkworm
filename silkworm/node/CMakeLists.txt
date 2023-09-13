@@ -16,7 +16,7 @@
 
 find_package(absl REQUIRED)
 find_package(asio-grpc REQUIRED)
-find_package(Boost REQUIRED container thread)
+find_package(Boost REQUIRED headers container)
 find_package(nlohmann_json REQUIRED)
 find_package(gRPC REQUIRED)
 find_package(magic_enum REQUIRED)
@@ -33,7 +33,6 @@ target_link_libraries(${SILKWORM_EMBED} PRIVATE CLI11::CLI11 Boost::headers)
 set(SILKWORM_TOML_SRC_DIR "${SILKWORM_MAIN_DIR}/third_party/erigon-snapshot")
 set(SILKWORM_TOML_SRC
     ${SILKWORM_TOML_SRC_DIR}/bor-mainnet.toml
-    ${SILKWORM_TOML_SRC_DIR}/bsc.toml
     ${SILKWORM_TOML_SRC_DIR}/gnosis.toml
     ${SILKWORM_TOML_SRC_DIR}/goerli.toml
     ${SILKWORM_TOML_SRC_DIR}/mainnet.toml
@@ -44,7 +43,6 @@ set(SILKWORM_TOML_SRC
 set(SILKWORM_TOML_CPP_SRC_DIR "${SILKWORM_MAIN_SRC_DIR}/node/snapshot/config")
 set(SILKWORM_TOML_CPP_SRC
     ${SILKWORM_TOML_CPP_SRC_DIR}/bor_mainnet.cpp
-    ${SILKWORM_TOML_CPP_SRC_DIR}/bsc.cpp
     ${SILKWORM_TOML_CPP_SRC_DIR}/gnosis.cpp
     ${SILKWORM_TOML_CPP_SRC_DIR}/goerli.cpp
     ${SILKWORM_TOML_CPP_SRC_DIR}/mainnet.cpp
@@ -56,10 +54,10 @@ set(SILKWORM_TOML_CPP_SRC
 add_custom_command(
   OUTPUT "${SILKWORM_TOML_CPP_SRC}"
   COMMAND "${SILKWORM_EMBED}" ARGS -i "${SILKWORM_TOML_SRC_DIR}" -o "${SILKWORM_TOML_CPP_SRC_DIR}" -e ".toml" -s "toml"
-  DEPENDS "${SILKWORM_EMBED}"
+  DEPENDS "${SILKWORM_EMBED}" "${SILKWORM_TOML_SRC}"
 )
 
-add_custom_target(generate_toml DEPENDS "${SILKWORM_TOML_SRC}" "${SILKWORM_EMBED}")
+add_custom_target(generate_toml ALL DEPENDS "${SILKWORM_TOML_CPP_SRC}" "${SILKWORM_EMBED}")
 
 file(
   GLOB_RECURSE
@@ -78,12 +76,6 @@ add_library(silkworm_node "${SILKWORM_NODE_SRC}" "${SILKWORM_TOML_CPP_SRC}")
 
 add_dependencies(silkworm_node generate_toml)
 
-# Suppress ASAN/TSAN in gRPC to avoid ODR violation when building Silkworm with sanitizers See
-# https://github.com/grpc/grpc/issues/19224
-if(SILKWORM_SANITIZE)
-  target_compile_definitions(silkworm_node PRIVATE GRPC_ASAN_SUPPRESSED GRPC_TSAN_SUPPRESSED)
-endif()
-
 target_include_directories(silkworm_node PUBLIC "${SILKWORM_MAIN_DIR}")
 
 set(SILKWORM_NODE_PUBLIC_LIBS
@@ -95,7 +87,7 @@ set(SILKWORM_NODE_PUBLIC_LIBS
     absl::flat_hash_set
     asio-grpc::asio-grpc
     Boost::container
-    Boost::thread
+    Boost::headers
     gRPC::grpc++
     mdbx-static
     nlohmann_json::nlohmann_json

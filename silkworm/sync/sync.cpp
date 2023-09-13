@@ -24,13 +24,13 @@
 
 namespace silkworm::chainsync {
 
-Sync::Sync(boost::asio::io_context& io_context,
+Sync::Sync(boost::asio::any_io_executor executor,
            mdbx::env_managed& chaindata_env,
            execution::Client& execution,
-           const std::shared_ptr<silkworm::sentry::api::api_common::SentryClient>& sentry_client,
+           const std::shared_ptr<silkworm::sentry::api::SentryClient>& sentry_client,
            const ChainConfig& config,
            const EngineRpcSettings& rpc_settings)
-    : sync_sentry_client_{io_context, sentry_client},
+    : sync_sentry_client_{std::move(executor), sentry_client},
       block_exchange_{sync_sentry_client_, db::ROAccess{chaindata_env}, config} {
     // If terminal total difficulty is present in chain config, the network will use Proof-of-Stake sooner or later
     if (config.terminal_total_difficulty) {
@@ -60,7 +60,9 @@ Sync::Sync(boost::asio::io_context& io_context,
 
         // Create the synchronization algorithm based on Casper + LMD-GHOST, i.e. PoS
         auto pos_sync = std::make_unique<PoSSync>(block_exchange_, execution);
-        engine_rpc_server_->add_backend_service(std::make_unique<EngineApiBackend>(*pos_sync));
+        std::vector<std::unique_ptr<rpc::ethbackend::BackEnd>> backends;
+        backends.push_back(std::make_unique<EngineApiBackend>(*pos_sync));  // just one PoS-based Engine backend
+        engine_rpc_server_->add_backend_services(std::move(backends));
         chain_sync_ = std::move(pos_sync);
     } else {
         // Create the synchronization algorithm based on GHOST, i.e. PoW
@@ -73,29 +75,36 @@ void Sync::force_pow(execution::Client& execution) {
     engine_rpc_server_.reset();
 }
 
-boost::asio::awaitable<void> Sync::async_run() {
+Task<void> Sync::async_run() {
     using namespace concurrency::awaitable_wait_for_all;
     return (run_tasks() && start_engine_rpc_server());
 }
 
-boost::asio::awaitable<void> Sync::run_tasks() {
+Task<void> Sync::run_tasks() {
     using namespace concurrency::awaitable_wait_for_all;
     co_await (start_sync_sentry_client() && start_block_exchange() && start_chain_sync());
 }
 
-boost::asio::awaitable<void> Sync::start_sync_sentry_client() {
+Task<void> Sync::start_sync_sentry_client() {
     return sync_sentry_client_.async_run();
 }
 
-boost::asio::awaitable<void> Sync::start_block_exchange() {
-    return block_exchange_.async_run();
+Task<void> Sync::start_block_exchange() {
+    return block_exchange_.async_run("block-exchg");
 }
 
-boost::asio::awaitable<void> Sync::start_chain_sync() {
-    return chain_sync_->async_run();
+Task<void> Sync::start_chain_sync() {
+    if (!engine_rpc_server_) {
+        return chain_sync_->async_run();
+    }
+
+    // The ChainSync async loop *must* run onto the Engine RPC server unique execution context
+    // This is *strictly* required by the current design assumptions in PoSSync
+    auto& engine_rpc_ioc = engine_rpc_server_->context_pool().next_io_context();
+    return boost::asio::co_spawn(engine_rpc_ioc, chain_sync_->async_run(), boost::asio::use_awaitable);
 }
 
-boost::asio::awaitable<void> Sync::start_engine_rpc_server() {
+Task<void> Sync::start_engine_rpc_server() {
     if (engine_rpc_server_) {
         auto engine_rpc_server_run = [this]() {
             engine_rpc_server_->start();
@@ -104,7 +113,9 @@ boost::asio::awaitable<void> Sync::start_engine_rpc_server() {
         auto engine_rpc_server_stop = [this]() {
             engine_rpc_server_->stop();
         };
-        co_await concurrency::async_thread(std::move(engine_rpc_server_run), std::move(engine_rpc_server_stop));
+        co_await concurrency::async_thread(std::move(engine_rpc_server_run),
+                                           std::move(engine_rpc_server_stop),
+                                           "eng-api-srv");
     }
 }
 

@@ -169,7 +169,7 @@ uint64_t EVMExecutor::refund_gas(const EVM& evm, const silkworm::Transaction& tx
     const uint64_t max_refund_quotient{rev >= EVMC_LONDON ? protocol::kMaxRefundQuotientLondon
                                                           : protocol::kMaxRefundQuotientFrontier};
     const uint64_t max_refund{(txn.gas_limit - gas_left) / max_refund_quotient};
-    uint64_t refund = gas_refund < max_refund ? gas_refund : max_refund;  // min
+    const uint64_t refund = gas_refund < max_refund ? gas_refund : max_refund;  // min
     gas_left += refund;
 
     const intx::uint256 base_fee_per_gas{evm.block().header.base_fee_per_gas.value_or(0)};
@@ -191,9 +191,9 @@ std::optional<std::string> EVMExecutor::pre_check(const EVM& evm, const silkworm
     if (rev >= EVMC_LONDON) {
         if (txn.max_fee_per_gas > 0 || txn.max_priority_fee_per_gas > 0) {
             if (txn.max_fee_per_gas < base_fee_per_gas) {
-                std::string from = to_hex(*txn.from);
-                std::string error = "fee cap less than block base fee: address 0x" + from + ", gasFeeCap: " + intx::to_string(txn.max_fee_per_gas) + " baseFee: " +
-                                    intx::to_string(base_fee_per_gas);
+                const std::string from = to_hex(*txn.from);
+                const std::string error = "fee cap less than block base fee: address 0x" + from + ", gasFeeCap: " +
+                                          intx::to_string(txn.max_fee_per_gas) + " baseFee: " + intx::to_string(base_fee_per_gas);
                 return error;
             }
 
@@ -310,7 +310,7 @@ ExecutionResult EVMExecutor::call(
     SILK_DEBUG << "EVMExecutor::call evm.beneficiary: " << evm.beneficiary << " balance: " << priority_fee_per_gas * gas_used;
     ibs_state_.add_to_balance(evm.beneficiary, priority_fee_per_gas * gas_used);
 
-    for (auto tracer : evm.tracers()) {
+    for (auto& tracer : evm.tracers()) {
         tracer.get().on_reward_granted(result, evm.state());
     }
     ibs_state_.finalize_transaction();
@@ -322,19 +322,21 @@ ExecutionResult EVMExecutor::call(
     return exec_result;
 }
 
-awaitable<ExecutionResult> EVMExecutor::call(const silkworm::ChainConfig& config,
-                                             boost::asio::thread_pool& workers,
-                                             const silkworm::Block& block,
-                                             const silkworm::Transaction& txn,
-                                             StateFactory state_factory,
-                                             Tracers tracers,
-                                             bool refund,
-                                             bool gas_bailout) {
+Task<ExecutionResult> EVMExecutor::call(
+    const silkworm::ChainConfig& config,
+    const ChainStorage& chain_storage,
+    boost::asio::thread_pool& workers,
+    const silkworm::Block& block,
+    const silkworm::Transaction& txn,
+    StateFactory state_factory,
+    Tracers tracers,
+    bool refund,
+    bool gas_bailout) {
     auto this_executor = co_await boost::asio::this_coro::executor;
     const auto execution_result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(ExecutionResult)>(
         [&](auto&& self) {
             boost::asio::post(workers, [&, self = std::move(self)]() mutable {
-                auto state = state_factory(this_executor, block.header.number);
+                auto state = state_factory(this_executor, block.header.number, chain_storage);
                 EVMExecutor executor{config, workers, state};
                 auto exec_result = executor.call(block, txn, tracers, refund, gas_bailout);
                 boost::asio::post(this_executor, [exec_result, self = std::move(self)]() mutable {

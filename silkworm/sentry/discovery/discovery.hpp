@@ -23,7 +23,9 @@
 
 #include <silkworm/infra/concurrency/task.hpp>
 
+#include <silkworm/infra/concurrency/executor_pool.hpp>
 #include <silkworm/sentry/common/ecc_key_pair.hpp>
+#include <silkworm/sentry/common/ecc_public_key.hpp>
 #include <silkworm/sentry/common/enode_url.hpp>
 
 namespace silkworm::sentry::discovery {
@@ -33,10 +35,14 @@ class DiscoveryImpl;
 class Discovery {
   public:
     explicit Discovery(
-        std::vector<common::EnodeUrl> peer_urls,
+        concurrency::ExecutorPool& executor_pool,
+        std::vector<EnodeUrl> peer_urls,
         bool with_dynamic_discovery,
         const std::filesystem::path& data_dir_path,
-        std::function<common::EccKeyPair()> node_key,
+        uint64_t network_id,
+        std::function<EccKeyPair()> node_key,
+        std::function<EnodeUrl()> node_url,
+        std::vector<EnodeUrl> bootnodes,
         uint16_t disc_v4_port);
     ~Discovery();
 
@@ -45,11 +51,13 @@ class Discovery {
 
     Task<void> run();
 
-    Task<std::vector<common::EnodeUrl>> request_peer_urls(
+    Task<std::vector<EnodeUrl>> request_peer_urls(
         size_t max_count,
-        std::vector<common::EnodeUrl> exclude_urls);
+        std::vector<EnodeUrl> exclude_urls);
 
-    bool is_static_peer_url(const common::EnodeUrl& peer_url);
+    bool is_static_peer_url(const EnodeUrl& peer_url);
+
+    Task<void> on_peer_disconnected(EccPublicKey peer_public_key, bool is_useless);
 
   private:
     std::unique_ptr<DiscoveryImpl> p_impl_;

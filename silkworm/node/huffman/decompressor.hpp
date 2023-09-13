@@ -183,7 +183,12 @@ class Decompressor {
         explicit Iterator(const Decompressor* decoder);
 
         [[nodiscard]] std::size_t data_size() const { return decoder_->words_length_; }
+
+        //! Check if any next word is present in the data stream
         [[nodiscard]] bool has_next() const { return word_offset_ < decoder_->words_length_; }
+
+        //! Check if the word at the current offset has the specified prefix (this does not move offset to the next)
+        [[nodiscard]] bool has_prefix(ByteView prefix);
 
         //! Extract one *compressed* word from current offset in the file and append it to buffer
         //! After extracting current word, move at the beginning of the next one
@@ -231,7 +236,7 @@ class Decompressor {
 
     using ReadAheadFuncRef = absl::FunctionRef<bool(Iterator)>;
 
-    explicit Decompressor(std::filesystem::path compressed_file);
+    explicit Decompressor(std::filesystem::path compressed_path, std::optional<MemoryMappedRegion> compressed_region = {});
     ~Decompressor();
 
     [[nodiscard]] const std::filesystem::path& compressed_path() const { return compressed_path_; }
@@ -247,6 +252,8 @@ class Decompressor {
     }
 
     [[nodiscard]] bool is_open() const { return bool(compressed_file_); }
+
+    [[nodiscard]] const MemoryMappedFile* memory_file() const { return compressed_file_.get(); }
 
     void open();
 
@@ -265,6 +272,7 @@ class Decompressor {
 
     //! The path to the compressed file
     std::filesystem::path compressed_path_;
+    std::optional<MemoryMappedRegion> compressed_region_;
 
     //! The memory-mapped compressed file
     std::unique_ptr<MemoryMappedFile> compressed_file_;

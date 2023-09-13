@@ -19,18 +19,15 @@
 #include <silkworm/infra/concurrency/task.hpp>
 
 #include <boost/asio/any_io_executor.hpp>
-#include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 
 #include <silkworm/core/common/base.hpp>
 
-namespace silkworm::sentry::common {
+namespace silkworm::sentry {
 
 class SocketStream {
   public:
-    explicit SocketStream(boost::asio::any_io_executor&& executor) : socket_(executor) {}
-    explicit SocketStream(boost::asio::any_io_executor& executor) : socket_(executor) {}
-    explicit SocketStream(boost::asio::io_context& io_context) : socket_(io_context) {}
+    explicit SocketStream(boost::asio::any_io_executor executor) : socket_(std::move(executor)) {}
 
     SocketStream(SocketStream&&) = default;
     SocketStream& operator=(SocketStream&&) = default;
@@ -48,4 +45,4 @@ class SocketStream {
     boost::asio::ip::tcp::socket socket_;
 };
 
-}  // namespace silkworm::sentry::common
+}  // namespace silkworm::sentry

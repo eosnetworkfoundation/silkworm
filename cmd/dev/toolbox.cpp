@@ -25,8 +25,6 @@
 #include <list>
 
 #include <CLI/CLI.hpp>
-#include <absl/container/btree_map.h>
-#include <boost/bind/placeholders.hpp>
 #include <boost/format.hpp>
 #include <magic_enum.hpp>
 
@@ -39,8 +37,8 @@
 #include <silkworm/core/trie/hash_builder.hpp>
 #include <silkworm/core/trie/nibbles.hpp>
 #include <silkworm/core/trie/prefix_set.hpp>
-#include <silkworm/infra/common/decoding_exception.hpp>
 #include <silkworm/infra/common/directories.hpp>
+#include <silkworm/infra/common/ensure.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/infra/concurrency/signal_handler.hpp>
@@ -48,13 +46,14 @@
 #include <silkworm/node/db/mdbx.hpp>
 #include <silkworm/node/db/prune_mode.hpp>
 #include <silkworm/node/db/stages.hpp>
+#include <silkworm/node/stagedsync/execution_pipeline.hpp>
+#include <silkworm/node/stagedsync/stages/stage_execution.hpp>
 #include <silkworm/node/stagedsync/stages/stage_interhashes/trie_cursor.hpp>
 
 #include "jsonfile/types.hpp"
 
 namespace fs = std::filesystem;
 using namespace silkworm;
-using namespace boost::placeholders;
 
 class Progress {
   public:
@@ -155,6 +154,39 @@ void cursor_for_each(mdbx::cursor& cursor, db::WalkFuncRef walker) {
         walker(db::from_slice(data.key), db::from_slice(data.value));
         data = cursor.move(mdbx::cursor::move_operation::next, throw_notfound);
     }
+}
+
+static void print_header(const BlockHeader& header) {
+    std::cout << "Header:\nhash=" << to_hex(header.hash()) << "\n"
+              << "parent_hash=" << to_hex(header.parent_hash) << "\n"
+              << "number=" << header.number << "\n"
+              << "beneficiary=" << to_hex(header.beneficiary) << "\n"
+              << "ommers_hash=" << to_hex(header.ommers_hash) << "\n"
+              << "state_root=" << to_hex(header.state_root) << "\n"
+              << "transactions_root=" << to_hex(header.transactions_root) << "\n"
+              << "receipts_root=" << to_hex(header.receipts_root) << "\n"
+              << "withdrawals_root=" << (header.withdrawals_root ? to_hex(*header.withdrawals_root) : "") << "\n"
+              << "beneficiary=" << to_hex(header.beneficiary) << "\n"
+              << "timestamp=" << header.timestamp << "\n"
+              << "nonce=" << to_hex(header.nonce) << "\n"
+              << "prev_randao=" << to_hex(header.prev_randao) << "\n"
+              << "base_fee_per_gas=" << (header.base_fee_per_gas ? intx::to_string(*header.base_fee_per_gas) : "") << "\n"
+              << "difficulty=" << intx::to_string(header.difficulty) << "\n"
+              << "gas_limit=" << header.gas_limit << "\n"
+              << "gas_used=" << header.gas_used << "\n"
+              << "data_gas_used=" << (header.data_gas_used ? *header.data_gas_used : 0) << "\n"
+              << "excess_data_gas=" << (header.excess_data_gas ? *header.excess_data_gas : 0) << "\n"
+              << "logs_bloom=" << to_hex(header.logs_bloom) << "\n"
+              << "extra_data=" << to_hex(header.extra_data) << "\n"
+              << "rlp=" << to_hex([&]() { Bytes b; rlp::encode(b, header); return b; }()) << "\n";
+}
+
+static void print_body(const db::detail::BlockBodyForStorage& body) {
+    std::cout << "Body:\nbase_txn_id=" << body.base_txn_id << "\n"
+              << "txn_count=" << body.txn_count << "\n"
+              << "#ommers=" << body.ommers.size() << "\n"
+              << (body.withdrawals ? "#withdrawals=" + std::to_string(body.withdrawals->size()) + "\n" : "")
+              << "rlp=" << to_hex(body.encode()) << "\n";
 }
 
 bool user_confirmation(const std::string& message = {"Confirm ?"}) {
@@ -460,7 +492,7 @@ void do_stage_set(db::EnvConfig& config, std::string&& stage_name, uint32_t new_
     }
 
     auto env{silkworm::db::open_env(config)};
-    db::RWTxn txn{env};
+    db::RWTxnManaged txn{env};
     if (!db::stages::is_known_stage(stage_name.c_str())) {
         throw std::runtime_error("Stage name " + stage_name + " is not known");
     }
@@ -471,11 +503,77 @@ void do_stage_set(db::EnvConfig& config, std::string&& stage_name, uint32_t new_
     auto old_height{db::stages::read_stage_progress(txn, stage_name.c_str())};
     db::stages::write_stage_progress(txn, stage_name.c_str(), new_height);
     if (!dry) {
-        txn.commit();
+        txn.commit_and_renew();
     }
 
     std::cout << "\n Stage " << stage_name << " touched from " << old_height << " to " << new_height << "\n"
               << std::endl;
+}
+
+void unwind(db::EnvConfig& config, BlockNum unwind_point, bool remove_blocks) {
+    ensure(config.exclusive, "Function requires exclusive access to database");
+
+    config.readonly = false;
+
+    auto env{silkworm::db::open_env(config)};
+    db::RWTxnManaged txn{env};
+    auto chain_config{db::read_chain_config(txn)};
+    ensure(chain_config.has_value(), "Not an initialized Silkworm db or unknown/custom chain");
+
+    NodeSettings settings{
+        .data_directory = std::make_unique<DataDirectory>(),
+        .chaindata_env_config = config,
+        .chain_config = chain_config};
+
+    stagedsync::ExecutionPipeline stage_pipeline{&settings};
+    const auto unwind_result{stage_pipeline.unwind(txn, unwind_point)};
+
+    ensure(unwind_result == stagedsync::Stage::Result::kSuccess,
+           "unwind failed: " + std::string{magic_enum::enum_name<stagedsync::Stage::Result>(unwind_result)});
+
+    std::cout << "\n Staged pipeline unwind up to block: " << unwind_point << " completed\n";
+
+    // In consensus-separated Sync/Execution design block headers and bodies are stored by the Sync component
+    // not by the Execution component: hence, ExecutionPipeline will not remove them during unwind phase
+    if (remove_blocks) {
+        std::cout << " Removing also block headers and bodies up to block: " << unwind_point << "\n";
+
+        // Remove the block bodies up to the unwind point
+        const auto body_cursor{txn.rw_cursor(db::table::kBlockBodies)};
+        const auto start_key{db::block_key(unwind_point)};
+        std::size_t erased_bodies{0};
+        auto body_data{body_cursor->lower_bound(db::to_slice(start_key), /*throw_notfound=*/false)};
+        while (body_data) {
+            body_cursor->erase();
+            ++erased_bodies;
+            body_data = body_cursor->to_next(/*throw_notfound=*/false);
+        }
+        std::cout << " Removed block bodies erased: " << erased_bodies << "\n";
+
+        // Remove the block headers up to the unwind point
+        const auto header_cursor{txn.rw_cursor(db::table::kHeaders)};
+        std::size_t erased_headers{0};
+        auto header_data{header_cursor->lower_bound(db::to_slice(start_key), /*throw_notfound=*/false)};
+        while (header_data) {
+            header_cursor->erase();
+            ++erased_headers;
+            header_data = header_cursor->to_next(/*throw_notfound=*/false);
+        }
+        std::cout << " Removed block headers erased: " << erased_headers << "\n";
+
+        // Remove the canonical hashes up to the unwind point
+        const auto canonical_cursor{txn.rw_cursor(db::table::kCanonicalHashes)};
+        std::size_t erased_hashes{0};
+        auto hash_data{canonical_cursor->lower_bound(db::to_slice(start_key), /*throw_notfound=*/false)};
+        while (hash_data) {
+            canonical_cursor->erase();
+            ++erased_hashes;
+            hash_data = canonical_cursor->to_next(/*throw_notfound=*/false);
+        }
+        std::cout << " Removed canonical hashes erased: " << erased_hashes << "\n";
+
+        txn.commit_and_stop();
+    }
 }
 
 void do_tables(db::EnvConfig& config) {
@@ -554,7 +652,7 @@ void do_freelist(db::EnvConfig& config, bool detail) {
 
 void do_schema(db::EnvConfig& config) {
     auto env{silkworm::db::open_env(config)};
-    db::ROTxn txn{env};
+    db::ROTxnManaged txn{env};
 
     auto schema_version{db::read_schema_version(txn)};
     if (!schema_version.has_value()) {
@@ -848,7 +946,7 @@ void do_init_genesis(DataDirectory& data_dir, const std::string&& json_file, uin
     // Prime database
     db::EnvConfig config{data_dir.chaindata().path().string(), /*create*/ true};
     auto env{db::open_env(config)};
-    db::RWTxn txn{env};
+    db::RWTxnManaged txn{env};
     db::table::check_or_create_chaindata_tables(txn);
     db::initialize_genesis(txn, genesis_json, /*allow_exceptions=*/true);
 
@@ -857,7 +955,7 @@ void do_init_genesis(DataDirectory& data_dir, const std::string&& json_file, uin
     db::write_schema_version(txn, v);
 
     if (!dry) {
-        txn.commit();
+        txn.commit_and_renew();
     } else {
         txn.abort();
     }
@@ -866,17 +964,120 @@ void do_init_genesis(DataDirectory& data_dir, const std::string&& json_file, uin
 
 void do_chainconfig(db::EnvConfig& config) {
     auto env{silkworm::db::open_env(config)};
-    db::ROTxn txn{env};
+    db::ROTxnManaged txn{env};
     auto chain_config{db::read_chain_config(txn)};
     if (!chain_config.has_value()) {
         throw std::runtime_error("Not an initialized Silkworm db or unknown/custom chain ");
     }
     const auto& chain{chain_config.value()};
-    std::cout << "\n Chain id " << chain.chain_id << "\n Settings (json) : \n"
-              << chain.to_json().dump() << "\n"
-              << std::endl;
+    std::cout << "\n Chain ID: " << chain.chain_id
+              << "\n Settings (json): \n"
+              << chain.to_json().dump(/*indent=*/2) << "\n\n";
+}
 
-    env.close(config.shared);
+void print_canonical_blocks(db::EnvConfig& config, BlockNum from, std::optional<BlockNum> to, uint64_t step) {
+    auto env{silkworm::db::open_env(config)};
+    db::ROTxnManaged txn{env};
+
+    // Determine last canonical block number
+    auto canonical_hashes_table{txn.ro_cursor(db::table::kCanonicalHashes)};
+    auto last_data{canonical_hashes_table->to_last(/*throw_notfound=*/false)};
+    ensure(last_data.done, "Table CanonicalHashes is empty");
+    ensure(last_data.key.size() == sizeof(BlockNum), "Table CanonicalHashes has unexpected key size");
+
+    // Use last block as max block if to is missing and perform range checks
+    BlockNum last{db::block_number_from_key(last_data.key)};
+    if (to) {
+        ensure(from <= *to, "Block from=" + std::to_string(from) + " must not be greater than to=" + std::to_string(*to));
+        ensure(*to <= last, "Block to=" + std::to_string(*to) + " must not be greater than last=" + std::to_string(last));
+    } else {
+        ensure(from <= last, "Block from=" + std::to_string(from) + " must not be greater than last=" + std::to_string(last));
+        to = last;
+    }
+
+    // Read the range of block headers and bodies from database
+    auto block_headers_table{txn.ro_cursor(db::table::kHeaders)};
+    auto block_bodies_table{txn.ro_cursor(db::table::kBlockBodies)};
+    for (BlockNum block_number{from}; block_number <= *to; block_number += step) {
+        // Lookup each canonical block hash from each block number
+        auto block_number_key{db::block_key(block_number)};
+        auto ch_data{canonical_hashes_table->find(db::to_slice(block_number_key), /*throw_notfound=*/false)};
+        ensure(ch_data.done, "Table CanonicalHashes does not contain key=" + to_hex(block_number_key));
+        const auto block_hash{to_bytes32(db::from_slice(ch_data.value))};
+
+        // Read and decode each canonical block header
+        auto block_key{db::block_key(block_number, block_hash.bytes)};
+        auto bh_data{block_headers_table->find(db::to_slice(block_key), /*throw_notfound=*/false)};
+        ensure(bh_data.done, "Table Headers does not contain key=" + to_hex(block_key));
+        ByteView block_header_data{db::from_slice(bh_data.value)};
+        BlockHeader header;
+        const auto res{rlp::decode(block_header_data, header)};
+        ensure(res.has_value(), "Cannot decode block header from rlp=" + to_hex(db::from_slice(bh_data.value)));
+
+        // Read and decode each canonical block body
+        auto bb_data{block_bodies_table->find(db::to_slice(block_key), /*throw_notfound=*/false)};
+        if (!bb_data.done) {
+            break;
+        }
+        ByteView block_body_data{db::from_slice(bb_data.value)};
+        const auto stored_body{db::detail::decode_stored_block_body(block_body_data)};
+
+        // Print block information to console
+        std::cout << "\nBlock number=" << block_number << "\n\n";
+        print_header(header);
+        std::cout << "\n";
+        print_body(stored_body);
+        std::cout << "\n\n";
+    }
+}
+
+void print_blocks(db::EnvConfig& config, BlockNum from, std::optional<BlockNum> to, uint64_t step) {
+    auto env{silkworm::db::open_env(config)};
+    db::ROTxnManaged txn{env};
+
+    // Determine last block header number
+    auto block_headers_table{txn.ro_cursor(db::table::kHeaders)};
+    auto last_data{block_headers_table->to_last(/*throw_notfound=*/false)};
+    ensure(last_data.done, "Table Headers is empty");
+    ensure(last_data.key.size() == sizeof(BlockNum) + kHashLength, "Table Headers has unexpected key size");
+
+    // Use last block as max block if to is missing and perform range checks
+    BlockNum last{db::block_number_from_key(last_data.key)};
+    if (to) {
+        ensure(from <= *to, "Block from=" + std::to_string(from) + " must not be greater than to=" + std::to_string(*to));
+        ensure(*to <= last, "Block to=" + std::to_string(*to) + " must not be greater than last=" + std::to_string(last));
+    } else {
+        ensure(from <= last, "Block from=" + std::to_string(from) + " must not be greater than last=" + std::to_string(last));
+        to = last;
+    }
+
+    // Read the range of block headers and bodies from database
+    auto block_bodies_table{txn.ro_cursor(db::table::kBlockBodies)};
+    for (BlockNum block_number{from}; block_number <= *to; block_number += step) {
+        // Read and decode each block header
+        auto block_key{db::block_key(block_number)};
+        auto bh_data{block_headers_table->lower_bound(db::to_slice(block_key), /*throw_notfound=*/false)};
+        ensure(bh_data.done, "Table Headers does not contain key=" + to_hex(block_key));
+        ByteView block_header_data{db::from_slice(bh_data.value)};
+        BlockHeader header;
+        const auto res{rlp::decode(block_header_data, header)};
+        ensure(res.has_value(), "Cannot decode block header from rlp=" + to_hex(db::from_slice(bh_data.value)));
+
+        // Read and decode each block body
+        auto bb_data{block_bodies_table->lower_bound(db::to_slice(block_key), /*throw_notfound=*/false)};
+        if (!bb_data.done) {
+            break;
+        }
+        ByteView block_body_data{db::from_slice(bb_data.value)};
+        const auto stored_body{db::detail::decode_stored_block_body(block_body_data)};
+
+        // Print block information to console
+        std::cout << "\nBlock number=" << block_number << "\n\n";
+        print_header(header);
+        std::cout << "\n";
+        print_body(stored_body);
+        std::cout << "\n\n";
+    }
 }
 
 void do_first_byte_analysis(db::EnvConfig& config) {
@@ -887,7 +1088,7 @@ void do_first_byte_analysis(db::EnvConfig& config) {
     }
 
     auto env{silkworm::db::open_env(config)};
-    db::ROTxn txn{env};
+    db::ROTxnManaged txn{env};
 
     std::cout << "\n"
               << (boost::format(fmt_hdr) % "Table name" % "%") << "\n"
@@ -950,11 +1151,10 @@ void do_extract_headers(db::EnvConfig& config, const std::string& file_name, uin
     }
 
     auto env{silkworm::db::open_env(config)};
-    db::ROTxn txn{env};
+    db::ROTxnManaged txn{env};
 
-    // We can store all header hashes into a single byte array given all
-    // hashes are same in length. By consequence we only need to assert
-    // total size of byte array is a multiple of hash length.
+    // We can store all header hashes into a single byte array given all hashes have same length.
+    // We only need to ensure that the total size of the byte array is a multiple of hash length.
     // The process is mostly the same we have in genesistool.cpp
 
     // Open the output file
@@ -1368,7 +1568,7 @@ void do_trie_integrity(db::EnvConfig& config, bool with_state_coverage, bool con
                             }
                             throw std::runtime_error(what);
                         }
-                    };
+                    }
                 }
             }
 
@@ -1406,7 +1606,7 @@ void do_trie_reset(db::EnvConfig& config, bool always_yes) {
     }
 
     auto env{silkworm::db::open_env(config)};
-    db::RWTxn txn{env};
+    db::RWTxnManaged txn{env};
     log::Info("Clearing ...", {"table", db::table::kTrieOfAccounts.name});
     txn->clear_map(db::table::kTrieOfAccounts.name);
     log::Info("Clearing ...", {"table", db::table::kTrieOfStorage.name});
@@ -1414,7 +1614,7 @@ void do_trie_reset(db::EnvConfig& config, bool always_yes) {
     log::Info("Setting progress ...", {"key", db::stages::kIntermediateHashesKey, "value", "0"});
     db::stages::write_stage_progress(txn, db::stages::kIntermediateHashesKey, 0);
     log::Info("Committing ...", {});
-    txn.commit();
+    txn.commit_and_renew();
     log::Info("Closing db", {"path", env.get_path().string()});
     env.close();
 }
@@ -1425,7 +1625,7 @@ void do_trie_root(db::EnvConfig& config) {
     }
 
     auto env{silkworm::db::open_env(config)};
-    db::ROTxn txn{env};
+    db::ROTxnManaged txn{env};
     db::PooledCursor trie_accounts(txn, db::table::kTrieOfAccounts);
     std::string source{db::table::kTrieOfAccounts.name};
 
@@ -1471,7 +1671,7 @@ void do_dump_state(db::EnvConfig& config, const std::string& evm_state_file_name
     }
 
     auto env{silkworm::db::open_env(config)};
-    db::ROTxn txn(env);
+    db::ROTxnManaged txn(env);
 
     db::PooledCursor accounts(txn, db::table::kPlainState);
     auto data{accounts.to_first(/*throw_notfound=*/false)};
@@ -1489,7 +1689,8 @@ void do_dump_state(db::EnvConfig& config, const std::string& evm_state_file_name
             }
             current_account = evm_json_file::account{};
             const auto account{Account::from_encoded_storage(value)};
-            success_or_throw(account);
+            //success_or_throw(account);
+
             memcpy(current_account->address.data(), key.data(), 20);
             current_account->nonce = account->nonce;
             intx::be::unsafe::store<intx::uint256>(current_account->balance.data(), account->balance);
@@ -1539,15 +1740,15 @@ void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
         return;
     }
 
-    log::Info() << "Ok boss ... you say it. Please be patient...";
+    log::Info() << "Ok... you say it. Please be patient...";
 
     auto env{silkworm::db::open_env(config)};
-    db::RWTxn txn(env);
+    db::RWTxnManaged txn(env);
 
     StopWatch sw(/*auto_start=*/true);
     // Void finish stage
     db::stages::write_stage_progress(txn, db::stages::kFinishKey, 0);
-    txn.commit(/*renew=*/true);
+    txn.commit_and_renew();
     log::Info(db::stages::kFinishKey, {"new height", "0", "in", StopWatch::format(sw.lap().second)});
     if (SignalHandler::signalled()) throw std::runtime_error("Aborted");
 
@@ -1557,7 +1758,7 @@ void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
     txn->clear_map(source.map());
     db::stages::write_stage_progress(txn, db::stages::kTxLookupKey, 0);
     db::stages::write_stage_prune_progress(txn, db::stages::kTxLookupKey, 0);
-    txn.commit(/*renew=*/true);
+    txn.commit_and_renew();
     log::Info(db::stages::kTxLookupKey, {"new height", "0", "in", StopWatch::format(sw.lap().second)});
     if (SignalHandler::signalled()) throw std::runtime_error("Aborted");
 
@@ -1570,7 +1771,7 @@ void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
     txn->clear_map(source.map());
     db::stages::write_stage_progress(txn, db::stages::kLogIndexKey, 0);
     db::stages::write_stage_prune_progress(txn, db::stages::kLogIndexKey, 0);
-    txn.commit(/*renew=*/true);
+    txn.commit_and_renew();
     log::Info(db::stages::kLogIndexKey, {"new height", "0", "in", StopWatch::format(sw.lap().second)});
     if (SignalHandler::signalled()) throw std::runtime_error("Aborted");
 
@@ -1583,7 +1784,7 @@ void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
     txn->clear_map(source.map());
     db::stages::write_stage_progress(txn, db::stages::kHistoryIndexKey, 0);
     db::stages::write_stage_prune_progress(txn, db::stages::kHistoryIndexKey, 0);
-    txn.commit(/*renew=*/true);
+    txn.commit_and_renew();
     log::Info(db::stages::kHistoryIndexKey, {"new height", "0", "in", StopWatch::format(sw.lap().second)});
     if (SignalHandler::signalled()) throw std::runtime_error("Aborted");
 
@@ -1599,7 +1800,7 @@ void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
     txn->clear_map(source.map());
     db::stages::write_stage_progress(txn, db::stages::kHashStateKey, 0);
     db::stages::write_stage_prune_progress(txn, db::stages::kHashStateKey, 0);
-    txn.commit(/*renew=*/true);
+    txn.commit_and_renew();
     log::Info(db::stages::kHashStateKey, {"new height", "0", "in", StopWatch::format(sw.lap().second)});
     if (SignalHandler::signalled()) throw std::runtime_error("Aborted");
 
@@ -1611,7 +1812,7 @@ void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
     source.bind(*txn, db::table::kTrieOfAccounts);
     txn->clear_map(source.map());
     db::stages::write_stage_progress(txn, db::stages::kIntermediateHashesKey, 0);
-    txn.commit(/*renew=*/true);
+    txn.commit_and_renew();
     log::Info(db::stages::kIntermediateHashesKey, {"new height", "0", "in", StopWatch::format(sw.lap().second)});
     if (SignalHandler::signalled()) throw std::runtime_error("Aborted");
 
@@ -1631,70 +1832,34 @@ void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
     log::Info(db::stages::kExecutionKey, {"table", db::table::kPlainCodeHash.name}) << " truncating ...";
     source.bind(*txn, db::table::kPlainCodeHash);
     txn->clear_map(source.map());
+    log::Info(db::stages::kExecutionKey, {"table", db::table::kAccountChangeSet.name}) << " truncating ...";
+    source.bind(*txn, db::table::kAccountChangeSet);
+    txn->clear_map(source.map());
+    log::Info(db::stages::kExecutionKey, {"table", db::table::kStorageChangeSet.name}) << " truncating ...";
+    source.bind(*txn, db::table::kStorageChangeSet);
+    txn->clear_map(source.map());
+    log::Info(db::stages::kExecutionKey, {"table", db::table::kPlainState.name}) << " truncating ...";
+    source.bind(*txn, db::table::kPlainState);
+    txn->clear_map(source.map());
+    txn.commit_and_renew();
 
     {
-        log::Info(db::stages::kExecutionKey, {"table", db::table::kPlainState.name})
-            << " reverting from " << db::table::kAccountChangeSet.name << " ...";
-        db::PooledCursor account_changeset(txn, db::table::kAccountChangeSet);
-        db::PooledCursor plain_state(txn, db::table::kPlainState);
-        absl::btree_map<evmc::address, std::optional<Account>> unique_addresses;
-        auto unique_addresses_it{unique_addresses.end()};
-        auto data{account_changeset.to_first(/*throw_notfound=*/false)};
-        while (data) {
-            auto value_view{db::from_slice(data.value)};
-            auto address{to_evmc_address(value_view)};
-            unique_addresses_it = unique_addresses.find(address);
-            if (unique_addresses_it != unique_addresses.end()) {
-                value_view.remove_prefix(kAddressLength);
-                if (value_view.empty()) {
-                    unique_addresses.emplace(address, std::nullopt);
-                } else {
-                    const auto account{Account::from_encoded_storage(value_view)};
-                    success_or_throw(account);
-                    unique_addresses.emplace(address, *account);
-                }
-            }
-            data = account_changeset.to_next(/*throw_notfound=*/false);
-        }
-        for (const auto& [address, account] : unique_addresses) {
-            if (!account) {
-                plain_state.erase(db::to_slice(address), true);
-            } else {
-                auto new_encoded_account{account->encode_for_storage(false)};
-                plain_state.upsert(db::to_slice(address), db::to_slice(new_encoded_account));
-            }
-        }
-        log::Info(db::stages::kExecutionKey, {"table", db::table::kAccountChangeSet.name}) << " truncating ...";
-        txn->clear_map(account_changeset.map());
-        txn.commit(/*renew=*/true);
-    }
-
-    {
-        // TODO: Implement properly when/if initial allocation of contracts is allowed in genesis
-        /*
-         * Clarification !
-         * For simplicity all states related to contracts are simply deleted as we do not support (yet)
-         * initial allocation of contracts in genesis.
-         */
-        log::Info(db::stages::kExecutionKey, {"table", db::table::kPlainState.name})
-            << " reverting from " << db::table::kStorageChangeSet.name << " ...";
-        db::PooledCursor storage_changeset(txn, db::table::kStorageChangeSet);
-        db::PooledCursor plain_state(txn, db::table::kPlainState);
-        auto data{plain_state.to_first(/*throw_notfound=*/false)};
-        while (data) {
-            if (data.key.size() == db::kPlainStoragePrefixLength) {
-                plain_state.erase(true);
-            }
-            data = plain_state.to_next(/*throw_notfound=*/false);
-        }
-        log::Info(db::stages::kExecutionKey, {"table", db::table::kStorageChangeSet.name}) << " truncating ...";
-        txn->clear_map(storage_changeset.map());
-        txn.commit(/*renew=*/true);
+        log::Info(db::stages::kExecutionKey, {"table", db::table::kPlainState.name}) << " redo genesis allocations ...";
+        // Read chain ID from database
+        const auto chain_config{db::read_chain_config(txn)};
+        ensure(chain_config.has_value(), "cannot read chain configuration from database");
+        // Read genesis data from embedded file
+        std::string source_data{read_genesis_data(chain_config->chain_id)};
+        // Parse genesis JSON data
+        // N.B. = instead of {} initialization due to https://github.com/nlohmann/json/issues/2204
+        auto genesis_json = nlohmann::json::parse(source_data, nullptr, /* allow_exceptions = */ false);
+        db::initialize_genesis_allocations(txn, genesis_json);
+        txn.commit_and_renew();
     }
 
     db::stages::write_stage_progress(txn, db::stages::kExecutionKey, 0);
     db::stages::write_stage_prune_progress(txn, db::stages::kExecutionKey, 0);
-    txn.commit(/*renew=*/true);
+    txn.commit_and_renew();
     log::Info(db::stages::kExecutionKey, {"new height", "0", "in", StopWatch::format(sw.lap().second)});
 
     if (!keep_senders) {
@@ -1704,7 +1869,7 @@ void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
         txn->clear_map(source.map());
         db::stages::write_stage_progress(txn, db::stages::kSendersKey, 0);
         db::stages::write_stage_prune_progress(txn, db::stages::kSendersKey, 0);
-        txn.commit(/*renew=*/true);
+        txn.commit_and_renew();
         log::Info(db::stages::kSendersKey, {"new height", "0", "in", StopWatch::format(sw.lap().second)});
         if (SignalHandler::signalled()) throw std::runtime_error("Aborted");
     }
@@ -1739,14 +1904,12 @@ int main(int argc, char* argv[]) {
     /*
      * Common opts and flags
      */
-
     auto app_yes_opt = app_main.add_flag("-Y,--yes", "Assume yes to all requests of confirmation");
     auto app_dry_opt = app_main.add_flag("--dry", "Don't commit to db. Only simulate");
 
     /*
      * Subcommands
      */
-
     // List tables and gives info about storage
     auto cmd_tables = app_main.add_subcommand("tables", "List db and tables info");
     auto cmd_tables_scan_opt = cmd_tables->add_flag("--scan", "Scan real data size (long)");
@@ -1793,7 +1956,17 @@ int main(int argc, char* argv[]) {
     auto cmd_stageset = app_main.add_subcommand("stage-set", "Sets a stage to a new height");
     auto cmd_stageset_name_opt = cmd_stageset->add_option("--name", "Name of the stage to set")->required();
     auto cmd_stageset_height_opt =
-        cmd_stageset->add_option("--height", "Name of the stage to set")->required()->check(CLI::Range(0u, UINT32_MAX));
+        cmd_stageset->add_option("--height", "Block height to set the stage to")->required()->check(CLI::Range(0u, UINT32_MAX));
+
+    // Unwind tool
+    auto cmd_staged_unwind = app_main.add_subcommand("unwind", "Unwind staged sync to a previous height");
+    auto cmd_staged_unwind_height =
+        cmd_staged_unwind->add_option("--height", "Block height to unwind the staged sync to")
+            ->required()
+            ->check(CLI::Range(0u, UINT32_MAX));
+    auto cmd_staged_unwind_remove_blocks =
+        cmd_staged_unwind->add_flag("--remove_blocks", "Remove block headers and bodies up to unwind point")
+            ->capture_default_str();
 
     // Initialize with genesis tool
     auto cmd_initgenesis = app_main.add_subcommand("init-genesis", "Initialize a new db with genesis block");
@@ -1808,6 +1981,29 @@ int main(int argc, char* argv[]) {
 
     // Read chain config held in db (if any)
     auto cmd_chainconfig = app_main.add_subcommand("chain-config", "Prints chain config held in database");
+
+    // Print the list of canonical blocks in specified range
+    auto cmd_canonical_blocks =
+        app_main.add_subcommand("canonical_blocks", "Print canonical blocks from database in specified range");
+    auto cmd_canonical_blocks_from = cmd_canonical_blocks->add_option("--from", "Block height to start with")
+                                         ->required()
+                                         ->check(CLI::Range(0u, UINT32_MAX));
+    auto cmd_canonical_blocks_to = cmd_canonical_blocks->add_option("--to", "Block height to end with")
+                                       ->check(CLI::Range(0u, UINT32_MAX));
+    auto cmd_canonical_blocks_step = cmd_canonical_blocks->add_option("--step", "Step every this number of blocks")
+                                         ->default_val("1")
+                                         ->check(CLI::Range(1u, UINT32_MAX));
+
+    // Print the list of saved blocks in specified range
+    auto cmd_blocks = app_main.add_subcommand("blocks", "Print blocks from database in specified range");
+    auto cmd_blocks_from = cmd_blocks->add_option("--from", "Block height to start with")
+                               ->required()
+                               ->check(CLI::Range(0u, UINT32_MAX));
+    auto cmd_blocks_to = cmd_blocks->add_option("--to", "Block height to end with")
+                             ->check(CLI::Range(0u, UINT32_MAX));
+    auto cmd_blocks_step = cmd_blocks->add_option("--step", "Step every this number of blocks")
+                               ->default_val("1")
+                               ->check(CLI::Range(1u, UINT32_MAX));
 
     // Do first byte analytics on deployed contract codes
     auto cmd_first_byte_analysis = app_main.add_subcommand(
@@ -1857,7 +2053,7 @@ int main(int argc, char* argv[]) {
     /*
      * Parse arguments and validate
      */
-    CLI11_PARSE(app_main, argc, argv);
+    CLI11_PARSE(app_main, argc, argv)
 
     auto data_dir_factory = [&chaindata_opt, &datadir_opt]() -> DataDirectory {
         if (*chaindata_opt) {
@@ -1918,6 +2114,8 @@ int main(int argc, char* argv[]) {
         } else if (*cmd_stageset) {
             do_stage_set(src_config, cmd_stageset_name_opt->as<std::string>(), cmd_stageset_height_opt->as<uint32_t>(),
                          static_cast<bool>(*app_dry_opt));
+        } else if (*cmd_staged_unwind) {
+            unwind(src_config, cmd_staged_unwind_height->as<uint32_t>(), static_cast<bool>(*cmd_staged_unwind_remove_blocks));
         } else if (*cmd_initgenesis) {
             do_init_genesis(data_dir, cmd_initgenesis_json_opt->as<std::string>(),
                             *cmd_initgenesis_chain_opt ? cmd_initgenesis_chain_opt->as<uint32_t>() : 0u,
@@ -1929,6 +2127,14 @@ int main(int argc, char* argv[]) {
             }
         } else if (*cmd_chainconfig) {
             do_chainconfig(src_config);
+        } else if (*cmd_canonical_blocks) {
+            print_canonical_blocks(src_config,
+                                   cmd_canonical_blocks_from->as<BlockNum>(),
+                                   cmd_canonical_blocks_to->as<std::optional<BlockNum>>(),
+                                   cmd_canonical_blocks_step->as<uint64_t>());
+        } else if (*cmd_blocks) {
+            print_blocks(src_config, cmd_blocks_from->as<BlockNum>(), cmd_blocks_to->as<std::optional<BlockNum>>(),
+                         cmd_blocks_step->as<uint64_t>());
         } else if (*cmd_first_byte_analysis) {
             do_first_byte_analysis(src_config);
         } else if (*cmd_extract_headers) {
@@ -1955,11 +2161,9 @@ int main(int argc, char* argv[]) {
         return 0;
 
     } catch (const std::exception& ex) {
-        std::cerr << "\nUnexpected " << typeid(ex).name() << " : " << ex.what() << "\n"
-                  << std::endl;
+        std::cerr << "\nError : " << ex.what() << "\n\n";
     } catch (...) {
-        std::cerr << "\nUnexpected undefined error\n"
-                  << std::endl;
+        std::cerr << "\nUnexpected undefined error\n\n";
     }
 
     return -1;

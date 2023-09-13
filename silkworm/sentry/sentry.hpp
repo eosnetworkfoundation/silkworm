@@ -16,22 +16,23 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 
 #include <silkworm/infra/concurrency/task.hpp>
 
-#include <silkworm/infra/grpc/server/server_context_pool.hpp>
+#include <silkworm/infra/concurrency/executor_pool.hpp>
 
-#include "api/api_common/sentry_client.hpp"
+#include "api/common/sentry_client.hpp"
 #include "settings.hpp"
 
 namespace silkworm::sentry {
 
 class SentryImpl;
 
-class Sentry final : public api::api_common::SentryClient {
+class Sentry final : public api::SentryClient {
   public:
-    explicit Sentry(Settings settings, silkworm::rpc::ServerContextPool& context_pool);
+    explicit Sentry(Settings settings, concurrency::ExecutorPool& executor_pool);
     ~Sentry() override;
 
     Sentry(const Sentry&) = delete;
@@ -39,7 +40,7 @@ class Sentry final : public api::api_common::SentryClient {
 
     Task<void> run();
 
-    Task<std::shared_ptr<api::api_common::Service>> service() override;
+    Task<std::shared_ptr<api::Service>> service() override;
     [[nodiscard]] bool is_ready() override;
     void on_disconnect(std::function<Task<void>()> callback) override;
     Task<void> reconnect() override;

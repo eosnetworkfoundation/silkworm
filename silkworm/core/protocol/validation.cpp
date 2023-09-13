@@ -16,7 +16,8 @@
 
 #include "validation.hpp"
 
-#include <silkworm/core/common/cast.hpp>
+#include <bit>
+
 #include <silkworm/core/crypto/secp256k1n.hpp>
 #include <silkworm/core/rlp/encode_vector.hpp>
 #include <silkworm/core/trie/vector_root.hpp>
@@ -159,11 +160,7 @@ ValidationResult pre_validate_transactions(const Block& block, const ChainConfig
     return ValidationResult::kOk;
 }
 
-std::optional<intx::uint256> expected_base_fee_per_gas(const BlockHeader& parent, const evmc_revision rev) {
-    if (rev < EVMC_LONDON) {
-        return std::nullopt;
-    }
-
+intx::uint256 expected_base_fee_per_gas(const BlockHeader& parent) {
     if (!parent.base_fee_per_gas) {
         return kInitialBaseFee;
     }
@@ -195,11 +192,7 @@ std::optional<intx::uint256> expected_base_fee_per_gas(const BlockHeader& parent
     }
 }
 
-std::optional<uint64_t> calc_excess_data_gas(const BlockHeader& parent, const evmc_revision rev) {
-    if (rev < EVMC_CANCUN) {
-        return std::nullopt;
-    }
-
+uint64_t calc_excess_data_gas(const BlockHeader& parent) {
     const uint64_t parent_excess_data_gas{parent.excess_data_gas.value_or(0)};
     const uint64_t consumed_data_gas{parent.data_gas_used.value_or(0)};
 
@@ -235,7 +228,7 @@ evmc::bytes32 compute_ommers_hash(const BlockBody& body) {
 
     Bytes ommers_rlp;
     rlp::encode(ommers_rlp, body.ommers);
-    return bit_cast<evmc_bytes32>(keccak256(ommers_rlp));
+    return std::bit_cast<evmc_bytes32>(keccak256(ommers_rlp));
 }
 
 }  // namespace silkworm::protocol

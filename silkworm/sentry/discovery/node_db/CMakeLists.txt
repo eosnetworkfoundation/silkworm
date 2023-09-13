@@ -14,7 +14,7 @@
    limitations under the License.
 ]]
 
-find_package(Boost REQUIRED thread)
+find_package(Boost REQUIRED headers)
 find_package(Catch2 REQUIRED)
 find_package(SQLiteCpp REQUIRED)
 
@@ -30,11 +30,15 @@ target_include_directories(${TARGET} PUBLIC "${SILKWORM_MAIN_DIR}")
 target_link_libraries(
   ${TARGET}
   PUBLIC silkworm_infra silkworm_sentry_common
-  PRIVATE Boost::thread SQLiteCpp::SQLiteCpp
+  PRIVATE Boost::headers SQLiteCpp::SQLiteCpp
 )
 
 # unit tests
 set(TEST_TARGET ${TARGET}_test)
 file(GLOB_RECURSE TEST_SRC CONFIGURE_DEPENDS "*_test.cpp")
 add_executable(${TEST_TARGET} "${SILKWORM_MAIN_DIR}/cmd/test/unit_test.cpp" ${TEST_SRC})
-target_link_libraries(${TEST_TARGET} ${TARGET} Catch2::Catch2)
+target_link_libraries(
+  ${TEST_TARGET}
+  PRIVATE ${TARGET} Catch2::Catch2
+  INTERFACE silkworm_infra_test_util
+)

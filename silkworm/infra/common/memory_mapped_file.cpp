@@ -32,18 +32,46 @@
 
 #include <gsl/util>
 
+#include "ensure.hpp"
+
 namespace silkworm {
 
-MemoryMappedFile::MemoryMappedFile(std::filesystem::path path, bool read_only) : path_(std::move(path)) {
-    map_existing(read_only);
+MemoryMappedFile::MemoryMappedFile(std::filesystem::path path, std::optional<MemoryMappedRegion> region, bool read_only)
+    : path_(std::move(path)), managed_{not region.has_value()} {
+    ensure(std::filesystem::exists(path_), "MemoryMappedFile: " + path_.string() + " does not exist");
+    ensure(std::filesystem::is_regular_file(path_), "MemoryMappedFile: " + path_.string() + " is not regular file");
+
+    if (region) {
+        ensure(region->address != nullptr, "MemoryMappedFile: address is null");
+        ensure(region->length > 0, "MemoryMappedFile: length is zero");
+        address_ = region->address;
+        length_ = region->length;
+    } else {
+        map_existing(read_only);
+    }
 }
 
 MemoryMappedFile::~MemoryMappedFile() {
+    if (not managed_) {
+        return;
+    }
+
     unmap();
 
 #ifdef _WIN32
     cleanup();
 #endif
+}
+
+MemoryMappedFile::MemoryMappedFile(MemoryMappedFile&& source) noexcept
+    : path_(std::move(source.path_)), address_(source.address_), length_(source.length_), managed_(source.managed_) {}
+
+MemoryMappedFile& MemoryMappedFile::operator=(MemoryMappedFile&& other) noexcept {
+    path_ = std::move(other.path_);
+    address_ = other.address_;
+    length_ = other.length_;
+    managed_ = other.managed_;
+    return *this;
 }
 
 #ifdef _WIN32
@@ -64,7 +92,7 @@ void MemoryMappedFile::map_existing(bool read_only) {
         throw std::runtime_error{"Failed to create existing file: " + path_.string() + " error: " + std::to_string(GetLastError())};
     }
 
-    auto _ = gsl::finally([fd]() { if (INVALID_HANDLE_VALUE != fd) ::CloseHandle(fd); });
+    [[maybe_unused]] auto _ = gsl::finally([fd]() { if (INVALID_HANDLE_VALUE != fd) ::CloseHandle(fd); });
 
     length_ = std::filesystem::file_size(path_);
 
@@ -122,7 +150,7 @@ void MemoryMappedFile::map_existing(bool read_only) {
     if (fd == -1) {
         throw std::runtime_error{"open failed for: " + path_.string() + " error: " + strerror(errno)};
     }
-    auto _ = gsl::finally([fd]() { ::close(fd); });
+    [[maybe_unused]] auto _ = gsl::finally([fd]() { ::close(fd); });
 
     length_ = std::filesystem::file_size(path_);
 

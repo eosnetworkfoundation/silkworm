@@ -16,7 +16,8 @@
 
 #include "block.hpp"
 
-#include <silkworm/core/common/cast.hpp>
+#include <bit>
+
 #include <silkworm/core/protocol/param.hpp>
 #include <silkworm/core/rlp/decode_vector.hpp>
 #include <silkworm/core/rlp/encode_vector.hpp>
@@ -41,7 +42,7 @@ BlockNum height(const BlockId& b) { return b.number; }
 evmc::bytes32 BlockHeader::hash(bool for_sealing, bool exclude_extra_data_sig) const {
     Bytes rlp;
     rlp::encode(rlp, *this, for_sealing, exclude_extra_data_sig);
-    return bit_cast<evmc_bytes32>(keccak256(rlp));
+    return std::bit_cast<evmc_bytes32>(keccak256(rlp));
 }
 
 ethash::hash256 BlockHeader::boundary() const {
@@ -122,6 +123,9 @@ namespace rlp {
         if (header.excess_data_gas) {
             rlp_head.payload_length += length(*header.excess_data_gas);
         }
+        if (header.parent_beacon_block_root) {
+            rlp_head.payload_length += kHashLength + 1;
+        }
 
         return rlp_head;
     }
@@ -159,13 +163,16 @@ namespace rlp {
             encode(to, *header.base_fee_per_gas);
         }
         if (header.withdrawals_root) {
-            encode(to, static_cast<ByteView>(*header.withdrawals_root));
+            encode(to, *header.withdrawals_root);
         }
         if (header.data_gas_used) {
             encode(to, *header.data_gas_used);
         }
         if (header.excess_data_gas) {
             encode(to, *header.excess_data_gas);
+        }
+        if (header.parent_beacon_block_root) {
+            encode(to, *header.parent_beacon_block_root);
         }
     }
 
@@ -223,12 +230,16 @@ namespace rlp {
         if (from.length() > leftover) {
             to.data_gas_used = 0;
             to.excess_data_gas = 0;
-            if (DecodingResult res{decode_items(from, *to.data_gas_used, *to.excess_data_gas)}; !res) {
+            to.parent_beacon_block_root = evmc::bytes32{};
+            if (DecodingResult res{decode_items(from, *to.data_gas_used, *to.excess_data_gas,
+                                                *to.parent_beacon_block_root)};
+                !res) {
                 return res;
             }
         } else {
             to.data_gas_used = std::nullopt;
             to.excess_data_gas = std::nullopt;
+            to.parent_beacon_block_root = std::nullopt;
         }
 
         if (from.length() != leftover) {

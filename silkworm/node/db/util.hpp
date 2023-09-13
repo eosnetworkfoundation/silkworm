@@ -80,7 +80,7 @@ Bytes block_key(BlockNum block_number);
 Bytes block_key(BlockNum block_number, std::span<const uint8_t, kHashLength> hash);
 
 // Split a block key in BlockNum and Hash
-auto split_block_key(ByteView key) -> std::tuple<BlockNum, evmc::bytes32>;
+std::tuple<BlockNum, evmc::bytes32> split_block_key(ByteView key);
 
 Bytes storage_change_key(BlockNum block_number, const evmc::address& address, uint64_t incarnation);
 
@@ -92,6 +92,23 @@ Bytes storage_history_key(const evmc::address& address, const evmc::bytes32& loc
 
 // Erigon LogKey
 Bytes log_key(BlockNum block_number, uint32_t transaction_id);
+
+//! Encode LogAddressIndex table key for target address
+Bytes log_address_key(const evmc::address& address, BlockNum block_number);
+
+//! Encode LogTopicIndex table key for target topic
+Bytes log_topic_key(const evmc::bytes32& topic, BlockNum block_number);
+
+BlockNum block_number_from_key(const mdbx::slice& key);
+
+//! Decode TransactionLog table key into block number and transaction index
+std::tuple<BlockNum, uint32_t> split_log_key(const mdbx::slice& key);
+
+//! Decode LogAddressIndex table key into account address and block upper bound
+std::tuple<ByteView, uint32_t> split_log_address_key(const mdbx::slice& key);
+
+//! Decode LogTopicIndex table key into topic hash and block upper bound
+std::tuple<ByteView, uint32_t> split_log_topic_key(const mdbx::slice& key);
 
 //! \brief Converts change set (AccountChangeSet/StorageChangeSet) entry to plain state format.
 //! \param [in] key : Change set key.

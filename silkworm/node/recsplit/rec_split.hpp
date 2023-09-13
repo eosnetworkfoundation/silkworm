@@ -231,7 +231,9 @@ class RecSplit {
         hasher_ = std::make_unique<Murmur3>(salt_);
     }
 
-    explicit RecSplit(std::filesystem::path index_path) : index_path_(std::move(index_path)), encoded_file_{index_path_} {
+    explicit RecSplit(std::filesystem::path index_path, std::optional<MemoryMappedRegion> index_region = {})
+        : index_path_{index_path},
+          encoded_file_{std::make_optional<MemoryMappedFile>(std::move(index_path), std::move(index_region))} {
         SILK_DEBUG << "RecSplit encoded file path: " << encoded_file_->path();
         check_minimum_length(kFirstMetadataHeaderLength);
 
@@ -410,7 +412,7 @@ class RecSplit {
 
         current_bucket_id_ = std::numeric_limits<uint64_t>::max();  // To make sure 0 bucket is detected
 
-        auto bucket_collector_clear = gsl::finally([&]() { bucket_collector_.clear(); });
+        [[maybe_unused]] auto _ = gsl::finally([&]() { bucket_collector_.clear(); });
         SILK_INFO << "[index] calculating file=" << index_path_.string();
 
         // We use an exception for collision error condition because ETL currently does not support loading errors
@@ -639,6 +641,9 @@ class RecSplit {
     std::filesystem::file_time_type last_write_time() const {
         return std::filesystem::last_write_time(index_path_);
     }
+
+    uint8_t* memory_file_address() const { return encoded_file_ ? encoded_file_->address() : nullptr; }
+    std::size_t memory_file_size() const { return encoded_file_ ? encoded_file_->length() : 0; }
 
   private:
     static inline std::size_t skip_bits(std::size_t m) { return memo[m] & 0xFFFF; }

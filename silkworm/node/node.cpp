@@ -23,6 +23,7 @@
 #include <silkworm/infra/concurrency/awaitable_wait_for_all.hpp>
 #include <silkworm/node/backend/ethereum_backend.hpp>
 #include <silkworm/node/backend/remote/backend_kv_server.hpp>
+#include <silkworm/node/bittorrent/client.hpp>
 #include <silkworm/node/common/preverified_hashes.hpp>
 #include <silkworm/node/common/resource_usage.hpp>
 #include <silkworm/node/snapshot/sync.hpp>
@@ -32,7 +33,10 @@ namespace silkworm::node {
 
 constexpr uint64_t kMaxFileDescriptors{10'240};
 
-using SentryClientPtr = std::shared_ptr<sentry::api::api_common::SentryClient>;
+//! Custom stack size for thread running block execution on EVM
+constexpr uint64_t kExecutionThreadStackSize{16'777'216};  // 16MiB
+
+using SentryClientPtr = std::shared_ptr<sentry::api::SentryClient>;
 
 class NodeImpl final {
   public:
@@ -42,7 +46,7 @@ class NodeImpl final {
     NodeImpl& operator=(const NodeImpl&) = delete;
 
     execution::LocalClient& execution_local_client() { return execution_local_client_; }
-    std::shared_ptr<sentry::api::api_common::SentryClient> sentry_client() { return sentry_client_; }
+    std::shared_ptr<sentry::api::SentryClient> sentry_client() { return sentry_client_; }
 
     void setup();
 
@@ -54,6 +58,7 @@ class NodeImpl final {
     Task<void> run_tasks();
     Task<void> start_execution_server();
     Task<void> start_backend_kv_grpc_server();
+    Task<void> start_bittorrent_client();
     Task<void> start_resource_usage_log();
     Task<void> start_execution_log_timer();
 
@@ -70,6 +75,7 @@ class NodeImpl final {
     std::unique_ptr<EthereumBackEnd> backend_;
     std::unique_ptr<rpc::BackEndKvServer> backend_kv_rpc_server_;
     ResourceUsageLog resource_usage_log_;
+    std::unique_ptr<BitTorrentClient> bittorrent_client_;
 };
 
 NodeImpl::NodeImpl(Settings& settings, SentryClientPtr sentry_client, mdbx::env& chaindata_db)
@@ -83,6 +89,7 @@ NodeImpl::NodeImpl(Settings& settings, SentryClientPtr sentry_client, mdbx::env&
     backend_ = std::make_unique<EthereumBackEnd>(settings_, &chaindata_db_, sentry_client_);
     backend_->set_node_name(settings_.node_name);
     backend_kv_rpc_server_ = std::make_unique<rpc::BackEndKvServer>(settings.server_settings, *backend_);
+    bittorrent_client_ = std::make_unique<BitTorrentClient>(settings_.snapshot_settings.bittorrent_settings);
 }
 
 void NodeImpl::setup() {
@@ -99,7 +106,7 @@ void NodeImpl::setup_snapshots() {
             throw std::runtime_error{"Cannot increase max file descriptor up to " + std::to_string(kMaxFileDescriptors)};
         }
 
-        db::RWTxn rw_txn{chaindata_db_};
+        db::RWTxnManaged rw_txn{chaindata_db_};
 
         // Snapshot sync - download chain from peers using snapshot files
         snapshot::SnapshotSync snapshot_sync{&snapshot_repository_, settings_.chain_config.value()};
@@ -116,7 +123,7 @@ void NodeImpl::setup_snapshots() {
 
 Task<void> NodeImpl::run() {
     using namespace concurrency::awaitable_wait_for_all;
-    return (run_tasks() && start_backend_kv_grpc_server());
+    return (run_tasks() && start_backend_kv_grpc_server() && start_bittorrent_client());
 }
 
 Task<void> NodeImpl::run_tasks() {
@@ -125,7 +132,8 @@ Task<void> NodeImpl::run_tasks() {
 }
 
 Task<void> NodeImpl::start_execution_server() {
-    return execution_server_.async_run();
+    // Thread running block execution requires custom stack size because of deep EVM call stacks
+    return execution_server_.async_run("exec-engine", /*stack_size=*/kExecutionThreadStackSize);
 }
 
 Task<void> NodeImpl::start_backend_kv_grpc_server() {
@@ -136,7 +144,19 @@ Task<void> NodeImpl::start_backend_kv_grpc_server() {
     auto stop = [this]() {
         backend_kv_rpc_server_->shutdown();
     };
-    co_await concurrency::async_thread(std::move(run), std::move(stop));
+    co_await concurrency::async_thread(std::move(run), std::move(stop), "bekv-server");
+}
+
+Task<void> NodeImpl::start_bittorrent_client() {
+    if (settings_.snapshot_settings.bittorrent_settings.seeding) {
+        auto run = [this]() {
+            bittorrent_client_->execute_loop();
+        };
+        auto stop = [this]() {
+            bittorrent_client_->stop();
+        };
+        co_await concurrency::async_thread(std::move(run), std::move(stop), "bit-torrent");
+    }
 }
 
 Task<void> NodeImpl::start_resource_usage_log() {
@@ -149,13 +169,13 @@ Task<void> NodeImpl::start_execution_log_timer() {
     auto asio_guard = std::make_unique<asio_guard_type>(settings_.asio_context.get_executor());
 
     auto run = [this] {
-        log::set_thread_name("asio_ctx_timer");
+        log::set_thread_name("ctx-log-tmr");
         log::Trace("Asio Timers", {"state", "started"});
         settings_.asio_context.run();
         log::Trace("Asio Timers", {"state", "stopped"});
     };
     auto stop = [&asio_guard] { asio_guard.reset(); };
-    co_await silkworm::concurrency::async_thread(std::move(run), std::move(stop));
+    co_await silkworm::concurrency::async_thread(std::move(run), std::move(stop), "ctx-log-tmr");
 }
 
 Node::Node(Settings& settings, SentryClientPtr sentry_client, mdbx::env& chaindata_db)

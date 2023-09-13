@@ -15,11 +15,6 @@ class TrustRuleSet : public IRuleSet {
         return ValidationResult::kOk;
     };
 
-    void finalize(IntraBlockState& state, const Block& block) override {
-        (void)state;
-        (void)block;
-    }
-
     //! \brief Performs validation of block body that can be done prior to sender recovery and execution.
     //! \brief See [YP] Sections 4.3.2 "Holistic Validity" and 11.1 "Ommer Validation".
     //! \param [in] block: block to pre-validate.
@@ -54,17 +49,31 @@ class TrustRuleSet : public IRuleSet {
         return ValidationResult::kOk;
     }
 
+    //! \brief Initializes block execution by applying changes stipulated by the protocol
+    //! (e.g. storing parent beacon root)
+    void initialize(EVM& evm) override {
+        (void)evm;
+    }
+
+    //! \brief Finalizes block execution by applying changes stipulated by the protocol
+    //! (e.g. block rewards, withdrawals)
+    //! \param [in] state: current state.
+    //! \param [in] block: current block to apply rewards for.
+    //! \remarks For Ethash See [YP] Section 11.3 "Reward Application".
+    void finalize(IntraBlockState& state, const Block& block) override {
+        (void)state;
+        (void)block;
+    }
+
     //! \brief See [YP] Section 11.3 "Reward Application".
     //! \param [in] header: Current block to get beneficiary from
     evmc::address get_beneficiary(const BlockHeader& header) override {
         return header.beneficiary;
     };
 
-    //! \brief Returns parent header (if any) of provided header
-    static std::optional<BlockHeader> get_parent_header(const BlockState& state, const BlockHeader& header) {
-        (void)state;
-        (void)header;
-        return {};
+    BlockReward compute_reward(const Block& block) override {
+        (void)block;
+        return BlockReward{};
     }
 };
 

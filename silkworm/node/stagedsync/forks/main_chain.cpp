@@ -18,16 +18,21 @@
 
 #include <set>
 
+#include <magic_enum.hpp>
+
 #include <silkworm/core/common/as_range.hpp>
 #include <silkworm/infra/common/ensure.hpp>
+#include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/node/db/access_layer.hpp>
-#include <silkworm/node/db/db_utils.hpp>
 
 #include "extending_fork.hpp"
 
 namespace silkworm::stagedsync {
 
-MainChain::MainChain(asio::io_context& ctx, NodeSettings& ns, const db::RWAccess dba)
+//! The number of inserted blocks between two successive commits on db
+constexpr uint64_t kInsertedBlockBatch{1'000};
+
+MainChain::MainChain(boost::asio::io_context& ctx, NodeSettings& ns, const db::RWAccess dba)
     : io_context_{ctx},
       node_settings_{ns},
       db_access_{dba},
@@ -51,22 +56,33 @@ MainChain::MainChain(asio::io_context& ctx, NodeSettings& ns, const db::RWAccess
     } else
         last_fork_choice_ = last_finalized_head_;
 
-    if (canonical_chain_.current_head() == last_fork_choice_) {
-        canonical_head_status_ = ValidChain{canonical_chain_.current_head()};
-    }
-
     tx_.commit_and_stop();
 }
 
 void MainChain::open() {
     tx_.reopen(*db_access_);  // comply to mdbx limitation: tx must be used from its creation thread
+
+    // Revalidate chain by executing forward cycle up to the canonical current head at startup:
+    // - if last cycle completed successfully, this will simply do nothing (no hurt)
+    // - if last cycle was executed partially (i.e. not all stages are at the same height), this will do a cleanup cycle
+    const auto& canonical_head{canonical_chain_.current_head()};
+    SILK_INFO << "Revalidate canonical chain up to number=" << canonical_head.number << " hash=" << to_hex(canonical_head.hash);
+
+    forward(canonical_head.number, canonical_head.hash);
+
+    // If forward cleanup cycle has not produced a valid chain, then we need to unwind
+    if (not std::holds_alternative<ValidChain>(canonical_head_status_)) {
+        const auto unwind_point{pipeline_.unwind_point()};
+        ensure_invariant(unwind_point.has_value(), "unwind point from pipeline requested when forward fails");
+        unwind(*unwind_point);
+    }
 }
 
 void MainChain::close() {
     tx_.abort();
 }
 
-auto MainChain::node_settings() -> NodeSettings& {
+NodeSettings& MainChain::node_settings() {
     return node_settings_;
 }
 
@@ -74,15 +90,15 @@ db::RWTxn& MainChain::tx() {
     return tx_;
 }
 
-auto MainChain::current_head() const -> BlockId {
+BlockId MainChain::current_head() const {
     return canonical_chain_.current_head();
 }
 
-auto MainChain::last_chosen_head() const -> BlockId {
+BlockId MainChain::last_chosen_head() const {
     return last_fork_choice_;
 }
 
-auto MainChain::last_finalized_head() const -> BlockId {
+BlockId MainChain::last_finalized_head() const {
     return last_finalized_head_;
 }
 
@@ -96,7 +112,7 @@ std::optional<BlockId> MainChain::find_forking_point(const Hash& header_hash) co
     return find_forking_point(*header, header_hash);
 }
 
-auto MainChain::is_canonical(BlockId block) const -> bool {
+bool MainChain::is_finalized_canonical(BlockId block) const {
     if (block.number > last_fork_choice_.number) return false;
     return (canonical_chain_.get_hash(block.number) == block.hash);
 }
@@ -121,38 +137,70 @@ void MainChain::insert_block(const Block& block) {
     Hash header_hash = insert_header(block.header);
     insert_body(block, header_hash);
 
-    auto parent = get_header(block.header.number, header_hash);  // remove in production?
+    // Check chain integrity also on execution side (remove in production?)
+    const auto parent = get_header(block.header.number - 1, block.header.parent_hash);
     ensure_invariant(parent.has_value(), "inserting block must have parent");
+
+    // Commit inserted blocks once in a while not to lose downloading progress on restart
+    static uint64_t block_count{0};
+    if (++block_count == kInsertedBlockBatch) {
+        block_count = 0;
+        StopWatch timing{StopWatch::kStart};
+        tx_.commit_and_renew();
+        SILK_INFO << "MainChain::insert_block commit " << kInsertedBlockBatch << " blocks up to " << block.header.number
+                  << " took " << StopWatch::format(timing.since_start());
+    }
 }
 
-auto MainChain::verify_chain(Hash head_block_hash) -> VerificationResult {
-    SILK_TRACE << "MainChain: verifying chain " << head_block_hash.to_hex();
+VerificationResult MainChain::verify_chain(Hash block_hash) {
+    SILK_TRACE << "MainChain: verifying chain block=" << block_hash.to_hex();
 
-    // retrieve the head header
-    auto head_header = get_header(head_block_hash);
-    ensure_invariant(head_header.has_value(), "header to verify not found");
+    // Retrieve the block header to validate
+    const auto block_header = get_header(block_hash);
+    ensure_invariant(block_header.has_value(), "header to verify not found");
+
+    // Check if incoming block already exists as canonical block
+    if (is_canonical(block_header->number, block_hash)) {
+        // The incoming block matches a block already on the canonical chain, verification is not always needed
+        if (block_header->number <= last_fork_choice_.number) {
+            // Last FCU block is greater than or equal to incoming canonical block, chain is valid up to last FCU block
+            return ValidChain{last_fork_choice_.number, last_fork_choice_.hash};
+        } else if (std::holds_alternative<ValidChain>(canonical_head_status_)) {
+            // Chain is valid up to canonical head
+            return ValidChain{canonical_chain_.current_head().number, canonical_chain_.current_head().hash};
+        } else if (std::holds_alternative<InvalidChain>(canonical_head_status_)) {
+            // Chain is valid up to unwind point
+            const auto& invalid_chain{std::get<InvalidChain>(canonical_head_status_)};
+            if (block_header->number <= invalid_chain.unwind_point.number) {
+                // Unwind point is greater than or equal incoming canonical block, chain is valid up to unwind point
+                return ValidChain{invalid_chain.unwind_point.number, invalid_chain.unwind_point.hash};
+            } else {
+                // Incoming canonical block is greater than unwind point, so chain is invalid
+                return invalid_chain;
+            }
+        }
+    }
 
     // db commit policy
     bool commit_at_each_stage = is_first_sync_;
     if (!commit_at_each_stage) tx_.disable_commit();
+    auto _ = gsl::finally([&]() { tx_.enable_commit(); });
 
     // the new head is on a new fork?
-    BlockId forking_point = canonical_chain_.find_forking_point(*head_header, head_block_hash);  // the forking origin
+    BlockId forking_point = canonical_chain_.find_forking_point(*block_header, block_hash);  // the forking origin
 
-    if (head_block_hash != canonical_chain_.current_head().hash &&        // if the new head is not the current head
+    if (block_hash != canonical_chain_.current_head().hash &&             // if the new head is not the current head
         forking_point.number < canonical_chain_.current_head().number) {  // and if the forking is behind the head
-        // we need to do unwind to change canonical
-        auto unwind_result = pipeline_.unwind(tx_, forking_point.number);
-        success_or_throw(unwind_result);  // unwind must complete with success
-        // remove last part of canonical
-        canonical_chain_.delete_down_to(forking_point.number);
+        // We need to do unwind to change canonical
+        unwind(forking_point.number);
     }
 
     // update canonical up to header_hash
-    canonical_chain_.update_up_to(head_header->number, head_block_hash);
+    canonical_chain_.update_up_to(block_header->number, block_hash);
 
     // forward
-    Stage::Result forward_result = pipeline_.forward(tx_, head_header->number);
+    Stage::Result forward_result = pipeline_.forward(tx_, block_header->number);
+    SILK_INFO << "MainChain::verify_chain forward_result=" << magic_enum::enum_name<>(forward_result);
 
     // evaluate result
     VerificationResult verify_result;
@@ -187,46 +235,53 @@ auto MainChain::verify_chain(Hash head_block_hash) -> VerificationResult {
     }
     canonical_head_status_ = verify_result;
 
-    // finish
-    tx_.enable_commit();
-    if (commit_at_each_stage) tx_.commit_and_renew();
     return verify_result;
 }
 
 bool MainChain::notify_fork_choice_update(Hash head_block_hash, std::optional<Hash> finalized_block_hash) {
-    if (canonical_chain_.current_head().hash != head_block_hash) {
-        // usually update_fork_choice must follow verify_chain with the same header except when:
-        // 1) (PoS) CL is syncing so head_block_hash is referring to a previous valid head
-        // 2) (PoW) previous verify_chain returned InvalidChain so CL is issuing a fcu with a previous valid head
+    if (finalized_block_hash and not canonical_chain_.has(*finalized_block_hash)) {
+        return false;  // finalized block not found
+    }
 
-        if (canonical_chain_.has(head_block_hash) &&
-            std::holds_alternative<ValidChain>(canonical_head_status_)) return true;
+    const auto head_block_number{get_block_number(head_block_hash)};
+    ensure_invariant(head_block_number.has_value(), "unknown block number for head block hash");
+    if (is_canonical_head_ancestor(head_block_hash) and head_block_number <= last_fork_choice_.number) {
+        // FCU selects an old canonical block already targeted by a previous FCU
+        return true;
+    }
 
-        auto verification = verify_chain(head_block_hash);  // this will reset canonical chain to head_block_hash
+    // Usually FCU must follow verify_chain with the same header except when:
+    // 1) (PoS) CL is syncing so head_block_hash is referring to a previous valid head
+    // 2) (PoW) previous verify_chain returned InvalidChain so CL is issuing a FCU with a previous valid head
 
+    // When FCU selects a non-canonical block or our last canonical is not valid, we need to verify the resulting chain
+    if (not canonical_chain_.has(head_block_hash) or not std::holds_alternative<ValidChain>(canonical_head_status_)) {
+        verify_chain(head_block_hash);  // this will reset canonical chain to head_block_hash
         ensure_invariant(canonical_chain_.current_head().hash == head_block_hash,
                          "canonical head not aligned with fork choice");
     }
 
-    if (!std::holds_alternative<ValidChain>(canonical_head_status_)) return false;  // head is not valid
+    if (!std::holds_alternative<ValidChain>(canonical_head_status_)) {
+        return false;  // canonical head is not valid
+    }
 
-    auto valid_chain = std::get<ValidChain>(canonical_head_status_);
+    const auto valid_chain = std::get<ValidChain>(canonical_head_status_);
     ensure_invariant(canonical_chain_.current_head() == valid_chain.current_head,
-                     "canonical head not aligned with recorded head status");
+                     "canonical head not aligned with saved head status");
 
-    if (finalized_block_hash && !canonical_chain_.has(*finalized_block_hash)) return false;  // finalized block not found
-    // we need a way to disambiguate this "false" from the one above
+    last_fork_choice_.number = *head_block_number;
+    last_fork_choice_.hash = head_block_hash;
 
-    db::write_last_head_block(tx_, head_block_hash);
-    if (finalized_block_hash) db::write_last_finalized_block(tx_, *finalized_block_hash);
+    db::write_last_head_block(tx_, last_fork_choice_.hash);
+    if (finalized_block_hash) {
+        db::write_last_finalized_block(tx_, *finalized_block_hash);
+
+        const auto finalized_block_number = get_block_number(*finalized_block_hash);
+        last_finalized_head_.number = *finalized_block_number;
+        last_finalized_head_.hash = std::move(*finalized_block_hash);
+    }
 
     tx_.commit_and_renew();
-
-    last_fork_choice_ = canonical_chain_.current_head();
-    if (finalized_block_hash) {
-        auto finalized_header = get_header(*finalized_block_hash);
-        last_finalized_head_ = {finalized_header->number, *finalized_block_hash};
-    }
 
     is_first_sync_ = false;
 
@@ -235,6 +290,14 @@ bool MainChain::notify_fork_choice_update(Hash head_block_hash, std::optional<Ha
 
 std::set<Hash> MainChain::collect_bad_headers(db::RWTxn& tx, InvalidChain& invalid_chain) {
     if (!invalid_chain.bad_block) return {};
+
+    const auto bad_count{canonical_chain_.current_head().number - invalid_chain.unwind_point.number};
+    SILK_INFO << "MainChain::collect_bad_headers bad_count=" << bad_count << " skip=" << (bad_count > 10);
+
+    // Do not collect too many headers, rather skip
+    if (bad_count > 10) {
+        return {};
+    }
 
     std::set<Hash> bad_headers;
     for (BlockNum current_height = canonical_chain_.current_head().number;
@@ -263,7 +326,7 @@ std::set<Hash> MainChain::collect_bad_headers(db::RWTxn& tx, InvalidChain& inval
     return bad_headers;
 }
 
-auto MainChain::fork(BlockId forking_point) -> std::unique_ptr<ExtendingFork> {
+std::unique_ptr<ExtendingFork> MainChain::fork(BlockId forking_point) {
     ensure(std::holds_alternative<ValidChain>(canonical_head_status_), "forking is allowed from a valid state");
     return std::make_unique<ExtendingFork>(forking_point, *this, io_context_);
 }
@@ -284,7 +347,7 @@ void MainChain::reintegrate_fork(ExtendingFork& extending_fork) {
     last_finalized_head_ = fork->finalized_head();
 }
 
-auto MainChain::get_header(Hash header_hash) const -> std::optional<BlockHeader> {
+std::optional<BlockHeader> MainChain::get_header(Hash header_hash) const {
     // const BlockHeader* cached = header_cache_.get(header_hash);
     // if (cached) {
     //     return *cached;
@@ -293,7 +356,7 @@ auto MainChain::get_header(Hash header_hash) const -> std::optional<BlockHeader>
     return header;
 }
 
-auto MainChain::get_header(BlockNum header_height, Hash header_hash) const -> std::optional<BlockHeader> {
+std::optional<BlockHeader> MainChain::get_header(BlockNum header_height, Hash header_hash) const {
     // const BlockHeader* cached = header_cache_.get(header_hash);
     // if (cached) {
     //     return *cached;
@@ -302,55 +365,55 @@ auto MainChain::get_header(BlockNum header_height, Hash header_hash) const -> st
     return header;
 }
 
-auto MainChain::get_canonical_hash(BlockNum height) const -> std::optional<Hash> {
+std::optional<Hash> MainChain::get_finalized_canonical_hash(BlockNum height) const {
     if (height > last_fork_choice_.number) return {};
     return canonical_chain_.get_hash(height);
 }
 
-auto MainChain::get_header_td(BlockNum header_height, Hash header_hash) const -> std::optional<TotalDifficulty> {
+std::optional<TotalDifficulty> MainChain::get_header_td(BlockNum header_height, Hash header_hash) const {
     return db::read_total_difficulty(tx_, header_height, header_hash);
 }
 
-auto MainChain::get_header_td(Hash header_hash) const -> std::optional<TotalDifficulty> {
+std::optional<TotalDifficulty> MainChain::get_header_td(Hash header_hash) const {
     auto header = get_header(header_hash);
     if (!header) return {};
     return db::read_total_difficulty(tx_, header->number, header_hash);
 }
 
-auto MainChain::get_body(Hash header_hash) const -> std::optional<BlockBody> {
+std::optional<BlockBody> MainChain::get_body(Hash header_hash) const {
     BlockBody body;
     bool found = data_model_.read_body(header_hash, body);
     if (!found) return {};
     return body;
 }
 
-auto MainChain::get_block_progress() const -> BlockNum {
+BlockNum MainChain::get_block_progress() const {
     return data_model_.highest_block_number();
 }
 
-auto MainChain::get_last_headers(BlockNum limit) const -> std::vector<BlockHeader> {
+std::vector<BlockHeader> MainChain::get_last_headers(uint64_t limit) const {
     std::vector<BlockHeader> headers;
 
-    for_last_n_headers(data_model_, limit, [&headers](BlockHeader&& header) {
+    data_model_.for_last_n_headers(limit, [&headers](BlockHeader&& header) {
         headers.emplace_back(std::move(header));
     });
 
     return headers;
 }
 
-auto MainChain::get_block_number(Hash header_hash) const -> std::optional<BlockNum> {
+std::optional<BlockNum> MainChain::get_block_number(Hash header_hash) const {
     return data_model_.read_block_number(header_hash);
 }
 
-auto MainChain::is_ancestor(BlockId supposed_parent, BlockId block) const -> bool {
+bool MainChain::is_ancestor(BlockId supposed_parent, BlockId block) const {
     return extends(block, supposed_parent);
 }
 
-auto MainChain::extends_last_fork_choice(BlockNum height, Hash hash) const -> bool {
+bool MainChain::extends_last_fork_choice(BlockNum height, Hash hash) const {
     return extends({height, hash}, last_fork_choice_);
 }
 
-auto MainChain::extends(BlockId block, BlockId supposed_parent) const -> bool {
+bool MainChain::extends(BlockId block, BlockId supposed_parent) const {
     while (block.number > supposed_parent.number) {
         auto header = get_header(block.number, block.hash);
         if (!header) return false;
@@ -363,7 +426,7 @@ auto MainChain::extends(BlockId block, BlockId supposed_parent) const -> bool {
     return false;
 }
 
-auto MainChain::is_canonical(Hash block_hash) const -> bool {
+bool MainChain::is_finalized_canonical(Hash block_hash) const {
     auto header = get_header(block_hash);
     if (!header) return false;
     if (header->number > last_fork_choice_.number) return false;
@@ -371,16 +434,62 @@ auto MainChain::is_canonical(Hash block_hash) const -> bool {
     return canonical_hash_at_same_height == block_hash;
 }
 
-/*
-auto MainChain::get_canonical_head_from_db() -> ChainHead {
-    auto [height, hash] = db::read_canonical_head(tx_);
-
-    std::optional<TotalDifficulty> td = db::read_total_difficulty(tx_, height, hash);
-    ensure_invariant(td.has_value(),
-                     "total difficulty of canonical hash at height " + std::to_string(height) + " not found in db");
-
-    return {height, hash, *td};
+bool MainChain::is_canonical(BlockNum block_height, const Hash& block_hash) const {
+    // Check if specified block already exists as canonical block
+    return canonical_chain_.get_hash(block_height) == block_hash;
 }
-*/
+
+bool MainChain::is_canonical_head_ancestor(const Hash& block_hash) const {
+    return canonical_chain_.has(block_hash) and canonical_chain_.current_head().hash != block_hash;
+}
+
+void MainChain::forward(BlockNum head_height, const Hash& head_hash) {
+    // update canonical up to header_hash
+    canonical_chain_.update_up_to(head_height, head_hash);
+
+    // forward
+    Stage::Result forward_result = pipeline_.forward(tx_, head_height);
+
+    // evaluate result
+    VerificationResult verify_result;
+    switch (forward_result) {
+        case Stage::Result::kSuccess: {
+            ensure_invariant(pipeline_.head_header_number() == canonical_chain_.current_head().number &&
+                                 pipeline_.head_header_hash() == canonical_chain_.current_head().hash,
+                             "forward succeeded with pipeline head not aligned with canonical head");
+            verify_result = ValidChain{pipeline_.head_header_number(), pipeline_.head_header_hash()};
+            break;
+        }
+        case Stage::Result::kWrongFork:
+        case Stage::Result::kInvalidBlock:
+        case Stage::Result::kWrongStateRoot: {
+            ensure_invariant(pipeline_.unwind_point().has_value(),
+                             "unwind point from pipeline requested when forward fails");
+            InvalidChain invalid_chain;
+            invalid_chain.unwind_point.number = *pipeline_.unwind_point();
+            invalid_chain.unwind_point.hash = *canonical_chain_.get_hash(*pipeline_.unwind_point());
+            if (pipeline_.bad_block()) {
+                invalid_chain.bad_block = pipeline_.bad_block();
+                invalid_chain.bad_headers = collect_bad_headers(tx_, invalid_chain);
+            }
+            verify_result = invalid_chain;
+            break;
+        }
+        case Stage::Result::kStoppedByEnv:
+            verify_result = ValidChain{pipeline_.head_header_number(), pipeline_.head_header_hash()};
+            break;
+        default:
+            verify_result = ValidationError{pipeline_.head_header_number(), pipeline_.head_header_hash()};
+    }
+    canonical_head_status_ = verify_result;
+}
+
+void MainChain::unwind(BlockNum unwind_point) {
+    const auto unwind_result = pipeline_.unwind(tx_, unwind_point);
+    success_or_throw(unwind_result);  // unwind must complete with success
+
+    // Remove last part of canonical chain
+    canonical_chain_.delete_down_to(unwind_point);
+}
 
 }  // namespace silkworm::stagedsync

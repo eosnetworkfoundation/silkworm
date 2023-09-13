@@ -16,7 +16,7 @@
 
 find_package(absl REQUIRED)
 find_package(asio-grpc REQUIRED)
-find_package(Boost REQUIRED container thread)
+find_package(Boost REQUIRED headers container)
 find_package(gRPC REQUIRED)
 find_package(jwt-cpp REQUIRED)
 find_package(nlohmann_json REQUIRED)
@@ -35,6 +35,14 @@ file(
 )
 list(FILTER SILKRPC_SRC EXCLUDE REGEX "main\\.cpp$|_test\\.cpp$|\\.pb\\.cc|\\.pb\\.h")
 
+# pico_http_parser
+add_library(pico_http_parser "${SILKWORM_MAIN_DIR}/third_party/picohttpparser/picohttpparser.c")
+if(MSVC)
+  target_compile_options(pico_http_parser PRIVATE /w)
+else()
+  target_compile_options(pico_http_parser PRIVATE -Wno-error)
+endif(MSVC)
+
 set(SILKRPC_PUBLIC_LIBRARIES
     silkworm_node
     silkworm_core
@@ -47,25 +55,21 @@ set(SILKRPC_PUBLIC_LIBRARIES
     absl::flat_hash_set
     absl::btree
     Boost::container
-    Boost::thread
+    Boost::headers
     protobuf::libprotobuf
     intx::intx
+    pico_http_parser
 )
 
 set(SILKRPC_PRIVATE_LIBRARIES evmc::instructions roaring::roaring)
 
 add_library(silkrpc "${SILKRPC_SRC}")
 
-# Suppress ASAN/TSAN in gRPC to avoid ODR violation when building Silkworm with sanitizers See
-# https://github.com/grpc/grpc/issues/19224
-if(SILKWORM_SANITIZE)
-  target_compile_definitions(silkrpc PRIVATE GRPC_ASAN_SUPPRESSED GRPC_TSAN_SUPPRESSED)
-endif()
-
 # cmake-format: off
 target_include_directories(
   silkrpc
   PUBLIC "${SILKWORM_MAIN_DIR}"
+         "${SILKWORM_MAIN_DIR}/third_party/picohttpparser"
          "${SILKWORM_MAIN_DIR}/third_party/cbor-cpp"
          "${SILKWORM_MAIN_DIR}/third_party/glaze/include"
          "${SILKWORM_MAIN_DIR}/third_party/evmone/lib"

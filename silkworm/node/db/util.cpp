@@ -48,7 +48,7 @@ Bytes block_key(BlockNum block_number, std::span<const uint8_t, kHashLength> has
     return key;
 }
 
-auto split_block_key(ByteView key) -> std::tuple<BlockNum, evmc::bytes32> {
+std::tuple<BlockNum, evmc::bytes32> split_block_key(ByteView key) {
     SILKWORM_ASSERT(key.size() == sizeof(BlockNum) + kHashLength);
 
     ByteView block_num_part = key.substr(0, sizeof(BlockNum));
@@ -89,6 +89,46 @@ Bytes log_key(BlockNum block_number, uint32_t transaction_id) {
     endian::store_big_u64(&key[0], block_number);
     endian::store_big_u32(&key[8], transaction_id);
     return key;
+}
+
+Bytes log_address_key(const evmc::address& address, BlockNum block_number) {
+    SILKWORM_ASSERT(block_number <= std::numeric_limits<uint32_t>::max());
+    Bytes key(kAddressLength + sizeof(uint32_t), '\0');
+    std::memcpy(key.data(), address.bytes, kAddressLength);
+    endian::store_big_u32(key.data() + kAddressLength, static_cast<uint32_t>(block_number));
+    return key;
+}
+
+Bytes log_topic_key(const evmc::bytes32& topic, BlockNum block_number) {
+    SILKWORM_ASSERT(block_number <= std::numeric_limits<uint32_t>::max());
+    Bytes key(kHashLength + sizeof(uint32_t), '\0');
+    std::memcpy(key.data(), topic.bytes, kHashLength);
+    endian::store_big_u32(key.data() + kHashLength, static_cast<uint32_t>(block_number));
+    return key;
+}
+
+BlockNum block_number_from_key(const mdbx::slice& key) {
+    SILKWORM_ASSERT(key.size() >= sizeof(BlockNum));
+    ByteView key_view{from_slice(key)};
+    return endian::load_big_u64(key_view.data());
+}
+
+std::tuple<BlockNum, uint32_t> split_log_key(const mdbx::slice& key) {
+    SILKWORM_ASSERT(key.size() == sizeof(BlockNum) + sizeof(uint32_t));
+    ByteView key_view{from_slice(key)};
+    return {endian::load_big_u64(key_view.data()), endian::load_big_u32(key_view.data() + sizeof(BlockNum))};
+}
+
+std::tuple<ByteView, uint32_t> split_log_address_key(const mdbx::slice& key) {
+    SILKWORM_ASSERT(key.size() == kAddressLength + sizeof(uint32_t));
+    ByteView key_view{from_slice(key)};
+    return {key_view.substr(0, kAddressLength), endian::load_big_u32(key_view.data() + kAddressLength)};
+}
+
+std::tuple<ByteView, uint32_t> split_log_topic_key(const mdbx::slice& key) {
+    SILKWORM_ASSERT(key.size() == kHashLength + sizeof(uint32_t));
+    ByteView key_view{from_slice(key)};
+    return {key_view.substr(0, kHashLength), endian::load_big_u32(key_view.data() + kHashLength)};
 }
 
 std::pair<Bytes, Bytes> changeset_to_plainstate_format(const ByteView key, ByteView value) {
