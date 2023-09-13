@@ -70,7 +70,7 @@ void from_json(const nlohmann::json& json, Call& call) {
 
 struct GlazeJsonCall {
     char jsonrpc[jsonVersionSize] = "2.0";
-    uint32_t id;
+    nlohmann::json id;
     char result[2048];
     struct glaze {
         using T = GlazeJsonCall;
@@ -83,7 +83,7 @@ struct GlazeJsonCall {
 
 struct GlazeJsonCallResultAsString {
     char jsonrpc[jsonVersionSize] = "2.0";
-    uint32_t id;
+    nlohmann::json id;
     std::string result;
     struct glaze {
         using T = GlazeJsonCallResultAsString;
@@ -94,7 +94,7 @@ struct GlazeJsonCallResultAsString {
     };
 };
 
-void make_glaze_json_content(std::string& reply, uint32_t id, const silkworm::Bytes& call_result) {
+void make_glaze_json_content(std::string& reply, const nlohmann::json& id, const silkworm::Bytes& call_result) {
     if (call_result.size() * 2 + 2 + 1 > ethCallResultFixedSize) {
         GlazeJsonCallResultAsString log_json_data{};
         log_json_data.result.reserve(call_result.size() * 2 + 2);

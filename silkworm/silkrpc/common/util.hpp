@@ -24,13 +24,37 @@
 #include <boost/asio/buffer.hpp>
 #include <ethash/keccak.hpp>
 #include <evmc/evmc.hpp>
-
+#include <nlohmann/json.hpp>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Wshadow"
+#include <glaze/glaze.hpp>
+#pragma GCC diagnostic pop
 #include <silkworm/core/chain/config.hpp>
 #include <silkworm/core/common/base.hpp>
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/core/types/account.hpp>
 #include <silkworm/core/types/bloom.hpp>
 #include <silkworm/core/types/transaction.hpp>
+
+namespace glz::detail
+{
+    template <>
+    struct to_json<nlohmann::json>
+    {
+        template <auto Opts>
+        static void op(const nlohmann::json& value, auto&&... args) noexcept
+        {
+            if( value.is_string() ) {
+                write<json>::op<Opts>(value.get<std::string>(), args...);
+            } else if( value.is_number() ) {
+                write<json>::op<Opts>(value.get<int64_t>(), args...);
+            } else {
+                write<json>::op<Opts>(value.dump(), args...);
+            }
+        }
+    };
+}
 
 namespace silkworm {
 

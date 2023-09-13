@@ -48,27 +48,30 @@ boost::asio::awaitable<void> RequestHandler::handle(const http::Request& request
     } else {
         SILK_DEBUG << "handle_user_request content: " << request.content;
 
-        const auto request_json = nlohmann::json::parse(request.content);
+        std::optional<nlohmann::json> request_json;
+        try {
+            request_json = nlohmann::json::parse(request.content);
+        } catch(...){}
 
-        if (request_json.is_object()) {
-            if (!request_json.contains("id")) {
+        if (request_json && request_json->is_object()) {
+            if (!request_json->contains("id")) {
                 reply.content = "\n";
                 reply.status = http::StatusType::ok;
             } else {
-                const auto request_id = request_json["id"];
+                const auto request_id = request_json->at("id");
                 const auto error = co_await is_request_authorized(request);
                 if (error.has_value()) {
                     reply.content = make_json_error(request_id, 403, error.value()).dump() + "\n";
                     reply.status = http::StatusType::unauthorized;
                 } else {
-                    co_await handle_request_and_create_reply(request_json, reply);
+                    co_await handle_request_and_create_reply(request_json.value(), reply);
                     reply.content += "\n";
                 }
             }
-        } else {
+        } else if (request_json) {
             std::string batch_reply_content = "[";
             bool first_element = true;
-            for (auto& item : request_json.items()) {
+            for (auto& item : request_json->items()) {
                 const auto& item_json = item.value();
                 if (!item_json.contains("id")) {
                     reply.content = "\n";

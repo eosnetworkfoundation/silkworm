@@ -102,7 +102,7 @@ struct GlazeJsonLogItem {
 
 struct GlazeJsonLog {
     char jsonrpc[jsonVersionSize] = "2.0";
-    uint32_t id;
+    nlohmann::json id;
     std::vector<GlazeJsonLogItem> log_json_list;
     struct glaze {
         using T = GlazeJsonLog;
@@ -113,7 +113,7 @@ struct GlazeJsonLog {
     };
 };
 
-void make_glaze_json_content(std::string& reply, uint32_t id, const Logs& logs) {
+void make_glaze_json_content(std::string& reply, const nlohmann::json& id, const Logs& logs) {
     GlazeJsonLog log_json_data{};
     log_json_data.log_json_list.reserve(logs.size());
 

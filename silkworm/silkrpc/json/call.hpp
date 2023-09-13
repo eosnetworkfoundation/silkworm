@@ -23,7 +23,7 @@
 namespace silkworm::rpc {
 
 void from_json(const nlohmann::json& json, Call& call);
-void make_glaze_json_content(std::string& reply, uint32_t id, const silkworm::Bytes& call_result);
+void make_glaze_json_content(std::string& reply, const nlohmann::json& id, const silkworm::Bytes& call_result);
 
 void from_json(const nlohmann::json& json, Bundle& bundle);
 void from_json(const nlohmann::json& json, SimulationContext& state_context);
