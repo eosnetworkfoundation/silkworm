@@ -28,19 +28,6 @@
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
 
-namespace glz::detail
-{
-   template <>
-   struct to_json<nlohmann::json>
-   {
-      template <auto Opts>
-      static void op(const nlohmann::json& value, auto&&... args) noexcept
-      {
-         write<json>::op<Opts>(value.dump(), args...);
-      }
-   };
-}
-
 namespace silkworm::rpc {
 
 using evmc::literals::operator""_address;
