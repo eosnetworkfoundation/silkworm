@@ -2093,7 +2093,8 @@ awaitable<void> EthereumRpcApi::get_logs(ethdb::TransactionDatabase& tx_database
                                          FilterAddresses& addresses, FilterTopics& topics, std::vector<Log>& logs) {
     SILK_INFO << "start block: " << start << " end block: " << end;
 
-    roaring::Roaring64Map block_numbers(roaring::api::roaring_bitmap_from_range(start, end+1, 1));
+    roaring::Roaring block_numbers;
+    block_numbers.addRange(start, end + 1);  // [min, max)
 
     SILK_DEBUG << "block_numbers.cardinality(): " << block_numbers.cardinality();
 
