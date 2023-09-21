@@ -25,46 +25,37 @@
 #include <gsl/narrow>
 
 #include <silkworm/infra/common/log.hpp>
+#include <silkworm/node/db/bitmap.hpp>
 
 namespace silkworm::rpc::ethdb::bitmap {
 
 using roaring_bitmap_t = roaring::api::roaring_bitmap_t;
-using Roaring = roaring::Roaring;
+using Roaring64Map = roaring::Roaring64Map;
 
-static Roaring fast_or(size_t n, const std::vector<std::unique_ptr<Roaring>>& inputs) {
-    const auto** x = static_cast<const roaring_bitmap_t**>(malloc(n * sizeof(roaring_bitmap_t*)));
-    if (x == nullptr) {
-        throw std::runtime_error("failed memory alloc in fast_or");
-    }
+static Roaring64Map fast_or(size_t n, const std::vector<std::unique_ptr<Roaring64Map>>& inputs) {
+    Roaring64Map result;
     for (size_t k = 0; k < n; ++k) {
-        x[k] = &inputs[k]->roaring;
+        result |= *inputs[k];
     }
-
-    roaring_bitmap_t* c_ans = roaring_bitmap_or_many(n, x);
-    if (c_ans == nullptr) {
-        free(x);
-        throw std::runtime_error("failed memory alloc in fast_or");
-    }
-    Roaring ans(c_ans);
-    free(x);
-    return ans;
+    return result;
 }
 
-awaitable<Roaring> get(core::rawdb::DatabaseReader& db_reader, const std::string& table, silkworm::Bytes& key,
+awaitable<Roaring64Map> get(core::rawdb::DatabaseReader& db_reader, const std::string& table, silkworm::Bytes& key,
                        uint32_t from_block, uint32_t to_block) {
-    std::vector<std::unique_ptr<Roaring>> chunks;
+    std::vector<std::unique_ptr<Roaring64Map>> chunks;
 
     silkworm::Bytes from_key{key.begin(), key.end()};
-    from_key.resize(key.size() + sizeof(uint32_t));
-    boost::endian::store_big_u32(&from_key[key.size()], from_block);
+    from_key.resize(key.size() + sizeof(uint16_t));
+    boost::endian::store_big_u16(&from_key[key.size()], 0);
     SILK_DEBUG << "table: " << table << " key: " << key << " from_key: " << from_key;
 
     core::rawdb::Walker walker = [&](const silkworm::Bytes& k, const silkworm::Bytes& v) {
         SILK_TRACE << "k: " << k << " v: " << v;
-        auto chunk = std::make_unique<Roaring>(Roaring::readSafe(reinterpret_cast<const char*>(v.data()), v.size()));
-        SILK_TRACE << "chunk: " << chunk->toString();
-        chunks.push_back(std::move(chunk));
-        auto block = boost::endian::load_big_u32(&k[k.size() - sizeof(uint32_t)]);
+        auto chunck = std::make_unique<Roaring64Map>(silkworm::db::bitmap::parse(v));
+        auto block = chunck->maximum();
+        if (block >= from_block && chunck->minimum() <= to_block) {
+            chunks.push_back(std::move(chunck));
+        }
         return block < to_block;
     };
     co_await db_reader.walk(table, from_key, gsl::narrow<uint32_t>(key.size() * CHAR_BIT), walker);
@@ -74,13 +65,13 @@ awaitable<Roaring> get(core::rawdb::DatabaseReader& db_reader, const std::string
     co_return result;
 }
 
-awaitable<Roaring> from_topics(core::rawdb::DatabaseReader& db_reader, const std::string& table, const FilterTopics& topics,
+awaitable<Roaring64Map> from_topics(core::rawdb::DatabaseReader& db_reader, const std::string& table, const FilterTopics& topics,
                                uint64_t start, uint64_t end) {
     SILK_DEBUG << "#topics: " << topics.size() << " start: " << start << " end: " << end;
-    roaring::Roaring result_bitmap;
+    roaring::Roaring64Map result_bitmap;
     for (const auto& subtopics : topics) {
         SILK_DEBUG << "#subtopics: " << subtopics.size();
-        roaring::Roaring subtopic_bitmap;
+        roaring::Roaring64Map subtopic_bitmap;
         for (auto topic : subtopics) {
             silkworm::Bytes topic_key{std::begin(topic.bytes), std::end(topic.bytes)};
             SILK_TRACE << "topic: " << topic << " topic_key: " << silkworm::to_hex(topic);
@@ -101,10 +92,10 @@ awaitable<Roaring> from_topics(core::rawdb::DatabaseReader& db_reader, const std
     co_return result_bitmap;
 }
 
-awaitable<Roaring> from_addresses(core::rawdb::DatabaseReader& db_reader, const std::string& table, const FilterAddresses& addresses,
+awaitable<Roaring64Map> from_addresses(core::rawdb::DatabaseReader& db_reader, const std::string& table, const FilterAddresses& addresses,
                                   uint64_t start, uint64_t end) {
     SILK_TRACE << "#addresses: " << addresses.size() << " start: " << start << " end: " << end;
-    roaring::Roaring result_bitmap;
+    roaring::Roaring64Map result_bitmap;
     for (auto address : addresses) {
         silkworm::Bytes address_key{std::begin(address.bytes), std::end(address.bytes)};
         auto bitmap = co_await ethdb::bitmap::get(db_reader, table, address_key, gsl::narrow<uint32_t>(start), gsl::narrow<uint32_t>(end));
