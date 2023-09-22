@@ -245,7 +245,10 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
         }
         // Explicitly notify registered tracers (if any)
         for (auto tracer : tracers_) {
+            const ByteView code{}; // precompile code is empty.
+            tracer.get().on_execution_start(rev, message, code);
             tracer.get().on_precompiled_run(res.raw(), message.gas, state_);
+            tracer.get().on_execution_end(res.raw(),state_);
         }
     } else {
         const ByteView code{state_.get_code(message.code_address)};
