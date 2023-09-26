@@ -28,6 +28,7 @@ TEST_CASE("serialize empty transaction", "[silkrpc][to_json]") {
     silkworm::Transaction txn{};
     nlohmann::json j = txn;
     CHECK(j == R"({
+        "from":"0xbbbbbbbbbbbbbbbbbbbbbbbb0000000000000000",
         "nonce":"0x0",
         "gas":"0x0",
         "to":null,
