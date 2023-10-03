@@ -19,6 +19,8 @@
 #include <optional>
 #include <utility>
 
+#include "param.hpp"
+
 namespace silkworm::protocol {
 
 MergeRuleSet::MergeRuleSet(RuleSetPtr pre_merge_rule_set, const ChainConfig& chain_config)
@@ -35,7 +37,7 @@ ValidationResult MergeRuleSet::pre_validate_block_body(const Block& block, const
 
 ValidationResult MergeRuleSet::validate_block_header(const BlockHeader& header, const BlockState& state,
                                                      bool with_future_timestamp_check) {
-    // TODO (Andrew) how will all this work with backwards sync?
+    // TODO(yperbasis) how will all this work with backwards sync?
 
     const std::optional<BlockHeader> parent{BaseRuleSet::get_parent_header(state, header)};
     if (!parent) {
@@ -68,6 +70,28 @@ ValidationResult MergeRuleSet::validate_seal(const BlockHeader& header) {
         return pre_merge_rule_set_->validate_seal(header);
     }
     return header.nonce == BlockHeader::NonceType{} ? ValidationResult::kOk : ValidationResult::kInvalidNonce;
+}
+
+void MergeRuleSet::initialize(EVM& evm) {
+    const BlockHeader& header{evm.block().header};
+    if (header.difficulty != 0) {
+        pre_merge_rule_set_->initialize(evm);
+        return;
+    }
+
+    if (evm.revision() < EVMC_CANCUN) {
+        return;
+    }
+
+    // EIP-4788: Beacon block root in the EVM
+    SILKWORM_ASSERT(header.parent_beacon_block_root);
+    Transaction system_txn{{
+        .type = TransactionType::kSystem,
+        .to = kBeaconRootsAddress,
+        .data = Bytes{ByteView{*header.parent_beacon_block_root}},
+    }};
+    system_txn.from = kSystemAddress;
+    evm.execute(system_txn, kSystemCallGasLimit);
 }
 
 void MergeRuleSet::finalize(IntraBlockState& state, const Block& block) {
@@ -103,6 +127,13 @@ ValidationResult MergeRuleSet::validate_ommers(const Block& block, const BlockSt
 
 intx::uint256 MergeRuleSet::difficulty(const BlockHeader&, const BlockHeader&) {
     return 0;
+}
+
+BlockReward MergeRuleSet::compute_reward(const Block& block) {
+    if (block.header.difficulty != 0) {
+        return pre_merge_rule_set_->compute_reward(block);
+    }
+    return BaseRuleSet::compute_reward(block);
 }
 
 }  // namespace silkworm::protocol

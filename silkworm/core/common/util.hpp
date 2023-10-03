@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstring>
 #include <optional>
+#include <regex>
 #include <string_view>
 #include <vector>
 #include <endian.h>
@@ -27,16 +28,9 @@
 #include <intx/intx.hpp>
 
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 
 namespace silkworm {
-
-// Converts bytes to evmc::address; input is cropped if necessary.
-// Short inputs are left-padded with 0s.
-evmc::address to_evmc_address(ByteView bytes);
-
-// Converts bytes to evmc::bytes32; input is cropped if necessary.
-// Short inputs are left-padded with 0s.
-evmc::bytes32 to_bytes32(ByteView bytes);
 
 //! \brief Strips leftmost zeroed bytes from byte sequence
 //! \param [in] data : The view to process
@@ -45,6 +39,25 @@ ByteView zeroless_view(ByteView data);
 
 inline bool has_hex_prefix(std::string_view s) {
     return s.length() >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X');
+}
+
+inline bool is_valid_hex(std::string_view s) {
+    static const std::regex hexRegex("^0x[0-9a-fA-F]+$");
+    return std::regex_match(s.data(), hexRegex);
+}
+
+inline bool is_valid_hash(std::string_view s) {
+    if (s.length() != 2 + kHashLength * 2) {
+        return false;
+    }
+    return is_valid_hex(s);
+}
+
+inline bool is_valid_address(std::string_view s) {
+    if (s.length() != 2 + kAddressLength * 2) {
+        return false;
+    }
+    return is_valid_hex(s);
 }
 
 //! \brief Returns a string representing the hex form of provided string of bytes

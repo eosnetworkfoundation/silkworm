@@ -30,6 +30,7 @@
 #include <silkworm/silkrpc/json/access_list_entry.hpp>
 #include <silkworm/silkrpc/json/block.hpp>
 #include <silkworm/silkrpc/json/call.hpp>
+#include <silkworm/silkrpc/json/call_bundle.hpp>
 #include <silkworm/silkrpc/json/execution_payload.hpp>
 #include <silkworm/silkrpc/json/filter.hpp>
 #include <silkworm/silkrpc/json/fork_choice.hpp>
@@ -42,6 +43,7 @@
 #include <silkworm/silkrpc/json/withdrawal.hpp>
 #include <silkworm/silkrpc/types/block.hpp>
 #include <silkworm/silkrpc/types/call.hpp>
+#include <silkworm/silkrpc/types/call_bundle.hpp>
 #include <silkworm/silkrpc/types/chain_config.hpp>
 #include <silkworm/silkrpc/types/chain_traffic.hpp>
 #include <silkworm/silkrpc/types/error.hpp>
@@ -94,10 +96,6 @@ void to_json(nlohmann::json& json, const struct TxPoolStatusInfo& status_info);
 
 void to_json(nlohmann::json& json, const AccessListResult& access_list_result);
 
-void to_json(nlohmann::json& json, const struct CallBundleTxInfo& tx_info);
-
-void to_json(nlohmann::json& json, const struct CallBundleInfo& bundle_info);
-
 void to_json(nlohmann::json& json, const SyncingData& syncing_data);
 
 void to_json(nlohmann::json& json, const StageData& stage_data);
@@ -107,6 +105,8 @@ void to_json(nlohmann::json& json, const Rlp& rlp);
 void to_json(nlohmann::json& json, const BlockDetailsResponse& b);
 
 void to_json(nlohmann::json& json, const BlockTransactionsResponse& b);
+
+void to_json(nlohmann::json& json, const TransactionsWithReceipts& b);
 
 void to_json(nlohmann::json& json, const PayloadStatus& payload_status);
 
@@ -121,6 +121,7 @@ void to_json(nlohmann::json& json, const std::set<evmc::address>& addresses);
 
 uint64_t from_quantity(const std::string& hex_quantity);
 
+std::string to_hex(uint64_t number);
 std::string to_hex_no_leading_zeros(uint64_t number);
 std::string to_hex_no_leading_zeros(silkworm::ByteView bytes);
 std::string to_quantity(uint64_t number);
@@ -151,7 +152,7 @@ struct adl_serializer<silkworm::rpc::BlockNumberOrHash> {
         if (json.is_string()) {
             return silkworm::rpc::BlockNumberOrHash{json.get<std::string>()};
         } else if (json.is_number()) {
-            return silkworm::rpc::BlockNumberOrHash{json.get<std::uint64_t>()};
+            return silkworm::rpc::BlockNumberOrHash{json.get<silkworm::BlockNum>()};
         }
         return silkworm::rpc::BlockNumberOrHash{0};
     }

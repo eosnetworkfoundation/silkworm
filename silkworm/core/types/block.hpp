@@ -36,7 +36,7 @@ namespace silkworm {
 
 using TotalDifficulty = intx::uint256;
 
-struct BlockId {
+struct BlockId {  // TODO(canepat) rename BlockNumberAndHash
     BlockNum number{};
     Hash hash;
 };
@@ -70,12 +70,16 @@ struct BlockHeader {
     evmc::bytes32 prev_randao{};  // mix hash prior to EIP-4399
     NonceType nonce{};
 
+    // Added in London
     std::optional<intx::uint256> base_fee_per_gas{std::nullopt};  // EIP-1559
+
+    // Added in Shanghai
     std::optional<evmc::bytes32> withdrawals_root{std::nullopt};  // EIP-4895
 
-    // EIP-4844: Shard Blob Transactions
-    std::optional<uint64_t> data_gas_used{std::nullopt};
-    std::optional<uint64_t> excess_data_gas{std::nullopt};
+    // Added in Cancun
+    std::optional<uint64_t> blob_gas_used{std::nullopt};                  // EIP-4844
+    std::optional<uint64_t> excess_blob_gas{std::nullopt};                // EIP-4844
+    std::optional<evmc::bytes32> parent_beacon_block_root{std::nullopt};  // EIP-4788
 
     [[nodiscard]] evmc::bytes32 hash(bool for_sealing = false, bool exclude_extra_data_sig = false) const;
 
@@ -84,7 +88,7 @@ struct BlockHeader {
     [[nodiscard]] ethash::hash256 boundary() const;
 
     //! \see https://eips.ethereum.org/EIPS/eip-4844#gas-accounting
-    [[nodiscard]] std::optional<intx::uint256> data_gas_price() const;
+    [[nodiscard]] std::optional<intx::uint256> blob_gas_price() const;
 
     friend bool operator==(const BlockHeader&, const BlockHeader&);
 };

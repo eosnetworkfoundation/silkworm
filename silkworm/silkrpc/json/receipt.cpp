@@ -16,9 +16,6 @@
 
 #include "receipt.hpp"
 
-#include <cstring>
-#include <utility>
-
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
@@ -33,7 +30,11 @@ void to_json(nlohmann::json& json, const Receipt& receipt) {
     json["transactionHash"] = receipt.tx_hash;
     json["transactionIndex"] = to_quantity(receipt.tx_index);
     json["from"] = receipt.from.value_or(evmc::address{});
-    json["to"] = receipt.to.value_or(evmc::address{});
+    if (receipt.to) {
+        json["to"] = *receipt.to;
+    } else {
+        json["to"] = nlohmann::json{};
+    }
     json["type"] = to_quantity(receipt.type ? receipt.type.value() : 0);
     json["gasUsed"] = to_quantity(receipt.gas_used);
     json["cumulativeGasUsed"] = to_quantity(receipt.cumulative_gas_used);

@@ -16,6 +16,8 @@
 
 #include "extending_fork.hpp"
 
+#include <boost/asio/executor_work_guard.hpp>
+
 #include "main_chain.hpp"
 
 namespace silkworm::stagedsync {
@@ -28,7 +30,7 @@ static void ensure(bool condition, const std::string& message) {
     }
 }
 
-ExtendingFork::ExtendingFork(BlockId forking_point, MainChain& main_chain, asio::io_context& ctx)
+ExtendingFork::ExtendingFork(BlockId forking_point, MainChain& main_chain, io_context& ctx)
     : forking_point_{forking_point},
       main_chain_{main_chain},
       io_context_{ctx},
@@ -44,7 +46,7 @@ BlockId ExtendingFork::current_head() const {
 
 void ExtendingFork::execution_loop() {
     if (!executor_) return;
-    asio::executor_work_guard<decltype(executor_->get_executor())> work{executor_->get_executor()};
+    executor_work_guard<decltype(executor_->get_executor())> work{executor_->get_executor()};
     executor_->run();
     if (fork_) fork_->close();  // close the fork here, in the same thread where was created to comply to mdbx limitations
 }
@@ -52,7 +54,7 @@ void ExtendingFork::execution_loop() {
 void ExtendingFork::start_with(BlockId new_head, std::list<std::shared_ptr<Block>>&& blocks) {
     propagate_exception_if_any();
 
-    executor_ = std::make_unique<asio::io_context>();
+    executor_ = std::make_unique<io_context>();
     thread_ = std::thread{[this]() { execution_loop(); }};
 
     current_head_ = new_head;  // setting this here is important for find_fork_by_head() due to the fact that block
@@ -62,7 +64,7 @@ void ExtendingFork::start_with(BlockId new_head, std::list<std::shared_ptr<Block
         try {
             if (exception_) return;
             fork_ = std::make_unique<Fork>(forking_point_,
-                                           db::ROTxn(main_chain_.tx().db()),
+                                           db::ROTxnManaged(main_chain_.tx().db()),
                                            main_chain_.node_settings());  // create the real fork
             fork_->extend_with(blocks_);                                  // extend it with the blocks
             ensure(fork_->current_head() == new_head, "fork head mismatch");
@@ -93,10 +95,10 @@ void ExtendingFork::extend_with(Hash head_hash, const Block& block) {
     });
 }
 
-auto ExtendingFork::verify_chain() -> concurrency::AwaitableFuture<VerificationResult> {
+concurrency::AwaitableFuture<VerificationResult> ExtendingFork::verify_chain() {
     propagate_exception_if_any();
 
-    concurrency::AwaitablePromise<VerificationResult> promise{io_context_};  // note: promise uses an external io_context
+    concurrency::AwaitablePromise<VerificationResult> promise{io_context_.get_executor()};  // note: promise uses an external io_context
     auto awaitable_future = promise.get_future();
 
     post(*executor_, [this, promise_ = std::move(promise)]() mutable {
@@ -113,11 +115,10 @@ auto ExtendingFork::verify_chain() -> concurrency::AwaitableFuture<VerificationR
     return awaitable_future;
 }
 
-auto ExtendingFork::fork_choice(Hash head_block_hash, std::optional<Hash> finalized_block_hash)
-    -> concurrency::AwaitableFuture<bool> {
+concurrency::AwaitableFuture<bool> ExtendingFork::fork_choice(Hash head_block_hash, std::optional<Hash> finalized_block_hash) {
     propagate_exception_if_any();
 
-    concurrency::AwaitablePromise<bool> promise{io_context_};  // note: promise uses an external io_context
+    concurrency::AwaitablePromise<bool> promise{io_context_.get_executor()};  // note: promise uses an external io_context
     auto awaitable_future = promise.get_future();
 
     post(*executor_, [this, promise_ = std::move(promise), head_block_hash, finalized_block_hash]() mutable {

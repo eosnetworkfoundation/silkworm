@@ -20,7 +20,7 @@
 #include <silkworm/core/chain/config.hpp>
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/execution/execution.hpp>
-#include <silkworm/infra/test/log.hpp>
+#include <silkworm/infra/test_util/log.hpp>
 #include <silkworm/node/db/access_layer.hpp>
 #include <silkworm/node/db/bitmap.hpp>
 #include <silkworm/node/db/buffer.hpp>
@@ -33,16 +33,11 @@ using namespace evmc::literals;
 namespace silkworm {
 
 TEST_CASE("Stage History Index") {
-    // Temporarily override std::cout and std::cerr with null stream to avoid terminal output
-    test::StreamSwap cout_swap{std::cout, test::null_stream()};
-    test::StreamSwap cerr_swap{std::cerr, test::null_stream()};
+    test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     test::Context context;
     db::RWTxn& txn{context.rw_txn()};
     txn.disable_commit();
-    log::Settings log_settings;
-    log_settings.log_std_out = true;
-    log::init(log_settings);
 
     SECTION("Check bitmaps values") {
         // ---------------------------------------
@@ -363,14 +358,14 @@ TEST_CASE("Stage History Index") {
             }
         }
         db::stages::write_stage_progress(txn, db::stages::kExecutionKey, block - 1);
-        txn.commit();
+        txn.commit_and_renew();
 
         REQUIRE(stage_history_index.forward(txn) == stagedsync::Stage::Result::kSuccess);
 
         account_history.bind(txn, db::table::kAccountHistory);
         REQUIRE(batch_1 < account_history.size());
         check_addresses(addresses);
-        txn.commit();
+        txn.commit_and_renew();
 
         // Unwind to 4000 and ensure account 4 has been removed from history
         sync_context.unwind_point.emplace(4'000);

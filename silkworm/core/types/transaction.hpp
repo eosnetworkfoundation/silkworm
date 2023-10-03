@@ -22,6 +22,7 @@
 #include <intx/intx.hpp>
 
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 #include <silkworm/core/rlp/decode.hpp>
 #include <silkworm/core/types/hash.hpp>
 
@@ -42,6 +43,10 @@ enum class TransactionType : uint8_t {
     kAccessList = 1,  // EIP-2930
     kDynamicFee = 2,  // EIP-1559
     kBlob = 3,        // EIP-4844
+
+    // System transactions are used for internal protocol operations like storing parent beacon root (EIP-4788).
+    // They do not pay the base fee.
+    kSystem = 0xff,
 };
 
 struct UnsignedTransaction {
@@ -60,7 +65,7 @@ struct UnsignedTransaction {
     std::vector<AccessListEntry> access_list{};  // EIP-2930
 
     // EIP-4844: Shard Blob Transactions
-    intx::uint256 max_fee_per_data_gas{0};
+    intx::uint256 max_fee_per_blob_gas{0};
     std::vector<Hash> blob_versioned_hashes{};
 
     //! \brief Maximum possible cost of normal and data (EIP-4844) gas
@@ -69,7 +74,7 @@ struct UnsignedTransaction {
     [[nodiscard]] intx::uint256 priority_fee_per_gas(const intx::uint256& base_fee_per_gas) const;  // EIP-1559
     [[nodiscard]] intx::uint256 effective_gas_price(const intx::uint256& base_fee_per_gas) const;   // EIP-1559
 
-    [[nodiscard]] uint64_t total_data_gas() const;  // EIP-4844
+    [[nodiscard]] uint64_t total_blob_gas() const;  // EIP-4844
 
     void encode_for_signing(Bytes& into) const;
 

@@ -16,6 +16,8 @@
 
 #include "filter.hpp"
 
+#include <silkworm/core/execution/address.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
 
 std::ostream& operator<<(std::ostream& out, const std::optional<silkworm::rpc::FilterAddresses>& addresses) {
@@ -23,7 +25,7 @@ std::ostream& operator<<(std::ostream& out, const std::optional<silkworm::rpc::F
         auto address_vector = addresses.value();
         out << "[";
         for (std::size_t i{0}; i < address_vector.size(); i++) {
-            out << "0x" << address_vector[i];
+            out << address_vector[i];
             if (i != address_vector.size() - 1) {
                 out << " ";
             }
@@ -38,7 +40,7 @@ std::ostream& operator<<(std::ostream& out, const std::optional<silkworm::rpc::F
 std::ostream& operator<<(std::ostream& out, const silkworm::rpc::FilterSubTopics& subtopics) {
     out << "[";
     for (std::size_t i{0}; i < subtopics.size(); i++) {
-        out << "0x" << subtopics[i];
+        out << silkworm::to_hex(subtopics[i], true);
         if (i != subtopics.size() - 1) {
             out << " ";
         }
@@ -67,11 +69,19 @@ std::ostream& operator<<(std::ostream& out, const std::optional<silkworm::rpc::F
 namespace silkworm::rpc {
 
 std::ostream& operator<<(std::ostream& out, const Filter& filter) {
-    out << "from_block: " << filter.from_block.value_or("null") << " ";
-    out << "to_block: " << filter.to_block.value_or("null") << " ";
-    out << "address: " << filter.addresses << " ";
-    out << "topics: " << filter.topics << " ";
-    out << "block_hash: " << filter.block_hash.value_or("null");
+    out << "from_block: " << filter.from_block.value_or("null");
+    out << ", to_block: " << filter.to_block.value_or("null");
+    out << ", addresses: " << filter.addresses;
+    out << ", topics: " << filter.topics;
+    out << ", block_hash: " << filter.block_hash.value_or("null");
+    return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const LogFilterOptions& filter_options) {
+    out << "add_timestamp: " << std::boolalpha << filter_options.add_timestamp;
+    out << ", logCount: " << filter_options.log_count;
+    out << ", blockCount: " << filter_options.block_count;
+    out << ", ignore_topics_order: " << std::boolalpha << filter_options.ignore_topics_order;
     return out;
 }
 

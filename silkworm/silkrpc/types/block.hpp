@@ -43,7 +43,7 @@ std::ostream& operator<<(std::ostream& out, const Block& b);
 class BlockNumberOrHash {
   public:
     explicit BlockNumberOrHash(std::string const& bnoh) { build(bnoh); }
-    explicit BlockNumberOrHash(uint64_t number) noexcept : value_{number} {}
+    explicit BlockNumberOrHash(BlockNum number) noexcept : value_{number} {}
 
     virtual ~BlockNumberOrHash() noexcept = default;
 
@@ -114,6 +114,14 @@ struct BlockTransactionsResponse {
     std::vector<silkworm::BlockHeader> ommers;
     std::vector<silkworm::rpc::Receipt> receipts;
     std::vector<silkworm::Transaction> transactions;
+};
+
+struct TransactionsWithReceipts {
+    bool first_page;
+    bool last_page;
+    std::vector<silkworm::rpc::Receipt> receipts;
+    std::vector<silkworm::Transaction> transactions;
+    std::vector<BlockDetails> blocks;
 };
 
 }  // namespace silkworm::rpc

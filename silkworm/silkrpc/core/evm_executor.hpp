@@ -20,9 +20,8 @@
 #include <string>
 #include <vector>
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
-#include <boost/asio/awaitable.hpp>
 #include <boost/asio/impl/execution_context.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/thread_pool.hpp>
@@ -39,6 +38,7 @@
 #include <silkworm/core/types/transaction.hpp>
 #include <silkworm/silkrpc/core/rawdb/accessors.hpp>
 #include <silkworm/silkrpc/core/state_reader.hpp>
+#include <silkworm/silkrpc/storage/chain_storage.hpp>
 
 namespace silkworm::rpc {
 
@@ -78,15 +78,17 @@ using Tracers = std::vector<std::shared_ptr<EvmTracer>>;
 
 class EVMExecutor {
   public:
-    using StateFactory = std::function<std::shared_ptr<silkworm::State>(boost::asio::any_io_executor&, BlockNum)>;
-    static awaitable<ExecutionResult> call(const silkworm::ChainConfig& config,
-                                           boost::asio::thread_pool& workers,
-                                           const silkworm::Block& block,
-                                           const silkworm::Transaction& txn,
-                                           StateFactory state_factory,
-                                           Tracers tracers = {},
-                                           bool refund = true,
-                                           bool gas_bailout = false);
+    using StateFactory = std::function<std::shared_ptr<silkworm::State>(boost::asio::any_io_executor&, BlockNum, const ChainStorage& chain_storage)>;
+    static Task<ExecutionResult> call(
+        const silkworm::ChainConfig& config,
+        const ChainStorage& storage,
+        boost::asio::thread_pool& workers,
+        const silkworm::Block& block,
+        const silkworm::Transaction& txn,
+        StateFactory state_factory,
+        Tracers tracers = {},
+        bool refund = true,
+        bool gas_bailout = false);
     static std::string get_error_message(int64_t error_code, const Bytes& error_data, bool full_error = true);
 
     EVMExecutor(const silkworm::ChainConfig& config, boost::asio::thread_pool& workers, std::shared_ptr<silkworm::State>& state)
@@ -107,6 +109,8 @@ class EVMExecutor {
 
     ExecutionResult call(const silkworm::Block& block, const silkworm::Transaction& txn, Tracers tracers = {}, bool refund = true, bool gas_bailout = false);
     void reset();
+
+    const IntraBlockState& get_ibs_state() { return ibs_state_; }
 
   private:
     static std::optional<std::string> pre_check(const EVM& evm, const silkworm::Transaction& txn,

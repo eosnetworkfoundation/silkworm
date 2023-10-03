@@ -37,10 +37,10 @@ ValidationResult BaseRuleSet::pre_validate_block_body(const Block& block, const 
     }
 
     if (rev < EVMC_SHANGHAI && block.withdrawals) {
-        return ValidationResult::kUnexpectedWithdrawals;
+        return ValidationResult::kFieldBeforeFork;
     }
     if (rev >= EVMC_SHANGHAI && !block.withdrawals) {
-        return ValidationResult::kMissingWithdrawals;
+        return ValidationResult::kMissingField;
     }
 
     const std::optional<evmc::bytes32> withdrawals_root{compute_withdrawals_root(block)};
@@ -48,18 +48,18 @@ ValidationResult BaseRuleSet::pre_validate_block_body(const Block& block, const 
         return ValidationResult::kWrongWithdrawalsRoot;
     }
 
-    std::optional<uint64_t> data_gas_used{std::nullopt};
+    std::optional<uint64_t> blob_gas_used{std::nullopt};
     if (rev >= EVMC_CANCUN) {
-        data_gas_used = 0;
+        blob_gas_used = 0;
         for (const Transaction& tx : block.transactions) {
-            *data_gas_used += tx.total_data_gas();
+            *blob_gas_used += tx.total_blob_gas();
         }
-        if (data_gas_used > kMaxDataGasPerBlock) {
+        if (blob_gas_used > kMaxBlobGasPerBlock) {
             return ValidationResult::kTooManyBlobs;
         }
     }
-    if (header.data_gas_used != data_gas_used) {
-        return ValidationResult::kWrongDataGasUsed;
+    if (header.blob_gas_used != blob_gas_used) {
+        return ValidationResult::kWrongBlobGasUsed;
     }
 
     if (block.ommers.empty()) {
@@ -177,19 +177,40 @@ ValidationResult BaseRuleSet::validate_block_header(const BlockHeader& header, c
 
     const evmc_revision rev{chain_config_.revision(header.number, header.timestamp)};
 
-    if (header.base_fee_per_gas != expected_base_fee_per_gas(*parent, rev)) {
-        return ValidationResult::kWrongBaseFee;
+    if (rev < EVMC_LONDON) {
+        if (header.base_fee_per_gas) {
+            return ValidationResult::kFieldBeforeFork;
+        }
+    } else {
+        if (!header.base_fee_per_gas) {
+            return ValidationResult::kMissingField;
+        }
+        if (header.base_fee_per_gas != expected_base_fee_per_gas(*parent)) {
+            return ValidationResult::kWrongBaseFee;
+        }
     }
 
-    if (rev < EVMC_SHANGHAI && header.withdrawals_root) {
-        return ValidationResult::kUnexpectedWithdrawals;
-    }
-    if (rev >= EVMC_SHANGHAI && !header.withdrawals_root) {
-        return ValidationResult::kMissingWithdrawals;
+    if (rev < EVMC_SHANGHAI) {
+        if (header.withdrawals_root) {
+            return ValidationResult::kFieldBeforeFork;
+        }
+    } else {
+        if (!header.withdrawals_root) {
+            return ValidationResult::kMissingField;
+        }
     }
 
-    if (header.excess_data_gas != calc_excess_data_gas(*parent, rev)) {
-        return ValidationResult::kWrongExcessDataGas;
+    if (rev < EVMC_CANCUN) {
+        if (header.blob_gas_used || header.excess_blob_gas || header.parent_beacon_block_root) {
+            return ValidationResult::kFieldBeforeFork;
+        }
+    } else {
+        if (!header.blob_gas_used || !header.excess_blob_gas || !header.parent_beacon_block_root) {
+            return ValidationResult::kMissingField;
+        }
+        if (header.excess_blob_gas != calc_excess_blob_gas(*parent)) {
+            return ValidationResult::kWrongExcessBlobGas;
+        }
     }
 
     return validate_seal(header);
@@ -230,5 +251,9 @@ bool BaseRuleSet::is_kin(const BlockHeader& branch_header, const BlockHeader& ma
 }
 
 evmc::address BaseRuleSet::get_beneficiary(const BlockHeader& header) { return header.beneficiary; }
+
+BlockReward BaseRuleSet::compute_reward(const Block&) {
+    return {0, {}};
+}
 
 }  // namespace silkworm::protocol

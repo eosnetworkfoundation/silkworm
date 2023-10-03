@@ -15,6 +15,15 @@ class TrustRuleSet : public IRuleSet {
         return ValidationResult::kOk;
     };
 
+    void initialize(EVM& evm) override {
+        (void)evm;
+    }
+
+    BlockReward compute_reward(const Block& block) override {
+        (void)block;
+        return {};
+    }
+
     void finalize(IntraBlockState& state, const Block& block) override {
         (void)state;
         (void)block;

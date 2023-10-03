@@ -31,8 +31,8 @@
 #include <magic_enum.hpp>
 
 #include <silkworm/core/common/assert.hpp>
-#include <silkworm/core/common/endian.hpp>
 #include <silkworm/core/common/util.hpp>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/grpc/common/conversion.hpp>
 #include <silkworm/infra/grpc/common/util.hpp>
@@ -480,7 +480,7 @@ class AsyncEtherbaseCall : public AsyncUnaryCall<
         if (ok && status_.ok()) {
             if (reply_.has_address()) {
                 const auto h160_address = reply_.address();
-                const auto address = silkworm::to_hex(silkworm::rpc::address_from_H160(h160_address));
+                const auto address = silkworm::rpc::address_from_H160(h160_address);
                 SILK_INFO << "Etherbase reply: " << address << " [latency=" << latency() / 1ns << " ns]";
             } else {
                 SILK_INFO << "Etherbase reply: no address";
@@ -972,9 +972,6 @@ int main(int argc, char* argv[]) {
     log_settings.log_verbosity = log_level;
     silkworm::log::init(log_settings);
 
-    // TODO(canepat): this could be an option in Silkworm logging facility
-    silkworm::rpc::Grpc2SilkwormLogGuard log_guard;
-
     try {
         std::vector<std::shared_ptr<grpc::Channel>> channels;
         for (int i{0}; i < num_channels; ++i) {
@@ -1025,7 +1022,7 @@ int main(int argc, char* argv[]) {
         }};
 
         boost::asio::io_context scheduler;
-        silkworm::cmd::common::ShutdownSignal shutdown_signal{scheduler};
+        silkworm::cmd::common::ShutdownSignal shutdown_signal{scheduler.get_executor()};
         shutdown_signal.on_signal([&](silkworm::cmd::common::ShutdownSignal::SignalNumber /*num*/) {
             pump_stop = true;
             completion_stop = true;

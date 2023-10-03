@@ -20,7 +20,7 @@
 #include <string>
 #include <utility>
 
-#include <boost/asio/awaitable.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
 #include <silkworm/silkrpc/common/util.hpp>
 #include <silkworm/silkrpc/core/remote_state.hpp>
@@ -37,21 +37,26 @@ class DummyTransaction : public ethdb::Transaction {
 
     [[nodiscard]] uint64_t view_id() const override { return view_id_; }
 
-    boost::asio::awaitable<void> open() override { co_return; }
+    Task<void> open() override { co_return; }
 
-    boost::asio::awaitable<std::shared_ptr<ethdb::Cursor>> cursor(const std::string& /*table*/) override {
+    Task<std::shared_ptr<ethdb::Cursor>> cursor(const std::string& /*table*/) override {
         co_return cursor_;
     }
 
-    boost::asio::awaitable<std::shared_ptr<ethdb::CursorDupSort>> cursor_dup_sort(const std::string& /*table*/) override {
+    Task<std::shared_ptr<ethdb::CursorDupSort>> cursor_dup_sort(const std::string& /*table*/) override {
         co_return cursor_;
     }
 
-    std::shared_ptr<silkworm::State> create_state(boost::asio::any_io_executor& executor, const core::rawdb::DatabaseReader& db_reader, uint64_t block_number) override {
-        return std::make_shared<silkworm::rpc::state::RemoteState>(executor, db_reader, block_number);
+    std::shared_ptr<silkworm::State> create_state(boost::asio::any_io_executor& executor, const core::rawdb::DatabaseReader& db_reader, const ChainStorage& storage,
+                                                  BlockNum block_number) override {
+        return std::make_shared<silkworm::rpc::state::RemoteState>(executor, db_reader, storage, block_number);
     }
 
-    boost::asio::awaitable<void> close() override { co_return; }
+    std::shared_ptr<ChainStorage> create_storage(const core::rawdb::DatabaseReader&, ethbackend::BackEnd*) override {
+        return nullptr;
+    }
+
+    Task<void> close() override { co_return; }
 
   private:
     uint64_t view_id_;

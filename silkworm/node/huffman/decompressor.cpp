@@ -28,6 +28,7 @@
 #include <silkworm/core/common/assert.hpp>
 #include <silkworm/core/common/endian.hpp>
 #include <silkworm/core/common/util.hpp>
+#include <silkworm/infra/common/ensure.hpp>
 #include <silkworm/infra/common/log.hpp>
 
 namespace pb = google::protobuf::io;
@@ -143,19 +144,23 @@ std::size_t PatternTable::build_condensed(std::span<Pattern> patterns, uint64_t 
     }
     const auto first_pattern = patterns.front();
     if (depth == first_pattern.depth) {
-        insert_word(std::make_shared<CodeWord>(code, static_cast<uint8_t>(bits), first_pattern.value, nullptr, nullptr));
+        auto codeword = make_unique<CodeWord>(code, static_cast<uint8_t>(bits), first_pattern.value, nullptr, nullptr);
+        codewords_list_.push_back(std::move(codeword));
+        insert_word(codewords_list_.back().get());
         return 1;
     }
     if (bits == kMaxTableBitLength) {
         auto new_table{std::make_unique<PatternTable>(highest_depth)};
-        const auto last_cw = insert_word(std::make_shared<CodeWord>(code, 0, ByteView{}, std::move(new_table), nullptr));
+        auto codeword = make_unique<CodeWord>(code, 0, ByteView{}, std::move(new_table), nullptr);
+        codewords_list_.push_back(std::move(codeword));
+        const auto last_cw = insert_word(codewords_list_.back().get());
         return last_cw->table()->build_condensed(patterns, highest_depth, 0, 0, depth);
     }
     const auto b0 = build_condensed(patterns, highest_depth - 1, code, bits + 1, depth + 1);
     return b0 + build_condensed(patterns.subspan(b0), highest_depth - 1, static_cast<uint16_t>((1 << bits) | code), bits + 1, depth + 1);
 }
 
-CodeWord* PatternTable::insert_word(std::shared_ptr<CodeWord> codeword) {
+CodeWord* PatternTable::insert_word(CodeWord* codeword) {
     CodeWord* inserted{nullptr};
     if (bit_length_ <= condensed_table_bit_length_threshold_) {
         const auto code_step = 1 << codeword->code_length();
@@ -163,10 +168,10 @@ CodeWord* PatternTable::insert_word(std::shared_ptr<CodeWord> codeword) {
         const auto code_to =
             bit_length_ != codeword->code_length() && codeword->code_length() > 0 ? code_from | 1 << bit_length_ : code_from + code_step;
         for (auto c{code_from}; c < code_to; c += code_step) {
-            auto* cw = codewords_[c].get();
+            auto cw = codewords_[c];
             if (cw == nullptr) {
                 codewords_[c] = codeword;
-                inserted = codewords_[c].get();
+                inserted = codewords_[c];
             } else {
                 cw->reset_content(c, codeword->code_length(), codeword->pattern());
                 inserted = cw;
@@ -176,12 +181,12 @@ CodeWord* PatternTable::insert_word(std::shared_ptr<CodeWord> codeword) {
         codeword->set_next(nullptr);
         if (head_ == nullptr) {
             codewords_.push_back(std::move(codeword));
-            head_ = codewords_.front().get();
+            head_ = codewords_.front();
             inserted = head_;
         } else {
             SILKWORM_ASSERT(!codewords_.empty());
             codewords_.push_back(std::move(codeword));
-            inserted = codewords_.back().get();
+            inserted = codewords_.back();
         }
     }
 
@@ -291,14 +296,15 @@ std::ostream& operator<<(std::ostream& out, const PositionTable& pt) {
     return out;
 }
 
-Decompressor::Decompressor(std::filesystem::path compressed_path) : compressed_path_(std::move(compressed_path)) {}
+Decompressor::Decompressor(std::filesystem::path compressed_path, std::optional<MemoryMappedRegion> compressed_region)
+    : compressed_path_(std::move(compressed_path)), compressed_region_{std::move(compressed_region)} {}
 
 Decompressor::~Decompressor() {
     close();
 }
 
 void Decompressor::open() {
-    compressed_file_ = std::make_unique<MemoryMappedFile>(compressed_path_);
+    compressed_file_ = std::make_unique<MemoryMappedFile>(compressed_path_, compressed_region_);
     if (compressed_file_->length() < kMinimumFileSize) {
         throw std::runtime_error("compressed file is too short: " + std::to_string(compressed_file_->length()));
     }
@@ -337,11 +343,9 @@ void Decompressor::open() {
 }
 
 bool Decompressor::read_ahead(ReadAheadFuncRef fn) {
-    if (!compressed_file_) {
-        throw std::logic_error{"decompressor closed, call open first"};
-    }
+    ensure(bool(compressed_file_), "decompressor closed, call open first");
     compressed_file_->advise_sequential();
-    auto _ = gsl::finally([&]() { compressed_file_->advise_random(); });
+    [[maybe_unused]] auto _ = gsl::finally([&]() { compressed_file_->advise_random(); });
     Iterator it{this};
     return fn(it);
 }
@@ -473,6 +477,85 @@ Decompressor::Iterator::Iterator(const Decompressor* decoder) : decoder_(decoder
 
 ByteView Decompressor::Iterator::data() const {
     return ByteView{decoder_->words_start_, decoder_->words_length_};
+}
+
+[[nodiscard]] bool Decompressor::Iterator::has_prefix(ByteView prefix) {
+    const auto prefix_size{prefix.size()};
+
+    const auto start_offset = word_offset_;
+    [[maybe_unused]] auto _ = gsl::finally([&]() { word_offset_ = start_offset; bit_position_ = 0; });
+
+    uint64_t next_data_position = next_position(true);
+    if (next_data_position == 0) {
+        throw std::runtime_error{"invalid zero next position in: " + decoder_->compressed_filename()};
+    }
+    const auto word_length = --next_data_position;  // because when we create HT we do ++ (0 is terminator)
+    SILK_TRACE << "Iterator::has_prefix start_offset=" << start_offset << " word_length=" << word_length;
+    if (word_length == 0 or word_length < prefix_size) {
+        if (bit_position_ > 0) {
+            ++word_offset_;
+            bit_position_ = 0;
+        }
+        return prefix_size == word_length;
+    }
+
+    // First pass: we only check the patterns. Only run this loop as far as prefix goes, no need to go any further
+    std::size_t buffer_position{0};
+    for (auto pos{next_position(false)}; pos != 0; pos = next_position(false)) {
+        // Positions where to insert patterns are encoded relative to one another
+        buffer_position += pos - 1;
+        const ByteView pattern = next_pattern();
+        SILK_TRACE << "Iterator::has_prefix data-from-patterns pos=" << pos << " pattern=" << to_hex(pattern);
+        const auto comparison_size{std::min(prefix_size - buffer_position, pattern.size())};
+        if (buffer_position < prefix_size) {
+            if (prefix.substr(buffer_position, comparison_size) != pattern.substr(0, comparison_size)) {
+                return false;
+            }
+        }
+    }
+    if (bit_position_ > 0) {
+        ++word_offset_;
+        bit_position_ = 0;
+    }
+    uint64_t post_loop_offset = word_offset_;
+    word_offset_ = start_offset;
+    bit_position_ = 0;
+
+    // Reset the iterator state
+    (void)next_position(true);
+
+    // Second pass: we check spaces not covered by the patterns
+    std::size_t last_uncovered{0};
+    buffer_position = 0;
+    for (auto pos{next_position(false)}; pos != 0 and last_uncovered < prefix_size; pos = next_position(false)) {
+        // Positions where to insert patterns are encoded relative to one another
+        buffer_position += pos - 1;
+        if (buffer_position > last_uncovered) {
+            const std::size_t position_diff = buffer_position - last_uncovered;
+            SILK_TRACE << "Iterator::has_prefix other-data pos=" << pos << " last_uncovered=" << last_uncovered
+                       << " buffer_position=" << buffer_position << " position_diff=" << position_diff
+                       << " data=" << to_hex(ByteView{data().data() + post_loop_offset, position_diff});
+            const auto comparison_size{std::min(prefix_size - last_uncovered, position_diff)};
+            if (prefix.substr(last_uncovered, comparison_size) != data().substr(post_loop_offset, comparison_size)) {
+                return false;
+            }
+            post_loop_offset += position_diff;
+        }
+        last_uncovered = buffer_position + next_pattern().size();
+    }
+    if (prefix_size > last_uncovered and word_length > last_uncovered) {
+        const std::size_t position_diff = word_length - last_uncovered;
+        SILK_TRACE << "Iterator::has_prefix other-data last_uncovered=" << last_uncovered
+                   << " buffer_position=" << buffer_position << " position_diff=" << position_diff
+                   << " data=" << to_hex(ByteView{data().data() + post_loop_offset, position_diff});
+        const auto comparison_size{prefix_size < word_length ? prefix_size - last_uncovered : position_diff};
+        if (prefix.substr(last_uncovered, comparison_size) != data().substr(post_loop_offset, comparison_size)) {
+            return false;
+        }
+        post_loop_offset += position_diff;
+    }
+    SILK_TRACE << "Iterator::has_prefix word_offset_=" << word_offset_ << "; post_loop_offset=" << post_loop_offset;
+    return true;
 }
 
 uint64_t Decompressor::Iterator::next(Bytes& buffer) {

@@ -30,7 +30,6 @@
 namespace silkworm::rpc {
 
 using boost::asio::as_tuple;
-using boost::asio::awaitable;
 using namespace boost::asio::experimental::awaitable_operators;
 using boost::asio::steady_timer;
 using boost::asio::use_awaitable;
@@ -64,7 +63,7 @@ void KvVersionCall::fill_predefined_reply() {
     KvVersionCall::response_.set_patch(std::get<2>(max_version));
 }
 
-awaitable<void> KvVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
+Task<void> KvVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
     SILK_TRACE << "KvVersionCall START";
     co_await agrpc::finish(responder_, response_, grpc::Status::OK);
     SILK_TRACE << "KvVersionCall END version: " << response_.major() << "." << response_.minor() << "." << response_.patch();
@@ -76,14 +75,14 @@ void TxCall::set_max_ttl_duration(const std::chrono::milliseconds& max_ttl_durat
     TxCall::max_ttl_duration_ = max_ttl_duration;
 }
 
-awaitable<void> TxCall::operator()(const EthereumBackEnd& backend) {
+Task<void> TxCall::operator()(const EthereumBackEnd& backend) {
     auto chaindata_env = backend.chaindata_env();
     SILK_TRACE << "TxCall peer: " << peer() << " MDBX readers: " << chaindata_env->get_info().mi_numreaders;
 
     grpc::Status status{grpc::Status::OK};
     try {
         // Create a new read-only transaction.
-        read_only_txn_ = db::ROTxn{*chaindata_env};
+        read_only_txn_ = db::ROTxnManaged{*chaindata_env};
         SILK_DEBUG << "TxCall peer: " << peer() << " started tx: " << read_only_txn_->id();
 
         // Send an unsolicited message containing the transaction ID.
@@ -108,7 +107,7 @@ awaitable<void> TxCall::operator()(const EthereumBackEnd& backend) {
         remote::Cursor request;
         read_stream.initiate(agrpc::read, responder_, request);
 
-        const auto read = [&]() -> awaitable<void> {
+        const auto read = [&]() -> Task<void> {
             try {
                 while (co_await read_stream.next()) {
                     // Handle incoming request from client
@@ -136,11 +135,11 @@ awaitable<void> TxCall::operator()(const EthereumBackEnd& backend) {
                 status = grpc::Status{grpc::StatusCode::INTERNAL, exc.what()};
             }
         };
-        const auto write = [&]() -> awaitable<void> {
+        const auto write = [&]() -> Task<void> {
             while (co_await write_stream.next()) {
             }
         };
-        const auto max_idle_timer = [&]() -> awaitable<void> {
+        const auto max_idle_timer = [&]() -> Task<void> {
             while (true) {
                 const auto [ec] = co_await max_idle_alarm.async_wait(as_tuple(use_awaitable));
                 if (!ec) {
@@ -151,7 +150,7 @@ awaitable<void> TxCall::operator()(const EthereumBackEnd& backend) {
                 }
             }
         };
-        const auto max_ttl_timer = [&]() -> awaitable<void> {
+        const auto max_ttl_timer = [&]() -> Task<void> {
             while (true) {
                 const auto [ec] = co_await max_ttl_alarm.async_wait(as_tuple(use_awaitable));
                 if (!ec) {
@@ -336,7 +335,7 @@ void TxCall::handle_max_ttl_timer_expired(const EthereumBackEnd& backend) {
 
     // Close and reopen to avoid long-lived transactions (resource-consuming for MDBX)
     read_only_txn_.abort();
-    read_only_txn_ = db::ROTxn{*chaindata_env};
+    read_only_txn_ = db::ROTxnManaged{*chaindata_env};
 
     // Restore the whole state of the transaction (i.e. all cursor positions)
     const bool restore_success = restore_cursors(positions);
@@ -654,7 +653,7 @@ void TxCall::throw_with_error(grpc::Status&& status) {
     throw server::CallException{std::move(status)};
 }
 
-awaitable<void> StateChangesCall::operator()(const EthereumBackEnd& backend) {
+Task<void> StateChangesCall::operator()(const EthereumBackEnd& backend) {
     SILK_TRACE << "StateChangesCall w/ storage: " << request_.with_storage() << " w/ txs: " << request_.with_transactions() << " START";
     auto source = backend.state_change_source();
 
@@ -684,7 +683,7 @@ awaitable<void> StateChangesCall::operator()(const EthereumBackEnd& backend) {
     }
 
     // Unregister subscription whatever it happens
-    auto _ = gsl::finally([&]() { source->unsubscribe(*token); });
+    [[maybe_unused]] auto _ = gsl::finally([&]() { source->unsubscribe(*token); });
 
     bool done{false};
     while (!done) {

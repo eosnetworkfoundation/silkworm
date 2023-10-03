@@ -71,11 +71,11 @@ Stage::Result Execution::forward(db::RWTxn& txn) {
 
         block_num_ = previous_progress + 1;
         BlockNum max_block_num{senders_stage_progress};
-        BlockNum segment_width{senders_stage_progress - previous_progress};
+        const BlockNum segment_width{senders_stage_progress - previous_progress};
         if (segment_width > db::stages::kSmallBlockSegmentWidth) {
             log::Info(log_prefix_,
                       {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
-                       "from", std::to_string(block_num_),
+                       "from", std::to_string(previous_progress),
                        "to", std::to_string(senders_stage_progress),
                        "span", std::to_string(segment_width)});
         }
@@ -105,9 +105,7 @@ Stage::Result Execution::forward(db::RWTxn& txn) {
                                                       prune_receipts)};
 
             // If we return with success we must persist data
-            // Though counterintuitive we also must persist on KInvalidBlock to allow subsequent unwind
-            if (execution_result != Stage::Result::kSuccess &&
-                execution_result != Stage::Result::kInvalidBlock) {
+            if (execution_result != Stage::Result::kSuccess) {
                 throw StageError(execution_result);
             }
 
@@ -118,15 +116,10 @@ Stage::Result Execution::forward(db::RWTxn& txn) {
             }
 
             (void)commit_stopwatch.start(/*with_reset=*/true);
-            txn.commit();
+            txn.commit_and_renew();
             auto [_, duration]{commit_stopwatch.stop()};
             log::Info(log_prefix_ + " commit", {"batch time", StopWatch::format(duration)});
 
-            // If an invalid block returned now can throw
-            if (execution_result == Stage::Result::kInvalidBlock) {
-                ret = execution_result;
-                break;
-            }
             block_num_++;
         }
 
@@ -370,7 +363,7 @@ Stage::Result Execution::unwind(db::RWTxn& txn) {
             log::Info() << "Erased " << erased << " records from " << map_config.name;
         }
         db::stages::write_stage_progress(txn, db::stages::kExecutionKey, to);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -522,7 +515,7 @@ Stage::Result Execution::prune(db::RWTxn& txn) {
         }
 
         db::stages::write_stage_prune_progress(txn, db::stages::kExecutionKey, forward_progress);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,

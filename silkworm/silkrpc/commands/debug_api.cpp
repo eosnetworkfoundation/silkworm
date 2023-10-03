@@ -16,6 +16,7 @@
 
 #include "debug_api.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <ostream>
 #include <set>
@@ -23,10 +24,15 @@
 #include <string>
 #include <vector>
 
+#include <boost/asio/compose.hpp>
+#include <boost/asio/post.hpp>
 #include <evmc/evmc.hpp>
 
 #include <silkworm/core/common/endian.hpp>
 #include <silkworm/core/common/util.hpp>
+#include <silkworm/core/execution/address.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
+#include <silkworm/infra/common/ensure.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/node/db/tables.hpp>
 #include <silkworm/node/db/util.hpp>
@@ -35,6 +41,7 @@
 #include <silkworm/silkrpc/core/blocks.hpp>
 #include <silkworm/silkrpc/core/cached_chain.hpp>
 #include <silkworm/silkrpc/core/evm_debug.hpp>
+#include <silkworm/silkrpc/core/evm_executor.hpp>
 #include <silkworm/silkrpc/core/rawdb/chain.hpp>
 #include <silkworm/silkrpc/core/state_reader.hpp>
 #include <silkworm/silkrpc/core/storage_walker.hpp>
@@ -51,7 +58,7 @@ namespace silkworm::rpc::commands {
 static constexpr int16_t kAccountRangeMaxResults{256};
 
 // https://github.com/ethereum/retesteth/wiki/RPC-Methods#debug_accountrange
-awaitable<void> DebugRpcApi::handle_debug_account_range(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> DebugRpcApi::handle_debug_account_range(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.size() != 5) {
         auto error_msg = "invalid debug_accountRange params: " + params.dump();
@@ -66,24 +73,24 @@ awaitable<void> DebugRpcApi::handle_debug_account_range(const nlohmann::json& re
     const auto exclude_storage = params[4].get<bool>();
 
     silkworm::Bytes start_key(start_key_array.data(), start_key_array.size());
-    const auto start_address = silkworm::to_evmc_address(start_key);
+    const auto start_address = bytes_to_address(start_key);
 
     if (max_result > kAccountRangeMaxResults || max_result <= 0) {
         max_result = kAccountRangeMaxResults;
     }
 
-    SILK_INFO << "block_number_or_hash: " << block_number_or_hash
-              << " start_address: 0x" << silkworm::to_hex(start_address)
-              << " max_result: " << max_result
-              << " exclude_code: " << exclude_code
-              << " exclude_storage: " << exclude_storage;
+    SILK_TRACE << "block_number_or_hash: " << block_number_or_hash
+               << " start_address: " << start_address
+               << " max_result: " << max_result
+               << " exclude_code: " << exclude_code
+               << " exclude_storage: " << exclude_storage;
 
     auto tx = co_await database_->begin();
 
     try {
         auto start = std::chrono::system_clock::now();
         core::AccountDumper dumper{*tx};
-        DumpAccounts dump_accounts = co_await dumper.dump_accounts(*block_cache_, block_number_or_hash, start_address, max_result, exclude_code, exclude_storage);
+        DumpAccounts dump_accounts = co_await dumper.dump_accounts(*block_cache_, block_number_or_hash, backend_, start_address, max_result, exclude_code, exclude_storage);
         auto end = std::chrono::system_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start;
         SILK_DEBUG << "dump_accounts: elapsed " << elapsed_seconds.count() << " sec";
@@ -102,7 +109,7 @@ awaitable<void> DebugRpcApi::handle_debug_account_range(const nlohmann::json& re
 }
 
 // https://github.com/ethereum/retesteth/wiki/RPC-Methods#debug_getmodifiedaccountsbynumber
-awaitable<void> DebugRpcApi::handle_debug_get_modified_accounts_by_number(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> DebugRpcApi::handle_debug_get_modified_accounts_by_number(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.empty() || params.size() > 2) {
         auto error_msg = "invalid debug_getModifiedAccountsByNumber params: " + params.dump();
@@ -143,7 +150,7 @@ awaitable<void> DebugRpcApi::handle_debug_get_modified_accounts_by_number(const 
 }
 
 // https://github.com/ethereum/retesteth/wiki/RPC-Methods#debug_getmodifiedaccountsbyhash
-awaitable<void> DebugRpcApi::handle_debug_get_modified_accounts_by_hash(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> DebugRpcApi::handle_debug_get_modified_accounts_by_hash(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.empty() || params.size() > 2) {
         auto error_msg = "invalid debug_getModifiedAccountsByHash params: " + params.dump();
@@ -157,7 +164,7 @@ awaitable<void> DebugRpcApi::handle_debug_get_modified_accounts_by_hash(const nl
     if (params.size() == 2) {
         end_hash = params[1].get<evmc::bytes32>();
     }
-    SILK_DEBUG << "start_hash: " << start_hash << " end_hash: " << end_hash;
+    SILK_DEBUG << "start_hash: " << silkworm::to_hex(start_hash) << " end_hash: " << silkworm::to_hex(end_hash);
 
     auto tx = co_await database_->begin();
 
@@ -184,7 +191,7 @@ awaitable<void> DebugRpcApi::handle_debug_get_modified_accounts_by_hash(const nl
 }
 
 // https://github.com/ethereum/retesteth/wiki/RPC-Methods#debug_storagerangeat
-awaitable<void> DebugRpcApi::handle_debug_storage_range_at(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> DebugRpcApi::handle_debug_storage_range_at(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.empty() || params.size() > 5) {
         auto error_msg = "invalid debug_storageRangeAt params: " + params.dump();
@@ -201,7 +208,7 @@ awaitable<void> DebugRpcApi::handle_debug_storage_range_at(const nlohmann::json&
 
     SILK_DEBUG << "block_hash: 0x" << silkworm::to_hex(block_hash)
                << " tx_index: " << tx_index
-               << " address: 0x" << silkworm::to_hex(address)
+               << " address: " << address
                << " start_key: 0x" << silkworm::to_hex(start_key)
                << " max_result: " << max_result;
 
@@ -209,8 +216,17 @@ awaitable<void> DebugRpcApi::handle_debug_storage_range_at(const nlohmann::json&
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
 
-        const auto block_with_hash = co_await core::read_block_by_hash(*block_cache_, tx_database, block_hash);
+        const auto block_with_hash = co_await core::read_block_by_hash(*block_cache_, *chain_storage, block_hash);
+        if (!block_with_hash) {
+            const std::string error_msg = "block not found ";
+            SILK_ERROR << "debug_storage_range_at: core::read_block_by_hash: " << error_msg << request.dump();
+            reply = make_json_error(request["id"], -32000, error_msg);
+            co_await tx->close();  // RAII not (yet) available with coroutines
+            co_return;
+        }
+
         auto block_number = block_with_hash->block.header.number - 1;
 
         nlohmann::json storage({});
@@ -256,8 +272,109 @@ awaitable<void> DebugRpcApi::handle_debug_storage_range_at(const nlohmann::json&
     co_return;
 }
 
+// https://github.com/ethereum/retesteth/wiki/RPC-Methods#debugdebugaccountat
+Task<void> DebugRpcApi::handle_debug_account_at(const nlohmann::json& request, nlohmann::json& reply) {
+    const auto& params = request["params"];
+    if (params.empty() || params.size() < 3) {
+        auto error_msg = "invalid debug_accountAt params: " + params.dump();
+        SILK_ERROR << error_msg;
+        reply = make_json_error(request["id"], 100, error_msg);
+        co_return;
+    }
+
+    auto block_hash = params[0].get<evmc::bytes32>();
+    auto tx_index = params[1].get<uint64_t>();
+    auto address = params[2].get<evmc::address>();
+
+    SILK_DEBUG << "block_hash: 0x" << silkworm::to_hex(block_hash)
+               << " tx_index: " << tx_index
+               << " address: " << address;
+
+    auto tx = co_await database_->begin();
+
+    try {
+        ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+
+        const auto block_with_hash = co_await core::read_block_by_hash(*block_cache_, *chain_storage, block_hash);
+        if (!block_with_hash) {
+            const std::string error_msg = "block not found ";
+            SILK_ERROR << "handle_debug_account_at: core::read_block_by_hash: " << error_msg << request.dump();
+            reply = make_json_error(request["id"], -32000, error_msg);
+            co_await tx->close();  // RAII not (yet) available with coroutines
+            co_return;
+        }
+
+        const auto& block = block_with_hash->block;
+        auto block_number = block.header.number - 1;
+        const auto& transactions = block.transactions;
+
+        SILK_DEBUG << "Block number: " << block_number << " #tnx: " << transactions.size();
+
+        auto chain_config_ptr = co_await chain_storage->read_chain_config();
+        ensure(chain_config_ptr.has_value(), "cannot read chain config");
+        auto this_executor = co_await boost::asio::this_coro::executor;
+
+        auto result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(nlohmann::json)>(
+            [&](auto&& self) {
+                boost::asio::post(workers_, [&, self = std::move(self)]() mutable {
+                    auto state = tx->create_state(this_executor, tx_database, *chain_storage, block_number - 1);
+                    auto account_opt = state->read_account(address);
+                    account_opt.value_or(silkworm::Account{});
+
+                    EVMExecutor executor{*chain_config_ptr, workers_, state};
+
+                    uint64_t index = std::min(static_cast<uint64_t>(transactions.size()), tx_index + 1);
+                    for (uint64_t idx{0}; idx < index; idx++) {
+                        rpc::Transaction txn{transactions[idx]};
+                        if (!txn.from) {
+                            txn.recover_sender();
+                        }
+                        executor.call(block, txn);
+                    }
+
+                    const auto& ibs = executor.get_ibs_state();
+
+                    nlohmann::json json_result;
+                    if (ibs.exists(address)) {
+                        std::ostringstream oss;
+                        oss << ibs.get_nonce(address);
+                        json_result["nonce"] = "0x" + oss.str();
+                        json_result["balance"] = "0x" + intx::to_string(ibs.get_balance(address));
+                        json_result["codeHash"] = ibs.get_code_hash(address);
+                        json_result["code"] = "0x" + silkworm::to_hex(ibs.get_code(address));
+                    } else {
+                        json_result["balance"] = "0x0";
+                        json_result["code"] = "0x";
+                        json_result["codeHash"] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+                        json_result["nonce"] = "0x0";
+                    }
+
+                    boost::asio::post(this_executor, [json_result, self = std::move(self)]() mutable {
+                        self.complete(json_result);
+                    });
+                });
+            },
+            boost::asio::use_awaitable);
+
+        reply = make_json_content(request["id"], result);
+    } catch (const std::invalid_argument& e) {
+        SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
+        reply = make_json_error(request["id"], -32000, e.what());
+    } catch (const std::exception& e) {
+        SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
+        reply = make_json_error(request["id"], 100, e.what());
+    } catch (...) {
+        SILK_ERROR << "unexpected exception processing request: " << request.dump();
+        reply = make_json_error(request["id"], 100, "unexpected exception");
+    }
+
+    co_await tx->close();  // RAII not (yet) available with coroutines
+    co_return;
+}
+
 // https://github.com/ethereum/retesteth/wiki/RPC-Methods#debug_tracetransaction
-awaitable<void> DebugRpcApi::handle_debug_trace_transaction(const nlohmann::json& request, json::Stream& stream) {
+Task<void> DebugRpcApi::handle_debug_trace_transaction(const nlohmann::json& request, json::Stream& stream) {
     const auto& params = request["params"];
     if (params.empty()) {
         auto error_msg = "invalid debug_traceTransaction params: " + params.dump();
@@ -274,7 +391,7 @@ awaitable<void> DebugRpcApi::handle_debug_trace_transaction(const nlohmann::json
         config = params[1].get<debug::DebugConfig>();
     }
 
-    SILK_DEBUG << "transaction_hash: " << transaction_hash << " config: {" << config << "}";
+    SILK_DEBUG << "transaction_hash: " << silkworm::to_hex(transaction_hash) << " config: {" << config << "}";
 
     stream.open_object();
     stream.write_field("id", request["id"]);
@@ -285,7 +402,8 @@ awaitable<void> DebugRpcApi::handle_debug_trace_transaction(const nlohmann::json
     try {
         ethdb::TransactionDatabase tx_database{*tx};
         debug::DebugExecutor executor{tx_database, *block_cache_, workers_, *tx, config};
-        co_await executor.trace_transaction(stream, transaction_hash);
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+        co_await executor.trace_transaction(stream, *chain_storage, transaction_hash);
     } catch (const std::exception& e) {
         SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
         const Error error{100, e.what()};
@@ -303,7 +421,7 @@ awaitable<void> DebugRpcApi::handle_debug_trace_transaction(const nlohmann::json
 }
 
 // https://github.com/ethereum/retesteth/wiki/RPC-Methods#debug_tracecall
-awaitable<void> DebugRpcApi::handle_debug_trace_call(const nlohmann::json& request, json::Stream& stream) {
+Task<void> DebugRpcApi::handle_debug_trace_call(const nlohmann::json& request, json::Stream& stream) {
     const auto& params = request["params"];
     if (params.size() < 2) {
         auto error_msg = "invalid debug_traceCall params: " + params.dump();
@@ -331,17 +449,18 @@ awaitable<void> DebugRpcApi::handle_debug_trace_call(const nlohmann::json& reque
     try {
         ethdb::TransactionDatabase tx_database{*tx};
         ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
 
         const bool is_latest_block = co_await core::is_latest_block_number(block_number_or_hash, tx_database);
         const core::rawdb::DatabaseReader& db_reader =
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database);
 
         debug::DebugExecutor executor{db_reader, *block_cache_, workers_, *tx, config};
-        co_await executor.trace_call(stream, block_number_or_hash, call);
+        co_await executor.trace_call(stream, block_number_or_hash, *chain_storage, call);
     } catch (const std::exception& e) {
         SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
         std::ostringstream oss;
-        oss << "block " << block_number_or_hash.number() << "(" << block_number_or_hash.hash() << ") not found";
+        oss << "block " << block_number_or_hash.number() << "(" << silkworm::to_hex(block_number_or_hash.hash()) << ") not found";
         const Error error{-32000, oss.str()};
         stream.write_field("error", error);
     } catch (...) {
@@ -357,7 +476,7 @@ awaitable<void> DebugRpcApi::handle_debug_trace_call(const nlohmann::json& reque
 }
 
 // https://github.com/ethereum/retesteth/wiki/RPC-Methods#debug_tracecallmany
-awaitable<void> DebugRpcApi::handle_debug_trace_call_many(const nlohmann::json& request, json::Stream& stream) {
+Task<void> DebugRpcApi::handle_debug_trace_call_many(const nlohmann::json& request, json::Stream& stream) {
     if (!request.contains("params")) {
         auto error_msg = "missing value for required arguments";
         SILK_ERROR << error_msg << request.dump();
@@ -405,7 +524,8 @@ awaitable<void> DebugRpcApi::handle_debug_trace_call_many(const nlohmann::json& 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
         debug::DebugExecutor executor{tx_database, *block_cache_, workers_, *tx, config};
-        co_await executor.trace_call_many(stream, bundles, simulation_context);
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+        co_await executor.trace_call_many(stream, *chain_storage, bundles, simulation_context);
     } catch (...) {
         SILK_ERROR << "unexpected exception processing request: " << request.dump();
         const Error error{100, "unexpected exception"};
@@ -419,7 +539,7 @@ awaitable<void> DebugRpcApi::handle_debug_trace_call_many(const nlohmann::json& 
 }
 
 // https://github.com/ethereum/retesteth/wiki/RPC-Methods#debug_traceblockbynumber
-awaitable<void> DebugRpcApi::handle_debug_trace_block_by_number(const nlohmann::json& request, json::Stream& stream) {
+Task<void> DebugRpcApi::handle_debug_trace_block_by_number(const nlohmann::json& request, json::Stream& stream) {
     const auto& params = request["params"];
     if (params.empty()) {
         auto error_msg = "invalid debug_traceBlockByNumber params: " + params.dump();
@@ -428,7 +548,7 @@ awaitable<void> DebugRpcApi::handle_debug_trace_block_by_number(const nlohmann::
         stream.write_json(reply);
         co_return;
     }
-    const auto block_number = params[0].get<std::uint64_t>();
+    const auto block_number = params[0].get<BlockNum>();
 
     debug::DebugConfig config;
     if (params.size() > 1) {
@@ -445,9 +565,10 @@ awaitable<void> DebugRpcApi::handle_debug_trace_block_by_number(const nlohmann::
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
 
         debug::DebugExecutor executor{tx_database, *block_cache_, workers_, *tx, config};
-        co_await executor.trace_block(stream, block_number);
+        co_await executor.trace_block(stream, *chain_storage, block_number);
     } catch (const std::invalid_argument& e) {
         SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
         std::ostringstream oss;
@@ -471,7 +592,7 @@ awaitable<void> DebugRpcApi::handle_debug_trace_block_by_number(const nlohmann::
 }
 
 // https://github.com/ethereum/retesteth/wiki/RPC-Methods#debug_traceblockbyhash
-awaitable<void> DebugRpcApi::handle_debug_trace_block_by_hash(const nlohmann::json& request, json::Stream& stream) {
+Task<void> DebugRpcApi::handle_debug_trace_block_by_hash(const nlohmann::json& request, json::Stream& stream) {
     const auto& params = request["params"];
     if (params.empty()) {
         auto error_msg = "invalid debug_traceBlockByHash params: " + params.dump();
@@ -487,7 +608,7 @@ awaitable<void> DebugRpcApi::handle_debug_trace_block_by_hash(const nlohmann::js
         config = params[1].get<debug::DebugConfig>();
     }
 
-    SILK_DEBUG << "block_hash: " << block_hash << " config: {" << config << "}";
+    SILK_DEBUG << "block_hash: " << silkworm::to_hex(block_hash) << " config: {" << config << "}";
 
     stream.open_object();
     stream.write_field("id", request["id"]);
@@ -497,13 +618,14 @@ awaitable<void> DebugRpcApi::handle_debug_trace_block_by_hash(const nlohmann::js
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
 
         debug::DebugExecutor executor{tx_database, *block_cache_, workers_, *tx, config};
-        co_await executor.trace_block(stream, block_hash);
+        co_await executor.trace_block(stream, *chain_storage, block_hash);
     } catch (const std::invalid_argument& e) {
         SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
         std::ostringstream oss;
-        oss << "block_hash " << block_hash << " not found";
+        oss << "block_hash " << silkworm::to_hex(block_hash) << " not found";
         const Error error{-32000, oss.str()};
         stream.write_field("error", error);
     } catch (const std::exception& e) {
@@ -522,7 +644,7 @@ awaitable<void> DebugRpcApi::handle_debug_trace_block_by_hash(const nlohmann::js
     co_return;
 }
 
-awaitable<std::set<evmc::address>> get_modified_accounts(ethdb::TransactionDatabase& tx_database, uint64_t start_block_number, uint64_t end_block_number) {
+Task<std::set<evmc::address>> get_modified_accounts(ethdb::TransactionDatabase& tx_database, BlockNum start_block_number, BlockNum end_block_number) {
     const auto latest_block_number = co_await core::get_block_number(core::kLatestBlockId, tx_database);
 
     SILK_DEBUG << "latest: " << latest_block_number << " start: " << start_block_number << " end: " << end_block_number;
@@ -534,11 +656,11 @@ awaitable<std::set<evmc::address>> get_modified_accounts(ethdb::TransactionDatab
         throw std::invalid_argument(msg.str());
     } else if (start_block_number <= end_block_number) {
         core::rawdb::Walker walker = [&](const silkworm::Bytes& key, const silkworm::Bytes& value) {
-            auto block_number = static_cast<uint64_t>(std::stol(silkworm::to_hex(key), nullptr, 16));
+            auto block_number = static_cast<BlockNum>(std::stol(silkworm::to_hex(key), nullptr, 16));
             if (block_number <= end_block_number) {
-                auto address = silkworm::to_evmc_address(value.substr(0, silkworm::kAddressLength));
+                auto address = bytes_to_address(value.substr(0, kAddressLength));
 
-                SILK_TRACE << "Walker: processing block " << block_number << " address 0x" << silkworm::to_hex(address);
+                SILK_TRACE << "Walker: processing block " << block_number << " address " << address;
                 addresses.insert(address);
             }
             return block_number <= end_block_number;
@@ -551,6 +673,124 @@ awaitable<std::set<evmc::address>> get_modified_accounts(ethdb::TransactionDatab
     }
 
     co_return addresses;
+}
+
+Task<void> DebugRpcApi::handle_debug_get_raw_block(const nlohmann::json& request, nlohmann::json& reply) {
+    const auto& params = request["params"];
+
+    if (params.size() != 1) {
+        auto error_msg = "invalid debug_getRawBlock params: " + params.dump();
+        SILK_ERROR << error_msg;
+        reply = make_json_error(request["id"], 100, error_msg);
+        co_return;
+    }
+    const auto block_id = params[0].get<std::string>();
+    SILK_DEBUG << "block_id: " << block_id;
+
+    auto tx = co_await database_->begin();
+
+    try {
+        ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage = tx->create_storage(tx_database, nullptr);
+        const auto block_number = co_await core::get_block_number(block_id, tx_database);
+        silkworm::Block block;
+        if (!(co_await chain_storage->read_canonical_block(block_number, block))) {
+            throw std::invalid_argument("block not found");
+        }
+        Bytes encoded_block;
+        rlp::encode(encoded_block, block);
+        reply = make_json_content(request["id"], silkworm::to_hex(encoded_block, true));
+    } catch (const std::invalid_argument& iv) {
+        SILK_ERROR << "exception: " << iv.what() << " processing request: " << request.dump();
+        reply = make_json_error(request["id"], -32602, iv.what());
+    } catch (const std::exception& e) {
+        SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
+        reply = make_json_error(request["id"], 100, e.what());
+    } catch (...) {
+        SILK_ERROR << "unexpected exception processing request: " << request.dump();
+        reply = make_json_error(request["id"], 100, "unexpected exception");
+    }
+
+    co_await tx->close();  // RAII not (yet) available with coroutines
+    co_return;
+}
+
+Task<void> DebugRpcApi::handle_debug_get_raw_header(const nlohmann::json& request, nlohmann::json& reply) {
+    const auto& params = request["params"];
+    if (params.size() != 1) {
+        auto error_msg = "invalid debug_getRawHeader params: " + params.dump();
+        SILK_ERROR << error_msg;
+        reply = make_json_error(request["id"], 100, error_msg);
+        co_return;
+    }
+    const auto block_id = params[0].get<std::string>();
+    SILK_DEBUG << "block_id: " << block_id;
+
+    auto tx = co_await database_->begin();
+
+    try {
+        ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage = tx->create_storage(tx_database, nullptr);
+        const auto block_number = co_await core::get_block_number(block_id, tx_database);
+        const auto block_hash = co_await chain_storage->read_canonical_hash(block_number);
+        auto header = co_await chain_storage->read_header(block_number, block_hash->bytes);
+        if (!header) {
+            throw std::invalid_argument("header not found");
+        }
+        Bytes encoded_header;
+        rlp::encode(encoded_header, *header);
+        reply = make_json_content(request["id"], silkworm::to_hex(encoded_header, true));
+    } catch (const std::invalid_argument& iv) {
+        SILK_ERROR << "exception: " << iv.what() << " processing request: " << request.dump();
+        reply = make_json_error(request["id"], -32602, iv.what());
+    } catch (const std::exception& e) {
+        SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
+        reply = make_json_error(request["id"], 100, e.what());
+    } catch (...) {
+        SILK_ERROR << "unexpected exception processing request: " << request.dump();
+        reply = make_json_error(request["id"], 100, "unexpected exception");
+    }
+
+    co_await tx->close();  // RAII not (yet) available with coroutines
+    co_return;
+}
+
+Task<void> DebugRpcApi::handle_debug_get_raw_transaction(const nlohmann::json& request, nlohmann::json& reply) {
+    auto params = request["params"];
+    if (params.size() != 1) {
+        auto error_msg = "invalid debug_getRawTransaction params: " + params.dump();
+        SILK_ERROR << error_msg;
+        reply = make_json_error(request["id"], 100, error_msg);
+        co_return;
+    }
+    auto transaction_hash = params[0].get<evmc::bytes32>();
+    SILK_DEBUG << "transaction_hash: " << silkworm::to_hex(transaction_hash);
+
+    auto tx = co_await database_->begin();
+
+    try {
+        ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage{tx->create_storage(tx_database, nullptr)};
+
+        Bytes rlp{};
+        auto success = co_await chain_storage->read_rlp_transaction(transaction_hash, rlp);
+        if (!success) {
+            throw std::invalid_argument("transaction not found");
+        }
+        reply = make_json_content(request["id"], silkworm::to_hex(rlp, true));
+    } catch (const std::invalid_argument& iv) {
+        SILK_WARN << "invalid_argument: " << iv.what() << " processing request: " << request.dump();
+        reply = make_json_error(request["id"], -32602, iv.what());
+    } catch (const std::exception& e) {
+        SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
+        reply = make_json_error(request["id"], 100, e.what());
+    } catch (...) {
+        SILK_ERROR << "unexpected exception processing request: " << request.dump();
+        reply = make_json_error(request["id"], 100, "unexpected exception");
+    }
+
+    co_await tx->close();  // RAII not (yet) available with coroutines
+    co_return;
 }
 
 }  // namespace silkworm::rpc::commands

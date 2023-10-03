@@ -19,8 +19,10 @@
 #include <cstdlib>
 
 #include <silkworm/core/common/util.hpp>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/protocol/ethash_rule_set.hpp>
 #include <silkworm/core/protocol/intrinsic_gas.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 
 void* new_buffer(size_t size) { return std::malloc(size); }
 
@@ -151,7 +153,7 @@ uint8_t* state_root_hash_new(const InMemoryState* state) {
     return static_cast<uint8_t*>(out);
 }
 
-static evmc::address address_from_ptr(const uint8_t* ptr) { return to_evmc_address({ptr, kAddressLength}); }
+static evmc::address address_from_ptr(const uint8_t* ptr) { return bytes_to_address({ptr, kAddressLength}); }
 
 static evmc::bytes32 bytes32_from_ptr(const uint8_t* ptr) { return to_bytes32({ptr, kHashLength}); }
 
@@ -182,7 +184,7 @@ Bytes* state_read_storage_new(const State* state, const uint8_t* address, const 
                               const Bytes* location) {
     evmc::bytes32 value{state->read_storage(address_from_ptr(address), account->incarnation, to_bytes32(*location))};
     auto out{new Bytes};
-    *out = zeroless_view(value);
+    *out = zeroless_view(value.bytes);
     return out;
 }
 

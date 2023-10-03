@@ -16,15 +16,14 @@
 
 #pragma once
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
-#include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
 #include <nlohmann/json.hpp>
 
+#include <silkworm/core/common/block_cache.hpp>
 #include <silkworm/infra/concurrency/private_service.hpp>
 #include <silkworm/infra/concurrency/shared_service.hpp>
-#include <silkworm/silkrpc/common/block_cache.hpp>
 #include <silkworm/silkrpc/core/rawdb/accessors.hpp>
 #include <silkworm/silkrpc/ethdb/database.hpp>
 #include <silkworm/silkrpc/json/types.hpp>
@@ -35,25 +34,25 @@ class RequestHandler;
 
 namespace silkworm::rpc::commands {
 
-using boost::asio::awaitable;
-
 class ParityRpcApi {
   public:
     explicit ParityRpcApi(boost::asio::io_context& io_context)
         : block_cache_{must_use_shared_service<BlockCache>(io_context)},
-          database_{must_use_private_service<ethdb::Database>(io_context)} {}
+          database_{must_use_private_service<ethdb::Database>(io_context)},
+          backend_{must_use_private_service<ethbackend::BackEnd>(io_context)} {}
     virtual ~ParityRpcApi() = default;
 
     ParityRpcApi(const ParityRpcApi&) = delete;
     ParityRpcApi& operator=(const ParityRpcApi&) = delete;
 
   protected:
-    awaitable<void> handle_parity_get_block_receipts(const nlohmann::json& request, nlohmann::json& reply);
-    awaitable<void> handle_parity_list_storage_keys(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_parity_get_block_receipts(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_parity_list_storage_keys(const nlohmann::json& request, nlohmann::json& reply);
 
   private:
     BlockCache* block_cache_;
     ethdb::Database* database_;
+    ethbackend::BackEnd* backend_;
 
     friend class silkworm::http::RequestHandler;
 };

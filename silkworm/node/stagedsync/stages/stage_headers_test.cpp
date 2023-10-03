@@ -19,7 +19,7 @@
 #include <catch2/catch.hpp>
 
 #include <silkworm/core/chain/genesis.hpp>
-#include <silkworm/core/common/cast.hpp>
+#include <silkworm/core/common/bytes_to_string.hpp>
 #include <silkworm/node/db/genesis.hpp>
 #include <silkworm/node/test/context.hpp>
 
@@ -42,7 +42,7 @@ TEST_CASE("HeadersStage - data model") {
      *         h0 <----- h1
      */
     SECTION("one header after the genesis") {
-        db::RWTxn tx(context.env());
+        db::RWTxnManaged tx(context.env());
 
         auto header0_hash = db::read_canonical_hash(tx, 0);
         REQUIRE(header0_hash.has_value());
@@ -85,7 +85,7 @@ TEST_CASE("HeadersStage - data model") {
      *                |-- h1'
      */
     SECTION("some header after the genesis") {
-        db::RWTxn tx(context.env());
+        db::RWTxnManaged tx(context.env());
 
         // starting from an initial status
         auto header0 = db::read_canonical_header(tx, 0);

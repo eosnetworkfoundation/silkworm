@@ -17,7 +17,6 @@
 #include "sentry.hpp"
 
 #include <cassert>
-#include <functional>
 #include <optional>
 #include <string>
 
@@ -29,9 +28,11 @@
 #include <silkworm/infra/concurrency/awaitable_wait_for_all.hpp>
 #include <silkworm/sentry/common/ecc_key_pair.hpp>
 #include <silkworm/sentry/common/enode_url.hpp>
+#include <silkworm/sentry/discovery/common/node_address.hpp>
+#include <silkworm/sentry/discovery/enr/enr_record.hpp>
 
-#include "api/api_common/node_info.hpp"
-#include "api/api_common/service.hpp"
+#include "api/common/node_info.hpp"
+#include "api/common/service.hpp"
 #include "api/router/direct_service.hpp"
 #include "api/router/service_router.hpp"
 #include "discovery/discovery.hpp"
@@ -41,6 +42,7 @@
 #include "message_sender.hpp"
 #include "nat/ip_resolver.hpp"
 #include "node_key_config.hpp"
+#include "peer_discovery_feedback.hpp"
 #include "peer_manager.hpp"
 #include "peer_manager_api.hpp"
 #include "rlpx/client.hpp"
@@ -54,40 +56,44 @@ using namespace boost;
 
 class SentryImpl final {
   public:
-    explicit SentryImpl(Settings settings, silkworm::rpc::ServerContextPool& context_pool);
+    explicit SentryImpl(Settings settings, concurrency::ExecutorPool& executor_pool);
 
     SentryImpl(const SentryImpl&) = delete;
     SentryImpl& operator=(const SentryImpl&) = delete;
 
     Task<void> run();
 
-    [[nodiscard]] std::shared_ptr<api::api_common::Service> service() { return direct_service_; }
+    [[nodiscard]] std::shared_ptr<api::Service> service() { return direct_service_; }
 
   private:
     void setup_node_key();
     Task<void> run_tasks();
-    Task<void> start_status_manager();
-    Task<void> start_server();
-    Task<void> start_discovery();
-    Task<void> start_peer_manager();
-    Task<void> start_message_sender();
-    Task<void> start_message_receiver();
-    Task<void> start_peer_manager_api();
-    Task<void> start_grpc_server();
+    Task<void> run_status_manager();
+    Task<void> run_server();
+    Task<void> run_discovery();
+    Task<void> run_peer_manager();
+    Task<void> run_message_sender();
+    Task<void> run_message_receiver();
+    Task<void> run_peer_manager_api();
+    Task<void> run_peer_discovery_feedback();
+    Task<void> run_grpc_server();
     std::unique_ptr<rlpx::Protocol> make_protocol();
     std::function<std::unique_ptr<rlpx::Protocol>()> protocol_factory();
     std::unique_ptr<rlpx::Client> make_client();
     std::function<std::unique_ptr<rlpx::Client>()> client_factory();
     [[nodiscard]] std::string client_id() const;
-    [[nodiscard]] common::EnodeUrl make_node_url() const;
-    [[nodiscard]] api::api_common::NodeInfo make_node_info() const;
-    [[nodiscard]] std::function<api::api_common::NodeInfo()> node_info_provider() const;
-    [[nodiscard]] std::function<common::EccKeyPair()> node_key_provider() const;
+    [[nodiscard]] EnodeUrl make_node_url() const;
+    [[nodiscard]] api::NodeInfo make_node_info() const;
+    [[nodiscard]] discovery::enr::EnrRecord make_node_record();
+    [[nodiscard]] std::function<api::NodeInfo()> node_info_provider() const;
+    [[nodiscard]] std::function<EccKeyPair()> node_key_provider() const;
+    [[nodiscard]] std::function<EnodeUrl()> node_url_provider() const;
+    [[nodiscard]] std::function<discovery::enr::EnrRecord()> node_record_provider();
 
     Settings settings_;
     std::optional<NodeKey> node_key_;
     std::optional<boost::asio::ip::address> public_ip_;
-    silkworm::rpc::ServerContextPool& context_pool_;
+    concurrency::ExecutorPool& executor_pool_;
 
     StatusManager status_manager_;
 
@@ -98,6 +104,7 @@ class SentryImpl final {
     MessageSender message_sender_;
     std::shared_ptr<MessageReceiver> message_receiver_;
     std::shared_ptr<PeerManagerApi> peer_manager_api_;
+    std::shared_ptr<PeerDiscoveryFeedback> peer_discovery_feedback_;
 
     api::router::ServiceRouter service_router_;
     std::shared_ptr<api::router::DirectService> direct_service_;
@@ -117,7 +124,7 @@ static api::router::ServiceRouter make_service_router(
     MessageSender& message_sender,
     MessageReceiver& message_receiver,
     PeerManagerApi& peer_manager_api,
-    std::function<api::api_common::NodeInfo()> node_info_provider) {
+    std::function<api::NodeInfo()> node_info_provider) {
     return api::router::ServiceRouter{
         eth::Protocol::kVersion,
         status_channel,
@@ -132,16 +139,27 @@ static api::router::ServiceRouter make_service_router(
     };
 }
 
-SentryImpl::SentryImpl(Settings settings, silkworm::rpc::ServerContextPool& context_pool)
+SentryImpl::SentryImpl(Settings settings, concurrency::ExecutorPool& executor_pool)
     : settings_(std::move(settings)),
-      context_pool_(context_pool),
-      status_manager_(context_pool_.next_io_context()),
-      rlpx_server_(context_pool_.next_io_context(), settings_.port),
-      discovery_(settings_.static_peers, !settings_.no_discover, settings_.data_dir_path, node_key_provider(), settings_.port),
-      peer_manager_(context_pool_.next_io_context(), settings_.max_peers, context_pool_),
-      message_sender_(context_pool_.next_io_context()),
-      message_receiver_(std::make_shared<MessageReceiver>(context_pool_.next_io_context(), settings_.max_peers)),
-      peer_manager_api_(std::make_shared<PeerManagerApi>(context_pool_.next_io_context(), peer_manager_)),
+      executor_pool_(executor_pool),
+      status_manager_(executor_pool.any_executor()),
+      rlpx_server_(executor_pool.any_executor(), settings_.port),
+      discovery_(
+          executor_pool,
+          settings_.static_peers,
+          !settings_.no_discover,
+          settings_.data_dir_path,
+          settings_.network_id,
+          node_key_provider(),
+          node_url_provider(),
+          node_record_provider(),
+          settings_.bootnodes,
+          settings_.port),
+      peer_manager_(executor_pool.any_executor(), settings_.max_peers, executor_pool_),
+      message_sender_(executor_pool.any_executor()),
+      message_receiver_(std::make_shared<MessageReceiver>(executor_pool.any_executor(), settings_.max_peers)),
+      peer_manager_api_(std::make_shared<PeerManagerApi>(executor_pool.any_executor(), peer_manager_)),
+      peer_discovery_feedback_(std::make_shared<PeerDiscoveryFeedback>(executor_pool.any_executor(), settings_.max_peers)),
       service_router_(make_service_router(status_manager_.status_channel(), message_sender_, *message_receiver_, *peer_manager_api_, node_info_provider())),
       direct_service_(std::make_shared<api::router::DirectService>(service_router_)),
       grpc_server_(make_server_config(settings_), service_router_) {
@@ -155,7 +173,7 @@ Task<void> SentryImpl::run() {
     public_ip_ = co_await nat::ip_resolver(settings_.nat);
     log::Info("sentry") << "Node URL: " << make_node_url().to_string();
 
-    co_await (run_tasks() && start_grpc_server());
+    co_await (run_tasks() && run_grpc_server());
 }
 
 void SentryImpl::setup_node_key() {
@@ -172,13 +190,14 @@ Task<void> SentryImpl::run_tasks() {
     log::Info("sentry") << "Sentry received initial status message";
 
     co_await (
-        start_status_manager() &&
-        start_server() &&
-        start_discovery() &&
-        start_peer_manager() &&
-        start_message_sender() &&
-        start_message_receiver() &&
-        start_peer_manager_api());
+        run_status_manager() &&
+        run_server() &&
+        run_discovery() &&
+        run_peer_manager() &&
+        run_message_sender() &&
+        run_message_receiver() &&
+        run_peer_manager_api() &&
+        run_peer_discovery_feedback());
 }
 
 std::unique_ptr<rlpx::Protocol> SentryImpl::make_protocol() {
@@ -189,43 +208,52 @@ std::function<std::unique_ptr<rlpx::Protocol>()> SentryImpl::protocol_factory() 
     return [this] { return this->make_protocol(); };
 }
 
-Task<void> SentryImpl::start_status_manager() {
-    return status_manager_.start();
+Task<void> SentryImpl::run_status_manager() {
+    return status_manager_.run();
 }
 
-Task<void> SentryImpl::start_server() {
-    return rlpx_server_.start(context_pool_, node_key_.value(), client_id(), protocol_factory());
+Task<void> SentryImpl::run_server() {
+    return rlpx_server_.run(executor_pool_, node_key_.value(), client_id(), protocol_factory());
 }
 
 std::unique_ptr<rlpx::Client> SentryImpl::make_client() {
-    return std::make_unique<rlpx::Client>(node_key_.value(), client_id(), settings_.port, protocol_factory());
+    return std::make_unique<rlpx::Client>(
+        node_key_.value(),
+        client_id(),
+        settings_.port,
+        /* max_retries = */ 2,
+        protocol_factory());
 }
 
 std::function<std::unique_ptr<rlpx::Client>()> SentryImpl::client_factory() {
     return [this] { return this->make_client(); };
 }
 
-Task<void> SentryImpl::start_discovery() {
+Task<void> SentryImpl::run_discovery() {
     return discovery_.run();
 }
 
-Task<void> SentryImpl::start_peer_manager() {
-    return peer_manager_.start(rlpx_server_, discovery_, client_factory());
+Task<void> SentryImpl::run_peer_manager() {
+    return peer_manager_.run(rlpx_server_, discovery_, client_factory());
 }
 
-Task<void> SentryImpl::start_message_sender() {
-    return message_sender_.start(peer_manager_);
+Task<void> SentryImpl::run_message_sender() {
+    return message_sender_.run(peer_manager_);
 }
 
-Task<void> SentryImpl::start_message_receiver() {
-    return MessageReceiver::start(message_receiver_, peer_manager_);
+Task<void> SentryImpl::run_message_receiver() {
+    return MessageReceiver::run(message_receiver_, peer_manager_);
 }
 
-Task<void> SentryImpl::start_peer_manager_api() {
-    return PeerManagerApi::start(peer_manager_api_);
+Task<void> SentryImpl::run_peer_manager_api() {
+    return PeerManagerApi::run(peer_manager_api_);
 }
 
-Task<void> SentryImpl::start_grpc_server() {
+Task<void> SentryImpl::run_peer_discovery_feedback() {
+    return PeerDiscoveryFeedback::run(peer_discovery_feedback_, peer_manager_, discovery_);
+}
+
+Task<void> SentryImpl::run_grpc_server() {
     if (!settings_.api_address.empty()) {
         co_await grpc_server_.async_run();
     }
@@ -244,17 +272,18 @@ std::string SentryImpl::client_id() const {
     return "silkworm";
 }
 
-common::EnodeUrl SentryImpl::make_node_url() const {
+EnodeUrl SentryImpl::make_node_url() const {
     assert(node_key_);
     assert(public_ip_);
-    return common::EnodeUrl{
+    return EnodeUrl{
         node_key_.value().public_key(),
         public_ip_.value(),
+        settings_.port,
         settings_.port,
     };
 }
 
-api::api_common::NodeInfo SentryImpl::make_node_info() const {
+api::NodeInfo SentryImpl::make_node_info() const {
     return {
         make_node_url(),
         client_id(),
@@ -263,19 +292,51 @@ api::api_common::NodeInfo SentryImpl::make_node_info() const {
     };
 }
 
-std::function<api::api_common::NodeInfo()> SentryImpl::node_info_provider() const {
+discovery::enr::EnrRecord SentryImpl::make_node_record() {
+    discovery::NodeAddress address{*public_ip_, settings_.port, settings_.port};
+    std::optional<discovery::NodeAddress> address_v4;
+    std::optional<discovery::NodeAddress> address_v6;
+    if (public_ip_->is_v4()) {
+        address_v4 = std::move(address);
+    } else if (public_ip_->is_v6()) {
+        address_v6 = std::move(address);
+    }
+
+    auto status_data = status_manager_.status_provider()();
+    Bytes eth1_fork_id_data = status_data.message.fork_id.rlp_encode_enr_entry();
+
+    return {
+        node_key_->public_key(),
+        1,
+        std::move(address_v4),
+        std::move(address_v6),
+        std::move(eth1_fork_id_data),
+        std::nullopt,
+        std::nullopt,
+    };
+}
+
+std::function<api::NodeInfo()> SentryImpl::node_info_provider() const {
     return [this] { return this->make_node_info(); };
 }
 
-std::function<common::EccKeyPair()> SentryImpl::node_key_provider() const {
+std::function<EccKeyPair()> SentryImpl::node_key_provider() const {
     return [this] {
         assert(this->node_key_);
         return this->node_key_.value();
     };
 }
 
-Sentry::Sentry(Settings settings, silkworm::rpc::ServerContextPool& context_pool)
-    : p_impl_(std::make_unique<SentryImpl>(std::move(settings), context_pool)) {
+std::function<EnodeUrl()> SentryImpl::node_url_provider() const {
+    return [this] { return this->make_node_url(); };
+}
+
+std::function<discovery::enr::EnrRecord()> SentryImpl::node_record_provider() {
+    return [this] { return this->make_node_record(); };
+}
+
+Sentry::Sentry(Settings settings, concurrency::ExecutorPool& executor_pool)
+    : p_impl_(std::make_unique<SentryImpl>(std::move(settings), executor_pool)) {
 }
 
 Sentry::~Sentry() {
@@ -286,7 +347,7 @@ Task<void> Sentry::run() {
     return p_impl_->run();
 }
 
-Task<std::shared_ptr<api::api_common::Service>> Sentry::service() {
+Task<std::shared_ptr<api::Service>> Sentry::service() {
     co_return p_impl_->service();
 }
 

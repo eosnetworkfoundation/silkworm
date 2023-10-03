@@ -23,6 +23,7 @@
 
 #include <silkworm/core/chain/config.hpp>
 #include <silkworm/core/common/endian.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/infra/common/directories.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/common/stopwatch.hpp>
@@ -80,7 +81,7 @@ int main(int argc, char* argv[]) {
         // Set database parameters
         db::EnvConfig db_config{options.datadir};
         auto env{db::open_env(db_config)};
-        db::ROTxn txn{env};
+        db::ROTxnManaged txn{env};
 
         auto config{db::read_chain_config(txn)};
         if (!config.has_value()) {

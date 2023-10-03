@@ -27,6 +27,7 @@ See https://en.wikipedia.org/wiki/Endianness
 #include <intx/intx.hpp>
 
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 #include <silkworm/core/common/decoding_result.hpp>
 
 namespace silkworm::endian {
@@ -57,6 +58,15 @@ const auto store_big_u32 = intx::be::unsafe::store<uint32_t>;
 
 // Similar to boost::endian::store_big_u64
 const auto store_big_u64 = intx::be::unsafe::store<uint64_t>;
+
+// Similar to boost::endian::store_little_u16
+const auto store_little_u16 = intx::le::unsafe::store<uint16_t>;
+
+// Similar to boost::endian::store_little_u32
+const auto store_little_u32 = intx::le::unsafe::store<uint32_t>;
+
+// Similar to boost::endian::store_little_u64
+const auto store_little_u64 = intx::le::unsafe::store<uint64_t>;
 
 //! \brief Transforms a uint64_t stored in memory with native endianness to it's compacted big endian byte form
 //! \param [in] value : the value to be transformed

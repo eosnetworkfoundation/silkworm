@@ -26,6 +26,7 @@
 #include <glaze/glaze.hpp>
 #pragma GCC diagnostic pop
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 
 namespace silkworm::rpc {
 
@@ -36,12 +37,13 @@ struct Log {
     silkworm::Bytes data;
 
     /* derived fields */
-    uint64_t block_number{0};
+    BlockNum block_number{0};
     evmc::bytes32 tx_hash;
     uint32_t tx_index{0};
     evmc::bytes32 block_hash;
     uint32_t index{0};
     bool removed{false};
+    std::optional<uint64_t> timestamp{std::nullopt};
 };
 
 typedef std::vector<Log> Logs;

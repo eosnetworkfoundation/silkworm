@@ -19,13 +19,14 @@
 #include <string>
 #include <utility>
 
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/json/types.hpp>
 
 namespace silkworm::rpc::commands {
 
 // https://eth.wiki/json-rpc/API#txpool_status
-boost::asio::awaitable<void> TxPoolRpcApi::handle_txpool_status(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TxPoolRpcApi::handle_txpool_status(const nlohmann::json& request, nlohmann::json& reply) {
     try {
         const auto status = co_await tx_pool_->get_status();
         TxPoolStatusInfo txpool_status{status.base_fee_count, status.pending_count, status.queued_count};
@@ -42,7 +43,7 @@ boost::asio::awaitable<void> TxPoolRpcApi::handle_txpool_status(const nlohmann::
 }
 
 // https://geth.ethereum.org/docs/rpc/ns-txpool
-boost::asio::awaitable<void> TxPoolRpcApi::handle_txpool_content(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TxPoolRpcApi::handle_txpool_content(const nlohmann::json& request, nlohmann::json& reply) {
     try {
         const auto txpool_transactions = co_await tx_pool_->get_transactions();
 
@@ -54,7 +55,7 @@ boost::asio::awaitable<void> TxPoolRpcApi::handle_txpool_content(const nlohmann:
         bool error = false;
         for (std::size_t i{0}; i < txpool_transactions.size(); i++) {
             silkworm::ByteView from{txpool_transactions[i].rlp};
-            std::string sender = silkworm::to_hex(txpool_transactions[i].sender, true);
+            std::string sender = address_to_hex(txpool_transactions[i].sender);
             Transaction txn{};
             const auto result = silkworm::rlp::decode_transaction(from, txn, rlp::Eip2718Wrapping::kBoth);
             if (!result) {

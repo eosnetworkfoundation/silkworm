@@ -18,6 +18,8 @@
 
 #include <catch2/catch.hpp>
 
+#include <silkworm/core/types/evmc_bytes32.hpp>
+
 namespace silkworm {
 
 TEST_CASE("Hex") {
@@ -39,7 +41,7 @@ TEST_CASE("Hex") {
     parsed_bytes = from_hex("0x0");
     CHECK((parsed_bytes.has_value() == true && parsed_bytes.value() == expected_bytes));
 
-    expected_bytes = {0x0a};
+    expected_bytes = Bytes{0x0a};
     parsed_bytes = from_hex("0xa");
     CHECK((parsed_bytes.has_value() == true && parsed_bytes.value() == expected_bytes));
 
@@ -91,9 +93,23 @@ TEST_CASE("Integrals to hex") {
 }
 
 TEST_CASE("Zeroless view") {
-    CHECK(to_hex(zeroless_view(0x0000000000000000000000000000000000000000000000000000000000000000_bytes32)).empty());
-    CHECK(to_hex(zeroless_view(0x000000000000000000000000000000000000000000000000000000000004bc00_bytes32)) ==
-          "04bc00");
+    SECTION("from bytes32") {
+        CHECK(to_hex(zeroless_view((0x0000000000000000000000000000000000000000000000000000000000000000_bytes32).bytes)).empty());
+        CHECK(to_hex(zeroless_view((0x000000000000000000000000000000000000000000000000000000000004bc00_bytes32).bytes)) ==
+              "04bc00");
+        CHECK(to_hex(zeroless_view((0x100000000000000000000000000000000000000000000000000000000004bc00_bytes32).bytes)) ==
+              "100000000000000000000000000000000000000000000000000000000004bc00");
+    }
+    SECTION("from Bytes") {
+        Bytes block_num_as_bytes(sizeof(BlockNum), '\0');
+        intx::be::unsafe::store<uint64_t>(block_num_as_bytes.data(), 12'209'569);
+        CHECK(to_hex(zeroless_view(block_num_as_bytes)) == "ba4da1");
+    }
+    SECTION("from ByteView") {
+        CHECK(to_hex(zeroless_view(ByteView{})) == "");
+        CHECK(to_hex(zeroless_view(ByteView{{0x01, 0x00}})) == "0100");
+        CHECK(to_hex(zeroless_view(ByteView{{00, 01}})) == "01");
+    }
 }
 
 TEST_CASE("to_bytes32") {

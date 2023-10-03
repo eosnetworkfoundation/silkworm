@@ -25,6 +25,7 @@
 #include <iostream>
 #include <vector>
 
+#include <absl/strings/str_join.h>
 #include <boost/asio/write.hpp>
 #include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/nlohmann-json/defaults.h>
@@ -38,7 +39,7 @@
 
 namespace silkworm::rpc::http {
 
-boost::asio::awaitable<void> RequestHandler::handle(const http::Request& request) {
+Task<void> RequestHandler::handle(const http::Request& request) {
     auto start = clock_time::now();
 
     http::Reply reply;
@@ -46,7 +47,7 @@ boost::asio::awaitable<void> RequestHandler::handle(const http::Request& request
         reply.content = "";
         reply.status = http::StatusType::no_content;
     } else {
-        SILK_DEBUG << "handle_user_request content: " << request.content;
+        SILK_TRACE << "handle HTTP request content #size: " << request.content.size();
 
         std::optional<nlohmann::json> request_json;
         try {
@@ -59,9 +60,9 @@ boost::asio::awaitable<void> RequestHandler::handle(const http::Request& request
                 reply.status = http::StatusType::ok;
             } else {
                 const auto request_id = request_json->at("id");
-                const auto error = co_await is_request_authorized(request);
-                if (error.has_value()) {
-                    reply.content = make_json_error(request_id, 403, error.value()).dump() + "\n";
+                const auto auth_result = is_request_authorized(request);
+                if (!auth_result) {
+                    reply.content = make_json_error(request_id, 403, auth_result.error()).dump() + "\n";
                     reply.status = http::StatusType::unauthorized;
                 } else {
                     co_await handle_request_and_create_reply(request_json.value(), reply);
@@ -78,9 +79,9 @@ boost::asio::awaitable<void> RequestHandler::handle(const http::Request& request
                     reply.status = http::StatusType::ok;
                 } else {
                     auto request_id = item_json["id"];
-                    const auto error = co_await is_request_authorized(request);
-                    if (error.has_value()) {
-                        reply.content = make_json_error(request_id, 403, error.value()).dump() + "\n";
+                    const auto auth_result = is_request_authorized(request);
+                    if (!auth_result) {
+                        reply.content = make_json_error(request_id, 403, auth_result.error()).dump() + "\n";
                         reply.status = http::StatusType::unauthorized;
                     } else {
                         if (first_element) {
@@ -100,10 +101,10 @@ boost::asio::awaitable<void> RequestHandler::handle(const http::Request& request
 
     co_await do_write(reply);
 
-    SILK_INFO << "handle_user_request t=" << clock_time::since(start) << "ns";
+    SILK_TRACE << "handle HTTP request t=" << clock_time::since(start) << "ns";
 }
 
-boost::asio::awaitable<void> RequestHandler::handle_request_and_create_reply(const nlohmann::json& request_json, http::Reply& reply) {
+Task<void> RequestHandler::handle_request_and_create_reply(const nlohmann::json& request_json, http::Reply& reply) {
     const auto request_id = request_json["id"];
     if (!request_json.contains("method")) {
         reply.content = make_json_error(request_id, -32600, "invalid request").dump();
@@ -121,17 +122,23 @@ boost::asio::awaitable<void> RequestHandler::handle_request_and_create_reply(con
     // Dispatch JSON handlers in this order: 1) glaze JSON 2) nlohmann JSON 3) JSON streaming
     const auto json_glaze_handler = rpc_api_table_.find_json_glaze_handler(method);
     if (json_glaze_handler) {
+        SILK_TRACE << "--> handle RPC request: " << method;
         co_await handle_request(request_id, *json_glaze_handler, request_json, reply);
+        SILK_TRACE << "<-- handle RPC request: " << method;
         co_return;
     }
     const auto json_handler = rpc_api_table_.find_json_handler(method);
     if (json_handler) {
+        SILK_TRACE << "--> handle RPC request: " << method;
         co_await handle_request(request_id, *json_handler, request_json, reply);
+        SILK_TRACE << "<-- handle RPC request: " << method;
         co_return;
     }
     const auto stream_handler = rpc_api_table_.find_stream_handler(method);
     if (stream_handler) {
+        SILK_TRACE << "--> handle RPC stream request: " << method;
         co_await handle_request(*stream_handler, request_json);
+        SILK_TRACE << "<-- handle RPC stream request: " << method;
         co_return;
     }
 
@@ -141,7 +148,8 @@ boost::asio::awaitable<void> RequestHandler::handle_request_and_create_reply(con
     co_return;
 }
 
-boost::asio::awaitable<void> RequestHandler::handle_request(const nlohmann::json& request_id, commands::RpcApiTable::HandleMethodGlaze handler, const nlohmann::json& request_json, http::Reply& reply) {
+Task<void> RequestHandler::handle_request(const nlohmann::json& request_id, commands::RpcApiTable::HandleMethodGlaze handler, const nlohmann::json& request_json, http::Reply& reply) {
+    SILK_DEBUG << "1 handle_request IN";
     try {
         std::string reply_json;
         reply_json.reserve(2048);
@@ -161,7 +169,8 @@ boost::asio::awaitable<void> RequestHandler::handle_request(const nlohmann::json
     co_return;
 }
 
-boost::asio::awaitable<void> RequestHandler::handle_request(const nlohmann::json& request_id, commands::RpcApiTable::HandleMethod handler, const nlohmann::json& request_json, http::Reply& reply) {
+Task<void> RequestHandler::handle_request(const nlohmann::json& request_id, commands::RpcApiTable::HandleMethod handler, const nlohmann::json& request_json, http::Reply& reply) {
+    SILK_ERROR << "2 handle_request IN";
     try {
         nlohmann::json reply_json;
         co_await (rpc_api_.*handler)(request_json, reply_json);
@@ -182,7 +191,7 @@ boost::asio::awaitable<void> RequestHandler::handle_request(const nlohmann::json
     co_return;
 }
 
-boost::asio::awaitable<void> RequestHandler::handle_request(commands::RpcApiTable::HandleStream handler, const nlohmann::json& request_json) {
+Task<void> RequestHandler::handle_request(commands::RpcApiTable::HandleStream handler, const nlohmann::json& request_json) {
     try {
         SocketWriter socket_writer(socket_);
         ChunksWriter chunks_writer(socket_writer);
@@ -201,9 +210,9 @@ boost::asio::awaitable<void> RequestHandler::handle_request(commands::RpcApiTabl
     co_return;
 }
 
-boost::asio::awaitable<std::optional<std::string>> RequestHandler::is_request_authorized(const http::Request& request) {
+RequestHandler::AuthorizationResult RequestHandler::is_request_authorized(const http::Request& request) {
     if (!jwt_secret_.has_value() || (*jwt_secret_).empty()) {
-        co_return std::nullopt;
+        return {};
     }
 
     const auto it = std::find_if(request.headers.begin(), request.headers.end(), [&](const Header& h) {
@@ -211,8 +220,8 @@ boost::asio::awaitable<std::optional<std::string>> RequestHandler::is_request_au
     });
 
     if (it == request.headers.end()) {
-        SILK_ERROR << "JWT request without Authorization in auth connection";
-        co_return "missing Authorization Header";
+        SILK_ERROR << "JWT request without Authorization field";
+        return tl::make_unexpected("missing Authorization Header");
     }
 
     std::string client_token;
@@ -220,38 +229,43 @@ boost::asio::awaitable<std::optional<std::string>> RequestHandler::is_request_au
         client_token = it->value.substr(7);
     } else {
         SILK_ERROR << "JWT client request without token";
-        co_return "missing token";
+        return tl::make_unexpected("missing token");
     }
     try {
         // Parse token
         auto decoded_client_token = jwt::decode(client_token);
         if (decoded_client_token.has_issued_at() == 0) {
             SILK_ERROR << "JWT iat (Issued At) not defined";
-            co_return "iat(Issued At) not defined";
+            return tl::make_unexpected("iat(Issued At) not defined");
         }
         // Validate token
         auto verifier = jwt::verify().allow_algorithm(jwt::algorithm::hs256{*jwt_secret_});
 
-        SILK_TRACE << "jwt client token: " << client_token << " jwt_secret: " << *jwt_secret_;
+        SILK_TRACE << "JWT client token: " << client_token << " secret: " << *jwt_secret_;
         verifier.verify(decoded_client_token);
     } catch (const boost::system::system_error& se) {
         SILK_ERROR << "JWT invalid token: " << se.what();
-        co_return "invalid token";
+        return tl::make_unexpected("invalid token");
     } catch (const std::exception& se) {
         SILK_ERROR << "JWT invalid token: " << se.what();
-        co_return "invalid token";
+        return tl::make_unexpected("invalid token");
     }
 
-    co_return std::nullopt;
+    return {};
 }
 
-boost::asio::awaitable<void> RequestHandler::do_write(Reply& reply) {
+//! The number of HTTP headers added when Cross-Origin Resource Sharing (CORS) is enabled.
+static constexpr size_t kCorsNumHeaders{4};
+
+Task<void> RequestHandler::do_write(Reply& reply) {
     try {
         SILK_DEBUG << "RequestHandler::do_write reply: " << reply.content;
 
-        reply.headers.reserve(2);
+        reply.headers.reserve(allowed_origins_.empty() ? 2 : 2 + kCorsNumHeaders);
         reply.headers.emplace_back(http::Header{"Content-Length", std::to_string(reply.content.size())});
         reply.headers.emplace_back(http::Header{"Content-Type", "application/json"});
+
+        set_cors(reply.headers);
 
         const auto bytes_transferred = co_await boost::asio::async_write(socket_, reply.to_buffers(), boost::asio::use_awaitable);
         SILK_TRACE << "RequestHandler::do_write bytes_transferred: " << bytes_transferred;
@@ -262,12 +276,14 @@ boost::asio::awaitable<void> RequestHandler::do_write(Reply& reply) {
     }
 }
 
-boost::asio::awaitable<void> RequestHandler::write_headers() {
+Task<void> RequestHandler::write_headers() {
     try {
         std::vector<http::Header> headers;
-        headers.reserve(2);
+        headers.reserve(allowed_origins_.empty() ? 2 : 2 + kCorsNumHeaders);
         headers.emplace_back(http::Header{"Content-Type", "application/json"});
         headers.emplace_back(http::Header{"Transfer-Encoding", "chunked"});
+
+        set_cors(headers);
 
         auto buffers = http::to_buffers(StatusType::ok, headers);
 
@@ -279,6 +295,21 @@ boost::asio::awaitable<void> RequestHandler::write_headers() {
     } catch (const std::exception& e) {
         std::rethrow_exception(std::make_exception_ptr(e));
     }
+}
+
+void RequestHandler::set_cors(std::vector<Header>& headers) {
+    if (allowed_origins_.empty()) {
+        return;
+    }
+
+    if (allowed_origins_.at(0) == "*") {
+        headers.emplace_back(http::Header{"Access-Control-Allow-Origin", "*"});
+    } else {
+        headers.emplace_back(http::Header{"Access-Control-Allow-Origin", absl::StrJoin(allowed_origins_, ",")});
+    }
+    headers.emplace_back(http::Header{"Access-Control-Allow-Methods", "GET, POST"});
+    headers.emplace_back(http::Header{"Access-Control-Allow-Headers", "*"});
+    headers.emplace_back(http::Header{"Access-Control-Max-Age", "600"});
 }
 
 }  // namespace silkworm::rpc::http

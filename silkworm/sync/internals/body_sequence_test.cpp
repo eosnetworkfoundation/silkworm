@@ -21,7 +21,8 @@
 #include <catch2/catch.hpp>
 
 #include <silkworm/core/chain/genesis.hpp>
-#include <silkworm/core/common/cast.hpp>
+#include <silkworm/core/common/bytes_to_string.hpp>
+#include <silkworm/infra/test_util/log.hpp>
 #include <silkworm/node/db/genesis.hpp>
 #include <silkworm/node/test/context.hpp>
 #include <silkworm/sync/sentry_client.hpp>
@@ -45,6 +46,7 @@ TEST_CASE("body downloading", "[silkworm][sync][BodySequence]") {
     using namespace std::chrono_literals;
     using intx::operator""_u256;
 
+    test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
     test::Context context;
     context.add_genesis_data();
 
@@ -447,11 +449,11 @@ TEST_CASE("body downloading", "[silkworm][sync][BodySequence]") {
         BlockHeader header2;
         header2.number = 2;
         header2.parent_hash = header1_hash;
-        db::RWTxn txn2{context.env()};
+        db::RWTxnManaged txn2{context.env()};
         db::write_canonical_header_hash(txn2, header2.hash().bytes, 1);
         db::write_canonical_header(txn2, header2);
         db::write_header(txn2, header2, true);
-        txn2.commit();
+        txn2.commit_and_renew();
         bs.download_bodies({make_shared<BlockHeader>(header2)});
 
         std::shared_ptr<OutboundMessage> message2 = bs.request_bodies(tp);

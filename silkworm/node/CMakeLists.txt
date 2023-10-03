@@ -16,7 +16,7 @@
 
 find_package(absl REQUIRED)
 find_package(asio-grpc REQUIRED)
-find_package(Boost REQUIRED container thread)
+find_package(Boost REQUIRED headers container)
 find_package(nlohmann_json REQUIRED)
 find_package(gRPC REQUIRED)
 find_package(magic_enum REQUIRED)
@@ -24,42 +24,7 @@ find_package(Protobuf REQUIRED)
 find_package(roaring REQUIRED)
 find_package(tomlplusplus REQUIRED)
 
-# Generate source files containing snapshot TOML files as binary data
-set(SILKWORM_EMBED embed)
-find_package(CLI11 REQUIRED)
-add_executable(${SILKWORM_EMBED} ${SILKWORM_MAIN_DIR}/cmd/dev/embed.cpp)
-target_link_libraries(${SILKWORM_EMBED} PRIVATE CLI11::CLI11 Boost::headers)
-
-set(SILKWORM_TOML_SRC_DIR "${SILKWORM_MAIN_DIR}/third_party/erigon-snapshot")
-set(SILKWORM_TOML_SRC
-    ${SILKWORM_TOML_SRC_DIR}/bor-mainnet.toml
-    ${SILKWORM_TOML_SRC_DIR}/bsc.toml
-    ${SILKWORM_TOML_SRC_DIR}/gnosis.toml
-    ${SILKWORM_TOML_SRC_DIR}/goerli.toml
-    ${SILKWORM_TOML_SRC_DIR}/mainnet.toml
-    ${SILKWORM_TOML_SRC_DIR}/mumbai.toml
-    ${SILKWORM_TOML_SRC_DIR}/ropsten.toml
-    ${SILKWORM_TOML_SRC_DIR}/sepolia.toml
-)
-set(SILKWORM_TOML_CPP_SRC_DIR "${SILKWORM_MAIN_SRC_DIR}/node/snapshot/config")
-set(SILKWORM_TOML_CPP_SRC
-    ${SILKWORM_TOML_CPP_SRC_DIR}/bor_mainnet.cpp
-    ${SILKWORM_TOML_CPP_SRC_DIR}/bsc.cpp
-    ${SILKWORM_TOML_CPP_SRC_DIR}/gnosis.cpp
-    ${SILKWORM_TOML_CPP_SRC_DIR}/goerli.cpp
-    ${SILKWORM_TOML_CPP_SRC_DIR}/mainnet.cpp
-    ${SILKWORM_TOML_CPP_SRC_DIR}/mumbai.cpp
-    ${SILKWORM_TOML_CPP_SRC_DIR}/ropsten.cpp
-    ${SILKWORM_TOML_CPP_SRC_DIR}/sepolia.cpp
-)
-
-add_custom_command(
-  OUTPUT "${SILKWORM_TOML_CPP_SRC}"
-  COMMAND "${SILKWORM_EMBED}" ARGS -i "${SILKWORM_TOML_SRC_DIR}" -o "${SILKWORM_TOML_CPP_SRC_DIR}" -e ".toml" -s "toml"
-  DEPENDS "${SILKWORM_EMBED}"
-)
-
-add_custom_target(generate_toml DEPENDS "${SILKWORM_TOML_SRC}" "${SILKWORM_EMBED}")
+add_subdirectory(snapshot/config)
 
 file(
   GLOB_RECURSE
@@ -74,15 +39,7 @@ file(
 list(FILTER SILKWORM_NODE_SRC EXCLUDE REGEX "_test\\.cpp$")
 list(FILTER SILKWORM_NODE_SRC EXCLUDE REGEX "_benchmark\\.cpp$")
 
-add_library(silkworm_node "${SILKWORM_NODE_SRC}" "${SILKWORM_TOML_CPP_SRC}")
-
-add_dependencies(silkworm_node generate_toml)
-
-# Suppress ASAN/TSAN in gRPC to avoid ODR violation when building Silkworm with sanitizers See
-# https://github.com/grpc/grpc/issues/19224
-if(SILKWORM_SANITIZE)
-  target_compile_definitions(silkworm_node PRIVATE GRPC_ASAN_SUPPRESSED GRPC_TSAN_SUPPRESSED)
-endif()
+add_library(silkworm_node "${SILKWORM_NODE_SRC}")
 
 target_include_directories(silkworm_node PUBLIC "${SILKWORM_MAIN_DIR}")
 
@@ -95,7 +52,7 @@ set(SILKWORM_NODE_PUBLIC_LIBS
     absl::flat_hash_set
     asio-grpc::asio-grpc
     Boost::container
-    Boost::thread
+    Boost::headers
     gRPC::grpc++
     mdbx-static
     nlohmann_json::nlohmann_json
@@ -110,6 +67,7 @@ set(SILKWORM_NODE_PRIVATE_LIBS
     evmone
     magic_enum::magic_enum
     silkworm_interfaces
+    silkworm_node_snapshot_config
     tomlplusplus::tomlplusplus
 )
 # cmake-format: on
