@@ -16,9 +16,41 @@
 
 #include "stage_log_index.hpp"
 
+#include <gsl/narrow>
 #include <magic_enum.hpp>
 
+#include <silkworm/node/types/log_cbor.hpp>
+
 namespace silkworm::stagedsync {
+
+//! LogBitmapBuilder is a CBOR consumer which builds address and topic roaring bitmaps from the CBOR
+//! representation of a sequence of Logs
+class LogBitmapBuilder : public LogCborConsumer {
+  public:
+    using AddressHandler = std::function<void(std::span<const uint8_t, kAddressLength>)>;
+    using TopicHandler = std::function<void(HashAsSpan)>;
+
+    LogBitmapBuilder(AddressHandler address_callback, TopicHandler topic_callback)
+        : address_callback_{address_callback}, topic_callback_{topic_callback} {}
+
+    void on_num_logs(std::size_t /*num_logs*/) override {}
+
+    void on_address(std::span<const uint8_t, kAddressLength> address) override {
+        address_callback_(address);
+    }
+
+    void on_num_topics(std::size_t /*num_topics*/) override {}
+
+    void on_topic(HashAsSpan topic) override {
+        topic_callback_(topic);
+    }
+
+    void on_data(std::span<const uint8_t> /*data*/) override {}
+
+  private:
+    AddressHandler address_callback_;
+    TopicHandler topic_callback_;
+};
 
 Stage::Result LogIndex::forward(db::RWTxn& txn) {
     Stage::Result ret{Stage::Result::kSuccess};
@@ -62,7 +94,7 @@ Stage::Result LogIndex::forward(db::RWTxn& txn) {
 
         reset_log_progress();
         update_progress(txn, target_progress);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -122,7 +154,7 @@ Stage::Result LogIndex::unwind(db::RWTxn& txn) {
 
         reset_log_progress();
         update_progress(txn, to);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -191,7 +223,7 @@ Stage::Result LogIndex::prune(db::RWTxn& txn) {
 
         reset_log_progress();
         db::stages::write_stage_prune_progress(txn, stage_name_, forward_progress);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -239,7 +271,7 @@ void LogIndex::forward_impl(db::RWTxn& txn, const BlockNum from, const BlockNum 
     index_loader_ = std::make_unique<db::bitmap::IndexLoader>(db::table::kLogAddressIndex);
     log_lck.unlock();
 
-    index_loader_->merge_bitmaps(txn, kAddressLength, addresses_collector_.get());
+    index_loader_->merge_bitmaps32(txn, kAddressLength, addresses_collector_.get());
 
     log_lck.lock();
     current_key_.clear();
@@ -247,7 +279,7 @@ void LogIndex::forward_impl(db::RWTxn& txn, const BlockNum from, const BlockNum 
     index_loader_ = std::make_unique<db::bitmap::IndexLoader>(db::table::kLogTopicIndex);
     log_lck.unlock();
 
-    index_loader_->merge_bitmaps(txn, kHashLength, topics_collector_.get());
+    index_loader_->merge_bitmaps32(txn, kHashLength, topics_collector_.get());
 
     log_lck.lock();
     loading_ = false;
@@ -275,14 +307,14 @@ void LogIndex::unwind_impl(db::RWTxn& txn, BlockNum from, BlockNum to) {
     index_loader_ = std::make_unique<db::bitmap::IndexLoader>(db::table::kLogAddressIndex);
     log_lck.unlock();
 
-    index_loader_->unwind_bitmaps(txn, to, addresses_keys);
+    index_loader_->unwind_bitmaps32(txn, to, addresses_keys);
 
     log_lck.lock();
     current_target_ = db::table::kLogTopicIndex.name;
     index_loader_ = std::make_unique<db::bitmap::IndexLoader>(db::table::kLogTopicIndex);
     log_lck.unlock();
 
-    index_loader_->unwind_bitmaps(txn, to, topics_keys);
+    index_loader_->unwind_bitmaps32(txn, to, topics_keys);
 
     log_lck.lock();
     index_loader_.reset();
@@ -301,45 +333,35 @@ void LogIndex::collect_bitmaps_from_logs(db::RWTxn& txn,
     const BlockNum max_block_number{to};
     BlockNum reached_block_number{0};
 
-    absl::btree_map<Bytes, roaring::Roaring64Map> topics_bitmaps;
-    absl::btree_map<Bytes, roaring::Roaring64Map> addresses_bitmaps;
+    absl::btree_map<Bytes, roaring::Roaring> topics_bitmaps;
+    absl::btree_map<Bytes, roaring::Roaring> addresses_bitmaps;
     size_t topics_bitmaps_size{0};
     size_t addresses_bitmaps_size{0};
     uint16_t topics_flush_count{0};
     uint16_t addresses_flush_count{0};
 
-    // The function we use to collect decoded data into bitmaps
-    cbor_function on_log_bytes{[&topics_bitmaps,
-                                &topics_bitmaps_size,
-                                &addresses_bitmaps,
-                                &addresses_bitmaps_size,
-                                &reached_block_number](unsigned char* data, int size) -> void {
-        // We need either a hash or an address
-        auto s{static_cast<size_t>(size)};
-        if (s != kHashLength && s != kAddressLength) return;
-
-        Bytes key(data, s);
-        if (key.size() == kHashLength) {
-            auto it{topics_bitmaps.find(key)};
-            if (it == topics_bitmaps.end()) {
-                it = topics_bitmaps.emplace(key, roaring::Roaring64Map()).first;
-                topics_bitmaps_size += key.size() + sizeof(BlockNum);
-            }
-            it->second.add(reached_block_number);
-            topics_bitmaps_size += sizeof(uint32_t);
-        } else {
+    // The CBOR consumer we use to collect decoded data into bitmaps
+    LogBitmapBuilder bitmap_builder{
+        [&](std::span<const uint8_t, kAddressLength> address_data) {
+            Bytes key(address_data.data(), address_data.size());
             auto it{addresses_bitmaps.find(key)};
             if (it == addresses_bitmaps.end()) {
-                it = addresses_bitmaps.emplace(key, roaring::Roaring64Map()).first;
-                addresses_bitmaps_size += key.size() + sizeof(BlockNum);
+                it = addresses_bitmaps.emplace(key, roaring::Roaring()).first;
+                addresses_bitmaps_size += key.size() + sizeof(uint32_t);
             }
-            it->second.add(reached_block_number);
+            it->second.add(gsl::narrow<uint32_t>(reached_block_number));
             addresses_bitmaps_size += sizeof(uint32_t);
-        }
-    }};
-
-    // Listener to CBOR decoder
-    CborListener listener{on_log_bytes};
+        },
+        [&](HashAsSpan topic_data) {
+            Bytes key(topic_data.data(), topic_data.size());
+            auto it{topics_bitmaps.find(key)};
+            if (it == topics_bitmaps.end()) {
+                it = topics_bitmaps.emplace(key, roaring::Roaring()).first;
+                topics_bitmaps_size += key.size() + sizeof(uint32_t);
+            }
+            it->second.add(gsl::narrow<uint32_t>(reached_block_number));
+            topics_bitmaps_size += sizeof(uint32_t);
+        }};
 
     auto start_key{db::block_key(from + 1)};
     auto source = txn.ro_cursor(source_config);
@@ -357,11 +379,9 @@ void LogIndex::collect_bitmaps_from_logs(db::RWTxn& txn,
         }
 
         // Decode CBOR value content and distribute it to the 2 bitmaps
-        cbor::input input(source_data.value.data(), static_cast<int>(source_data.value.length()));
-        cbor::decoder decoder(input, listener);
-        decoder.run();
+        cbor_decode({static_cast<uint8_t*>(source_data.value.data()), source_data.value.length()}, bitmap_builder);
 
-        // Flushes
+        // Flush bitmaps batch by batch
         if (topics_bitmaps_size > node_settings_->batch_size) {
             db::bitmap::IndexLoader::flush_bitmaps_to_etl(topics_bitmaps,
                                                           topics_collector_.get(),
@@ -379,17 +399,9 @@ void LogIndex::collect_bitmaps_from_logs(db::RWTxn& txn,
         source_data = source->to_next(/*throw_notfound=*/false);
     }
 
-    if (topics_bitmaps_size > 0) {
-        db::bitmap::IndexLoader::flush_bitmaps_to_etl(topics_bitmaps,
-                                                      topics_collector_.get(),
-                                                      topics_flush_count);
-    }
-    
-    if (addresses_bitmaps_size > 0) {
-        db::bitmap::IndexLoader::flush_bitmaps_to_etl(addresses_bitmaps,
-                                                      addresses_collector_.get(),
-                                                      addresses_flush_count);
-    }
+    // Flush remaining portion of bitmaps (if any)
+    db::bitmap::IndexLoader::flush_bitmaps_to_etl(topics_bitmaps, topics_collector_.get(), topics_flush_count);
+    db::bitmap::IndexLoader::flush_bitmaps_to_etl(addresses_bitmaps, addresses_collector_.get(), addresses_flush_count);
 }
 
 void LogIndex::collect_unique_keys_from_logs(db::RWTxn& txn,
@@ -404,23 +416,16 @@ void LogIndex::collect_unique_keys_from_logs(db::RWTxn& txn,
     const BlockNum max_block_number{std::max(from, to)};
     BlockNum reached_block_number{0};
 
-    // The function we use to collect decoded data into bitmaps
-    cbor_function on_log_bytes{[&addresses,
-                                &topics](unsigned char* data, int size) -> void {
-        // We need either a hash or an address
-        auto s{static_cast<size_t>(size)};
-        if (s != kHashLength && s != kAddressLength) return;
-
-        Bytes key(data, s);
-        if (key.size() == kHashLength) {
-            (void)topics.try_emplace(key, false);
-        } else {
+    // The CBOR consumer we use to collect decoded data into bitmaps
+    LogBitmapBuilder bitmap_builder{
+        [&](std::span<const uint8_t, kAddressLength> address_data) {
+            Bytes key(address_data.data(), address_data.size());
             (void)addresses.try_emplace(key, false);
-        }
-    }};
-
-    // Listener to CBOR decoder
-    CborListener listener{on_log_bytes};
+        },
+        [&](HashAsSpan topic_data) {
+            Bytes key(topic_data.data(), topic_data.size());
+            (void)topics.try_emplace(key, false);
+        }};
 
     auto start_key{db::block_key(expected_block_number)};
     auto source = txn.ro_cursor(source_config);
@@ -438,9 +443,8 @@ void LogIndex::collect_unique_keys_from_logs(db::RWTxn& txn,
         }
 
         // Decode CBOR value content and distribute it to the 2 bitmaps
-        cbor::input input(source_data.value.data(), static_cast<int>(source_data.value.length()));
-        cbor::decoder decoder(input, listener);
-        decoder.run();
+        cbor_decode({static_cast<uint8_t*>(source_data.value.data()), source_data.value.length()}, bitmap_builder);
+
         source_data = source->to_next(/*throw_notfound=*/false);
     }
 }
@@ -455,7 +459,7 @@ void LogIndex::prune_impl(db::RWTxn& txn, BlockNum threshold, const db::MapConfi
     index_loader_ = std::make_unique<db::bitmap::IndexLoader>(target);
     log_lck.unlock();
 
-    index_loader_->prune_bitmaps(txn, threshold);
+    index_loader_->prune_bitmaps32(txn, threshold);
 
     log_lck.lock();
     index_loader_.reset();
@@ -508,6 +512,7 @@ std::vector<std::string> LogIndex::get_log_progress() {
     }
     return ret;
 }
+
 void LogIndex::reset_log_progress() {
     std::unique_lock log_lck(sl_mutex_);
     loading_ = false;
@@ -515,4 +520,5 @@ void LogIndex::reset_log_progress() {
     current_target_.clear();
     current_key_.clear();
 }
+
 }  // namespace silkworm::stagedsync

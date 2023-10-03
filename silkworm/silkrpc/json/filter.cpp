@@ -53,7 +53,7 @@ void from_json(const nlohmann::json& json, Filter& filter) {
         if (json_from_block.is_string()) {
             filter.from_block = json_from_block.get<std::string>();
         } else {
-            filter.from_block = to_quantity(json_from_block.get<uint64_t>());
+            filter.from_block = to_quantity(json_from_block.get<BlockNum>());
         }
     }
     if (json.count("toBlock") != 0) {
@@ -61,7 +61,7 @@ void from_json(const nlohmann::json& json, Filter& filter) {
         if (json_to_block.is_string()) {
             filter.to_block = json_to_block.get<std::string>();
         } else {
-            filter.to_block = to_quantity(json_to_block.get<uint64_t>());
+            filter.to_block = to_quantity(json_to_block.get<BlockNum>());
         }
     }
     if (json.count("address") != 0) {
@@ -90,4 +90,18 @@ void from_json(const nlohmann::json& json, Filter& filter) {
     }
 }
 
+void from_json(const nlohmann::json& json, LogFilterOptions& filter_options) {
+    if (json.count("logCount") != 0) {
+        const auto& value = json.at("logCount");
+        filter_options.log_count = value.get<std::uint64_t>();
+    }
+    if (json.count("blockCount") != 0) {
+        const auto& value = json.at("blockCount");
+        filter_options.block_count = value.get<std::uint64_t>();
+    }
+    if (json.count("ignoreTopicsOrder") != 0) {
+        const auto& value = json.at("ignoreTopicsOrder");
+        filter_options.ignore_topics_order = value.get<bool>();
+    }
+}
 }  // namespace silkworm::rpc

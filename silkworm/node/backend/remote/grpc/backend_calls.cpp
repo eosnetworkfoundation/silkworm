@@ -16,6 +16,7 @@
 
 #include "backend_calls.hpp"
 
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/grpc/client/call.hpp>
 #include <silkworm/infra/grpc/common/conversion.hpp>
@@ -24,8 +25,6 @@
 #include <silkworm/sentry/grpc/interfaces/node_info.hpp>
 
 namespace silkworm::rpc {
-
-using boost::asio::awaitable;
 
 remote::EtherbaseReply EtherbaseCall::response_;
 
@@ -37,11 +36,11 @@ void EtherbaseCall::fill_predefined_reply(const EthereumBackEnd& backend) {
     }
 }
 
-awaitable<void> EtherbaseCall::operator()(const EthereumBackEnd& /*backend*/) {
+Task<void> EtherbaseCall::operator()(const EthereumBackEnd& /*backend*/) {
     SILK_TRACE << "EtherbaseCall START";
     if (response_.has_address()) {
         co_await agrpc::finish(responder_, response_, grpc::Status::OK);
-        SILK_TRACE << "EtherbaseCall END etherbase: " << to_hex(address_from_H160(response_.address()));
+        SILK_TRACE << "EtherbaseCall END etherbase: " << address_from_H160(response_.address());
     } else {
         const grpc::Status error{grpc::StatusCode::INTERNAL, "etherbase must be explicitly specified"};
         co_await agrpc::finish_with_error(responder_, error);
@@ -59,13 +58,13 @@ void NetVersionCall::fill_predefined_reply(const EthereumBackEnd& backend) {
     }
 }
 
-awaitable<void> NetVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
+Task<void> NetVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
     SILK_TRACE << "NetVersionCall START";
     co_await agrpc::finish(responder_, response_, grpc::Status::OK);
     SILK_TRACE << "NetVersionCall END chain_id: " << response_.id();
 }
 
-awaitable<void> NetPeerCountCall::operator()(const EthereumBackEnd& backend) {
+Task<void> NetPeerCountCall::operator()(const EthereumBackEnd& backend) {
     SILK_TRACE << "NetPeerCountCall START";
 
     auto sentry_client = backend.sentry_client();
@@ -99,7 +98,7 @@ void BackEndVersionCall::fill_predefined_reply() {
     BackEndVersionCall::response_.set_patch(std::get<2>(kEthBackEndApiVersion));
 }
 
-awaitable<void> BackEndVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
+Task<void> BackEndVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
     SILK_TRACE << "BackEndVersionCall START";
     co_await agrpc::finish(responder_, response_, grpc::Status::OK);
     SILK_TRACE << "BackEndVersionCall END version: " << response_.major() << "." << response_.minor() << "." << response_.patch();
@@ -111,7 +110,7 @@ void ProtocolVersionCall::fill_predefined_reply() {
     ProtocolVersionCall::response_.set_id(kEthDevp2pProtocolVersion);
 }
 
-awaitable<void> ProtocolVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
+Task<void> ProtocolVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
     SILK_TRACE << "ProtocolVersionCall START";
     co_await agrpc::finish(responder_, response_, grpc::Status::OK);
     SILK_TRACE << "ProtocolVersionCall END id: " << response_.id();
@@ -123,13 +122,13 @@ void ClientVersionCall::fill_predefined_reply(const EthereumBackEnd& backend) {
     ClientVersionCall::response_.set_node_name(backend.node_name());
 }
 
-awaitable<void> ClientVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
+Task<void> ClientVersionCall::operator()(const EthereumBackEnd& /*backend*/) {
     SILK_TRACE << "ClientVersionCall START";
     co_await agrpc::finish(responder_, response_, grpc::Status::OK);
     SILK_TRACE << "ClientVersionCall END node name: " << response_.node_name();
 }
 
-awaitable<void> SubscribeCall::operator()(const EthereumBackEnd& /*backend*/) {
+Task<void> SubscribeCall::operator()(const EthereumBackEnd& /*backend*/) {
     SILK_TRACE << "SubscribeCall START type: " << request_.type();
 
     // TODO(canepat): remove this example and fill the correct stream responses
@@ -145,7 +144,7 @@ awaitable<void> SubscribeCall::operator()(const EthereumBackEnd& /*backend*/) {
     SILK_TRACE << "SubscribeCall END";
 }
 
-awaitable<void> NodeInfoCall::operator()(const EthereumBackEnd& backend) {
+Task<void> NodeInfoCall::operator()(const EthereumBackEnd& backend) {
     SILK_TRACE << "NodeInfoCall START limit: " << request_.limit();
 
     auto sentry_client = backend.sentry_client();

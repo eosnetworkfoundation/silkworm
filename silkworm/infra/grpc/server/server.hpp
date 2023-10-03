@@ -21,9 +21,8 @@
 #include <utility>
 #include <vector>
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
-#include <boost/asio/awaitable.hpp>
 #include <grpcpp/grpcpp.h>
 
 #include <silkworm/infra/common/log.hpp>
@@ -77,22 +76,22 @@ class Server {
         }
 
         // gRPC async model requires the server to register the RPC services first.
-        SILK_DEBUG << "Server " << this << " registering async services";
+        SILK_TRACE << "Server " << this << " registering async services";
         register_async_services(builder);
 
         server_ = builder.BuildAndStart();
-        SILK_DEBUG << "Server " << this << " bound at selected port: " << selected_port;
+        SILK_TRACE << "Server " << this << " bound at selected port: " << selected_port;
         if (server_ == nullptr) {
             SILK_ERROR << "Server " << this << " BuildAndStart failed [" << settings_.address_uri << "]";
             throw std::runtime_error("cannot start gRPC server at " + settings_.address_uri);
         }
 
         // gRPC async model requires the server to register one request call for each RPC in advance.
-        SILK_DEBUG << "Server " << this << " registering request calls";
+        SILK_TRACE << "Server " << this << " registering request calls";
         register_request_calls();
 
         // Start the server execution: the context pool will spawn the context threads.
-        SILK_DEBUG << "Server " << this << " starting execution loop";
+        SILK_TRACE << "Server " << this << " starting execution loop";
         context_pool_.start();
 
         SILK_TRACE << "Server::build_and_start " << this << " END";
@@ -115,7 +114,7 @@ class Server {
         }
         shutdown_ = true;
 
-        SILK_DEBUG << "Server::shutdown " << this << " shutting down server immediately";
+        SILK_TRACE << "Server::shutdown " << this << " shutting down server immediately";
 
         // Order matters here: 1) shutdown the server (immediate deadline)
         if (server_) {
@@ -123,7 +122,7 @@ class Server {
             server_->Wait();
         }
 
-        SILK_DEBUG << "Server::shutdown " << this << " stopping context pool";
+        SILK_TRACE << "Server::shutdown " << this << " stopping context pool";
 
         // Order matters here: 2) shutdown and drain the queues
         context_pool_.stop();
@@ -131,13 +130,13 @@ class Server {
         SILK_TRACE << "Server::shutdown " << this << " END";
     }
 
-    boost::asio::awaitable<void> async_run() {
+    Task<void> async_run(const char* thread_name) {
         auto run = [this] {
             this->build_and_start();
             this->join();
         };
         auto stop = [this] { this->shutdown(); };
-        co_await concurrency::async_thread(std::move(run), std::move(stop));
+        co_await concurrency::async_thread(std::move(run), std::move(stop), thread_name);
     }
 
     //! Returns the number of server contexts.

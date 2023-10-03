@@ -31,13 +31,12 @@ ExecutionEngine::ExecutionEngine(asio::io_context& ctx, NodeSettings& ns, db::RW
     : io_context_{ctx},
       node_settings_{ns},
       main_chain_(ctx, ns, dba),
-      block_cache_{kDefaultCacheSize} {
-    last_finalized_block_ = main_chain_.last_finalized_head();
-    last_fork_choice_ = main_chain_.last_chosen_head();
-}
+      block_cache_{kDefaultCacheSize} {}
 
 void ExecutionEngine::open() {  // needed to circumvent mdbx threading model limitations
     main_chain_.open();
+    last_finalized_block_ = main_chain_.last_finalized_head();
+    last_fork_choice_ = main_chain_.last_chosen_head();
     block_progress_ = main_chain_.get_block_progress();
 }
 
@@ -45,15 +44,15 @@ void ExecutionEngine::close() {
     main_chain_.close();
 }
 
-auto ExecutionEngine::block_progress() const -> BlockNum {
+BlockNum ExecutionEngine::block_progress() const {
     return block_progress_;  // main_chain_.get_block_progress() or forks block progress
 }
 
-auto ExecutionEngine::last_fork_choice() const -> BlockId {
+BlockId ExecutionEngine::last_fork_choice() const {
     return last_fork_choice_;
 }
 
-auto ExecutionEngine::last_finalized_block() const -> BlockId {
+BlockId ExecutionEngine::last_finalized_block() const {
     return last_finalized_block_;
 }
 
@@ -109,7 +108,7 @@ bool ExecutionEngine::insert_block(const std::shared_ptr<Block> block) {
     return true;
 }
 
-auto ExecutionEngine::find_forking_point(const BlockHeader& header) const -> std::optional<ForkingPath> {
+std::optional<ExecutionEngine::ForkingPath> ExecutionEngine::find_forking_point(const BlockHeader& header) const {
     ForkingPath path;  // a path from the header to the first block of the main chain using parent-child relationship
 
     // search in cache till to the main chain
@@ -125,7 +124,7 @@ auto ExecutionEngine::find_forking_point(const BlockHeader& header) const -> std
     if (path.forking_point == main_chain_.last_chosen_head()) return {std::move(path)};
 
     // search remaining path on main chain
-    if (main_chain_.is_canonical(path.forking_point)) return {std::move(path)};
+    if (main_chain_.is_finalized_canonical(path.forking_point)) return {std::move(path)};
 
     auto forking_point = main_chain_.find_forking_point(path.forking_point.hash);
     if (!forking_point) return {};  // not found
@@ -133,33 +132,33 @@ auto ExecutionEngine::find_forking_point(const BlockHeader& header) const -> std
     return {std::move(path)};
 }
 
-auto ExecutionEngine::verify_chain(Hash head_block_hash) -> concurrency::AwaitableFuture<VerificationResult> {
+concurrency::AwaitableFuture<VerificationResult> ExecutionEngine::verify_chain(Hash head_block_hash) {
     log::Info("ExecutionEngine") << "verifying chain " << head_block_hash.to_hex();
 
     if (last_fork_choice_.hash == head_block_hash) {
         SILK_DEBUG << "ExecutionEngine: chain " << head_block_hash.to_hex() << " already verified";
-        concurrency::AwaitablePromise<VerificationResult> promise{io_context_};
+        concurrency::AwaitablePromise<VerificationResult> promise{io_context_.get_executor()};
         promise.set_value(ValidChain{last_fork_choice_});
         return promise.get_future();
     }
 
     if (!fork_tracking_active_) {
         auto verification = main_chain_.verify_chain(head_block_hash);  // BLOCKING
-        concurrency::AwaitablePromise<VerificationResult> promise{io_context_};
+        concurrency::AwaitablePromise<VerificationResult> promise{io_context_.get_executor()};
         promise.set_value(std::move(verification));
         return promise.get_future();
     }
 
     auto fork = find_fork_by_head(forks_, head_block_hash);
     if (fork == forks_.end()) {
-        if (main_chain_.is_canonical(head_block_hash)) {
+        if (main_chain_.is_finalized_canonical(head_block_hash)) {
             SILK_DEBUG << "ExecutionEngine: chain " << head_block_hash.to_hex() << " already verified";
-            concurrency::AwaitablePromise<VerificationResult> promise{io_context_};
+            concurrency::AwaitablePromise<VerificationResult> promise{io_context_.get_executor()};
             promise.set_value(ValidChain{last_fork_choice_});
             return promise.get_future();
         } else {
             SILK_WARN << "ExecutionEngine: chain " << head_block_hash.to_hex() << " not found at verification time";
-            concurrency::AwaitablePromise<VerificationResult> promise{io_context_};
+            concurrency::AwaitablePromise<VerificationResult> promise{io_context_.get_executor()};
             promise.set_value(ValidationError{});
             return promise.get_future();
         }
@@ -176,13 +175,16 @@ bool ExecutionEngine::notify_fork_choice_update(Hash head_block_hash, std::optio
         if (!updated) return false;
 
         last_fork_choice_ = main_chain_.last_chosen_head();
-        fork_tracking_active_ = true;
+        if (head_block_hash == main_chain_.current_head().hash and node_settings_.parallel_fork_tracking_enabled) {
+            log::Info("ExecutionEngine") << "activate parallel fork tracking at head " << head_block_hash.to_hex();
+            fork_tracking_active_ = true;
+        }
     } else {
         // chose the fork with the given head
         auto f = find_fork_by_head(forks_, head_block_hash);
 
         if (f == forks_.end()) {
-            if (main_chain_.is_canonical(head_block_hash)) {
+            if (main_chain_.is_finalized_canonical(head_block_hash)) {
                 SILK_DEBUG << "ExecutionEngine: chain " << head_block_hash.to_hex() << " already chosen";
                 return true;
             } else {
@@ -229,28 +231,28 @@ void ExecutionEngine::discard_all_forks() {
 
 // TO IMPLEMENT OR REWORK ---------------------------------------------------------------------------------------------
 
-auto ExecutionEngine::get_header(Hash header_hash) const -> std::optional<BlockHeader> {
+std::optional<BlockHeader> ExecutionEngine::get_header(Hash header_hash) const {
     // read from cache, then from main_chain_
     auto block = block_cache_.get_as_copy(header_hash);
     if (block) return (*block)->header;
     return main_chain_.get_header(header_hash);
 }
 
-auto ExecutionEngine::get_header(BlockNum height, Hash hash) const -> std::optional<BlockHeader> {
+std::optional<BlockHeader> ExecutionEngine::get_header(BlockNum height, Hash hash) const {
     // read from cache, then from main_chain_
     auto block = block_cache_.get_as_copy(hash);
     if (block) return (*block)->header;
     return main_chain_.get_header(height, hash);
 }
 
-auto ExecutionEngine::get_last_headers(BlockNum limit) const -> std::vector<BlockHeader> {
+std::vector<BlockHeader> ExecutionEngine::get_last_headers(uint64_t limit) const {
     ensure_invariant(!fork_tracking_active_, "actual get_last_headers() impl assume it is called only at beginning");
     // if fork_tracking_active_ is true, we should read blocks from cache where they are not ordered on block number
 
     return main_chain_.get_last_headers(limit);
 }
 
-auto ExecutionEngine::get_header_td(Hash h, std::optional<BlockNum> bn) const -> std::optional<TotalDifficulty> {
+std::optional<TotalDifficulty> ExecutionEngine::get_header_td(Hash h, std::optional<BlockNum> bn) const {
     ensure_invariant(!fork_tracking_active_, "actual get_header_td() impl assume it is called only at beginning");
     // if fork_tracking_active_ is true, we should read blocks from forks and recompute total difficulty but this
     // is a duty of the sync component
@@ -261,37 +263,37 @@ auto ExecutionEngine::get_header_td(Hash h, std::optional<BlockNum> bn) const ->
     }
 }
 
-auto ExecutionEngine::get_body(Hash header_hash) const -> std::optional<BlockBody> {
+std::optional<BlockBody> ExecutionEngine::get_body(Hash header_hash) const {
     // read from cache, then from main_chain_
     auto block = block_cache_.get_as_copy(header_hash);
     if (block) return *(block.value().get());
     return main_chain_.get_body(header_hash);
 }
 
-auto ExecutionEngine::get_canonical_header(BlockNum bn) const -> std::optional<BlockHeader> {
-    auto hash = main_chain_.get_canonical_hash(bn);
+std::optional<BlockHeader> ExecutionEngine::get_canonical_header(BlockNum bn) const {
+    auto hash = main_chain_.get_finalized_canonical_hash(bn);
     if (!hash) return {};
     return main_chain_.get_header(*hash);
 }
 
-auto ExecutionEngine::get_canonical_hash(BlockNum bn) const -> std::optional<Hash> {
-    return main_chain_.get_canonical_hash(bn);
+std::optional<Hash> ExecutionEngine::get_canonical_hash(BlockNum bn) const {
+    return main_chain_.get_finalized_canonical_hash(bn);
 }
 
-auto ExecutionEngine::get_canonical_body(BlockNum bn) const -> std::optional<BlockBody> {
-    auto hash = main_chain_.get_canonical_hash(bn);
+std::optional<BlockBody> ExecutionEngine::get_canonical_body(BlockNum bn) const {
+    auto hash = main_chain_.get_finalized_canonical_hash(bn);
     if (!hash) return {};
     return main_chain_.get_body(*hash);
 }
 
-auto ExecutionEngine::get_block_number(Hash header_hash) const -> std::optional<BlockNum> {
+std::optional<BlockNum> ExecutionEngine::get_block_number(Hash header_hash) const {
     auto cached_block = block_cache_.get_as_copy(header_hash);
     if (cached_block) return (*cached_block)->header.number;
     return main_chain_.get_block_number(header_hash);
 }
 
 bool ExecutionEngine::is_canonical(Hash header_hash) const {
-    return main_chain_.is_canonical(header_hash);
+    return main_chain_.is_finalized_canonical(header_hash);
 }
 
 }  // namespace silkworm::stagedsync

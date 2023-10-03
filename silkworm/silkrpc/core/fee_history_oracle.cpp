@@ -52,7 +52,7 @@ void to_json(nlohmann::json& json, const FeeHistory& fh) {
     }
 }
 
-boost::asio::awaitable<FeeHistory> FeeHistoryOracle::fee_history(uint64_t newest_block, uint64_t block_count, const std::vector<std::int8_t>& reward_percentile) {
+Task<FeeHistory> FeeHistoryOracle::fee_history(BlockNum newest_block, BlockNum block_count, const std::vector<std::int8_t>& reward_percentile) {
     FeeHistory fee_history;
     if (block_count < 1) {
         co_return fee_history;
@@ -119,7 +119,7 @@ boost::asio::awaitable<FeeHistory> FeeHistoryOracle::fee_history(uint64_t newest
     co_return fee_history;
 }
 
-boost::asio::awaitable<BlockRange> FeeHistoryOracle::resolve_block_range(uint64_t last_block, uint64_t block_count, uint64_t max_history) {
+Task<BlockRange> FeeHistoryOracle::resolve_block_range(BlockNum last_block, uint64_t block_count, uint64_t max_history) {
     const auto block_with_hash = co_await block_provider_(last_block);
     const auto receipts = co_await receipts_provider_(*block_with_hash);
 
@@ -141,7 +141,7 @@ boost::asio::awaitable<BlockRange> FeeHistoryOracle::resolve_block_range(uint64_
     co_return block_range;
 }
 
-boost::asio::awaitable<void> FeeHistoryOracle::process_block(BlockFees& block_fees, const std::vector<std::int8_t>& reward_percentile) {
+Task<void> FeeHistoryOracle::process_block(BlockFees& block_fees, const std::vector<std::int8_t>& reward_percentile) {
     auto& header = block_fees.block.block.header;
 
     block_fees.base_fee = header.base_fee_per_gas.value_or(0);
@@ -150,7 +150,10 @@ boost::asio::awaitable<void> FeeHistoryOracle::process_block(BlockFees& block_fe
     const auto parent_block = co_await block_provider_(header.number - 1);
 
     const auto evmc_revision = config_.revision(parent_block->block.header.number, parent_block->block.header.timestamp);
-    block_fees.next_base_fee = protocol::expected_base_fee_per_gas(parent_block->block.header, evmc_revision).value_or(0);
+    block_fees.next_base_fee = 0;
+    if (evmc_revision >= EVMC_LONDON) {
+        block_fees.next_base_fee = protocol::expected_base_fee_per_gas(parent_block->block.header);
+    }
 
     if (reward_percentile.size() == 0) {
         co_return;

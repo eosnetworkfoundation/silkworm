@@ -28,7 +28,7 @@
 
 namespace silkworm::stagedsync {
 
-Fork::Fork(BlockId forking_point, db::ROTxn&& main_chain_tx, NodeSettings& ns)
+Fork::Fork(BlockId forking_point, db::ROTxnManaged&& main_chain_tx, NodeSettings& ns)
     : main_tx_{std::move(main_chain_tx)},
       memory_db_{TemporaryDirectory::get_unique_temporary_path(ns.data_directory->forks().path()), &main_tx_},
       memory_tx_{memory_db_},
@@ -58,7 +58,7 @@ BlockId Fork::current_head() const {
     return current_head_;
 }
 
-auto Fork::finalized_head() const -> BlockId {
+BlockId Fork::finalized_head() const {
     return finalized_head_;
 }
 
@@ -260,7 +260,7 @@ std::set<Hash> Fork::collect_bad_headers(InvalidChain& invalid_chain) {
     return bad_headers;
 }
 
-auto Fork::get_header(Hash header_hash) const -> std::optional<BlockHeader> {
+std::optional<BlockHeader> Fork::get_header(Hash header_hash) const {
     std::optional<BlockHeader> header = data_model_.read_header(header_hash);
     return header;
 }

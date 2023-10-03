@@ -16,14 +16,17 @@
 
 #include "transaction.hpp"
 
+#include <bit>
+
 #include <ethash/keccak.hpp>
 
-#include <silkworm/core/common/cast.hpp>
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/core/crypto/ecdsa.h>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/protocol/param.hpp>
 #include <silkworm/core/rlp/decode_vector.hpp>
 #include <silkworm/core/rlp/encode_vector.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 
 #include "y_parity_and_chain_id.hpp"
 
@@ -66,7 +69,7 @@ bool Transaction::set_v(const intx::uint256& v) {
 evmc::bytes32 Transaction::hash() const {
     Bytes rlp;
     rlp::encode(rlp, *this, /*wrap_eip2718_into_string=*/false);
-    return bit_cast<evmc_bytes32>(keccak256(rlp));
+    return std::bit_cast<evmc_bytes32>(keccak256(rlp));
 }
 
 namespace rlp {
@@ -110,7 +113,7 @@ namespace rlp {
         if (txn.type != TransactionType::kLegacy) {
             h.payload_length += length(txn.access_list);
             if (txn.type == TransactionType::kBlob) {
-                h.payload_length += length(txn.max_fee_per_data_gas);
+                h.payload_length += length(txn.max_fee_per_blob_gas);
                 h.payload_length += length(txn.blob_versioned_hashes);
             }
         }
@@ -191,7 +194,7 @@ namespace rlp {
         encode(to, txn.access_list);
 
         if (txn.type == TransactionType::kBlob) {
-            encode(to, txn.max_fee_per_data_gas);
+            encode(to, txn.max_fee_per_blob_gas);
             encode(to, txn.blob_versioned_hashes);
         }
     }
@@ -292,9 +295,9 @@ namespace rlp {
         }
 
         if (to.type != TransactionType::kBlob) {
-            to.max_fee_per_data_gas = 0;
+            to.max_fee_per_blob_gas = 0;
             to.blob_versioned_hashes.clear();
-        } else if (DecodingResult res{decode_items(from, to.max_fee_per_data_gas, to.blob_versioned_hashes)}; !res) {
+        } else if (DecodingResult res{decode_items(from, to.max_fee_per_blob_gas, to.blob_versioned_hashes)}; !res) {
             return res;
         }
 
@@ -328,7 +331,7 @@ namespace rlp {
         if (h->list) {  // Legacy transaction
             to.type = TransactionType::kLegacy;
             to.access_list.clear();
-            to.max_fee_per_data_gas = 0;
+            to.max_fee_per_blob_gas = 0;
             to.blob_versioned_hashes.clear();
 
             const uint64_t leftover{from.length() - h->payload_length};
@@ -451,7 +454,7 @@ intx::uint512 UnsignedTransaction::maximum_gas_cost() const {
     // See https://github.com/ethereum/EIPs/pull/3594
     intx::uint512 max_gas_cost{intx::umul(intx::uint256{gas_limit}, max_fee_per_gas)};
     // and https://eips.ethereum.org/EIPS/eip-4844#gas-accounting
-    max_gas_cost += intx::umul(intx::uint256{total_data_gas()}, max_fee_per_data_gas);
+    max_gas_cost += intx::umul(intx::uint256{total_blob_gas()}, max_fee_per_blob_gas);
     return max_gas_cost;
 }
 
@@ -461,11 +464,14 @@ intx::uint256 UnsignedTransaction::priority_fee_per_gas(const intx::uint256& bas
 }
 
 intx::uint256 UnsignedTransaction::effective_gas_price(const intx::uint256& base_fee_per_gas) const {
+    if (type == TransactionType::kSystem) {
+        return 0;
+    }
     return priority_fee_per_gas(base_fee_per_gas) + base_fee_per_gas;
 }
 
-uint64_t UnsignedTransaction::total_data_gas() const {
-    return protocol::kDataGasPerBlob * blob_versioned_hashes.size();
+uint64_t UnsignedTransaction::total_blob_gas() const {
+    return protocol::kGasPerBlob * blob_versioned_hashes.size();
 }
 
 }  // namespace silkworm

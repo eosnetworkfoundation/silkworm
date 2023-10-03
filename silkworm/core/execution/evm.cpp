@@ -320,7 +320,7 @@ evmc_result EVM::execute_with_baseline_interpreter(evmc_revision rev, const evmc
 
     EvmHost host{*this};
     gsl::owner<evmone::ExecutionState*> state{acquire_state()};
-    state->reset(msg, rev, host.get_interface(), host.to_context(), code);
+    state->reset(msg, rev, host.get_interface(), host.to_context(), code, {});
 
     const auto vm{static_cast<evmone::VM*>(evm1_)};
     evmc_result res{evmone::baseline::execute(*vm, msg.gas, *state, *analysis)};
@@ -484,7 +484,6 @@ evmc_tx_context EvmHost::get_tx_context() const noexcept {
     context.block_coinbase = evm_.beneficiary;
     assert(header.number <= INT64_MAX);  // EIP-1985
     context.block_number = static_cast<int64_t>(header.number);
-    assert(header.timestamp <= INT64_MAX);  // EIP-1985
     context.block_timestamp = static_cast<int64_t>(header.timestamp);
     assert(header.gas_limit <= INT64_MAX);  // EIP-1985
     context.block_gas_limit = static_cast<int64_t>(header.gas_limit);
@@ -546,6 +545,14 @@ void EvmHost::emit_log(const evmc::address& address, const uint8_t* data, size_t
     std::copy_n(topics, num_topics, std::back_inserter(log.topics));
     std::copy_n(data, data_size, std::back_inserter(log.data));
     evm_.state().add_log(log);
+}
+
+evmc::bytes32 EvmHost::get_transient_storage(const evmc::address& addr, const evmc::bytes32& key) const noexcept {
+    return evm_.state().get_transient_storage(addr, key);
+}
+
+void EvmHost::set_transient_storage(const evmc::address& addr, const evmc::bytes32& key, const evmc::bytes32& value) noexcept {
+    evm_.state().set_transient_storage(addr, key, value);
 }
 
 }  // namespace silkworm

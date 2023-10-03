@@ -32,7 +32,6 @@
 
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/common/constants.hpp>
-#include <silkworm/silkrpc/common/util.hpp>
 #include <silkworm/silkrpc/http/connection.hpp>
 
 namespace silkworm::rpc::http {
@@ -52,11 +51,13 @@ Server::Server(const std::string& end_point,
                const std::string& api_spec,
                boost::asio::io_context& io_context,
                boost::asio::thread_pool& workers,
+               std::vector<std::string> allowed_origins,
                std::optional<std::string> jwt_secret)
     : rpc_api_{io_context, workers},
       handler_table_{api_spec},
       io_context_(io_context),
       acceptor_{io_context},
+      allowed_origins_{allowed_origins},
       jwt_secret_(std::move(jwt_secret)) {
     const auto [host, port] = parse_endpoint(end_point);
 
@@ -70,12 +71,12 @@ Server::Server(const std::string& end_point,
 }
 
 void Server::start() {
-    boost::asio::co_spawn(acceptor_.get_executor(), run(), [&](std::exception_ptr eptr) {
+    boost::asio::co_spawn(acceptor_.get_executor(), run(), [&](const std::exception_ptr& eptr) {
         if (eptr) std::rethrow_exception(eptr);
     });
 }
 
-boost::asio::awaitable<void> Server::run() {
+Task<void> Server::run() {
     acceptor_.listen();
 
     try {
@@ -111,9 +112,9 @@ boost::asio::awaitable<void> Server::run() {
             new_connection->socket().set_option(boost::asio::ip::tcp::socket::keep_alive(true));
 
             SILK_TRACE << "Server::run starting connection for socket: " << &new_connection->socket();
-            auto connection_loop = [=]() -> boost::asio::awaitable<void> { co_await new_connection->read_loop(); };
+            auto connection_loop = [=]() -> Task<void> { co_await new_connection->read_loop(); };
 
-            boost::asio::co_spawn(io_context_, connection_loop, [&](std::exception_ptr eptr) {
+            boost::asio::co_spawn(io_context_, connection_loop, [&](const std::exception_ptr& eptr) {
                 if (eptr) std::rethrow_exception(eptr);
             });
         }

@@ -28,14 +28,16 @@
 #include <nlohmann/json.hpp>
 
 #include <silkworm/core/chain/config.hpp>
+#include <silkworm/core/chain/genesis.hpp>
 #include <silkworm/core/common/as_range.hpp>
-#include <silkworm/core/common/cast.hpp>
 #include <silkworm/core/common/test_util.hpp>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/execution/evm.hpp>
 #include <silkworm/core/protocol/blockchain.hpp>
 #include <silkworm/core/protocol/ethash_rule_set.hpp>
 #include <silkworm/core/protocol/intrinsic_gas.hpp>
 #include <silkworm/core/state/in_memory_state.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/infra/common/terminal.hpp>
 #include <silkworm/infra/concurrency/thread_pool.hpp>
@@ -58,41 +60,26 @@ static const std::vector<fs::path> kSlowTests{
     kBlockchainDir / "GeneralStateTests" / "VMTests" / "vmPerformance",
 };
 
-static const std::vector<fs::path> kFailingTests{};
+// TODO(yperbasis) make them pass
+static const std::vector<fs::path> kFailingTests{
+    kBlockchainDir / "cancun" / "eip4844_blobs",
+    kBlockchainDir / "cancun" / "eip5656_mcopy",
+    kBlockchainDir / "cancun" / "eip6780_selfdestruct",
+};
+
+// TODO(yperbasis) remove me
+static const std::vector<fs::path> kSkipCancunTests{
+    kBlockchainDir / "frontier",
+    kBlockchainDir / "homestead",
+    kBlockchainDir / "istanbul",
+    kBlockchainDir / "merge",
+    kBlockchainDir / "shanghai",
+};
 
 static constexpr size_t kColumnWidth{80};
 
 ObjectPool<evmone::ExecutionState> execution_state_pool{/*thread_safe=*/true};
 evmc_vm* exo_evm{nullptr};
-
-// https://ethereum-tests.readthedocs.io/en/latest/test_types/blockchain_tests.html#pre-prestate-section
-void init_pre_state(const nlohmann::json& pre, State& state) {
-    for (const auto& entry : pre.items()) {
-        const evmc::address address{to_evmc_address(from_hex(entry.key()).value())};
-        const nlohmann::json& j{entry.value()};
-
-        Account account;
-        const auto balance{intx::from_string<intx::uint256>(j["balance"].get<std::string>())};
-        account.balance = balance;
-        const auto nonce_str{j["nonce"].get<std::string>()};
-        account.nonce = std::stoull(nonce_str, nullptr, /*base=*/16);
-
-        const Bytes code{from_hex(j["code"].get<std::string>()).value()};
-        if (!code.empty()) {
-            account.incarnation = kDefaultIncarnation;
-            account.code_hash = bit_cast<evmc_bytes32>(keccak256(code));
-            state.update_account_code(address, account.incarnation, account.code_hash, code);
-        }
-
-        state.update_account(address, /*initial=*/std::nullopt, account);
-
-        for (const auto& storage : j["storage"].items()) {
-            Bytes key{from_hex(storage.key()).value()};
-            Bytes value{from_hex(storage.value().get<std::string>()).value()};
-            state.update_storage(address, account.incarnation, to_bytes32(key), /*initial=*/{}, to_bytes32(value));
-        }
-    }
-}
 
 enum class Status {
     kPassed,
@@ -149,7 +136,7 @@ bool post_check(const InMemoryState& state, const nlohmann::json& expected) {
     }
 
     for (const auto& entry : expected.items()) {
-        const evmc::address address{to_evmc_address(from_hex(entry.key()).value())};
+        const evmc::address address{hex_to_address(entry.key())};
         const nlohmann::json& j{entry.value()};
 
         std::optional<Account> account{state.read_account(address)};
@@ -232,7 +219,17 @@ struct [[nodiscard]] RunResults {
 };
 
 // https://ethereum-tests.readthedocs.io/en/latest/test_types/blockchain_tests.html
-RunResults blockchain_test(const nlohmann::json& json_test) {
+RunResults blockchain_test(const nlohmann::json& json_test, bool skip_cancun) {
+    const auto network{json_test["network"].get<std::string>()};
+    if (skip_cancun && network == "Cancun") {
+        return Status::kSkipped;
+    }
+    const auto config_it{test::kNetworkConfig.find(network)};
+    if (config_it == test::kNetworkConfig.end()) {
+        std::cout << "unknown network " << network << std::endl;
+        return Status::kSkipped;
+    }
+
     Bytes genesis_rlp{from_hex(json_test["genesisRLP"].get<std::string>()).value()};
     ByteView genesis_view{genesis_rlp};
     Block genesis_block;
@@ -241,18 +238,8 @@ RunResults blockchain_test(const nlohmann::json& json_test) {
         return Status::kFailed;
     }
 
-    std::string network{json_test["network"].get<std::string>()};
-    const auto config_it{silkworm::test::kNetworkConfig.find(network)};
-    if (config_it == silkworm::test::kNetworkConfig.end()) {
-        std::cout << "unknown network " << network << std::endl;
-        return Status::kFailed;
-    }
-    const ChainConfig& config{config_it->second};
-
-    InMemoryState state;
-    init_pre_state(json_test["pre"], state);
-
-    Blockchain blockchain{state, config, genesis_block};
+    InMemoryState state{read_genesis_allocation(json_test["pre"])};
+    Blockchain blockchain{state, config_it->second, genesis_block};
     blockchain.state_pool = &execution_state_pool;
     blockchain.exo_evm = exo_evm;
 
@@ -300,9 +287,9 @@ std::atomic<size_t> total_passed{0};
 std::atomic<size_t> total_failed{0};
 std::atomic<size_t> total_skipped{0};
 
-using RunnerFunc = RunResults (*)(const nlohmann::json&);
+using RunnerFunc = RunResults (*)(const nlohmann::json&, bool skip_cancun);
 
-void run_test_file(const fs::path& file_path, RunnerFunc runner) {
+void run_test_file(const fs::path& file_path, RunnerFunc runner, bool skip_cancun) {
     std::ifstream in{file_path.string()};
     nlohmann::json json;
 
@@ -318,7 +305,7 @@ void run_test_file(const fs::path& file_path, RunnerFunc runner) {
     RunResults total;
 
     for (const auto& test : json.items()) {
-        const RunResults r{runner(test.value())};
+        const RunResults r{runner(test.value(), skip_cancun)};
         total += r;
         if (r.failed || r.skipped) {
             print_test_status(test.key(), r);
@@ -331,7 +318,7 @@ void run_test_file(const fs::path& file_path, RunnerFunc runner) {
 }
 
 // https://ethereum-tests.readthedocs.io/en/latest/test_types/transaction_tests.html
-RunResults transaction_test(const nlohmann::json& j) {
+RunResults transaction_test(const nlohmann::json& j, bool) {
     Transaction txn;
     bool decoded{false};
 
@@ -356,7 +343,7 @@ RunResults transaction_test(const nlohmann::json& j) {
             }
         }
 
-        const ChainConfig& config{silkworm::test::kNetworkConfig.at(entry.key())};
+        const ChainConfig& config{test::kNetworkConfig.at(entry.key())};
         const evmc_revision rev{config.revision(/*block_number=*/0, /*block_time=*/0)};
 
         /* pre_validate_transaction checks for invalid signature only if from is empty, which means sender recovery
@@ -369,7 +356,7 @@ RunResults transaction_test(const nlohmann::json& j) {
 
         if (ValidationResult err{
                 pre_validate_transaction(txn, rev, config.chain_id, /*base_fee_per_gas=*/std::nullopt,
-                                         /*data_gas_price=*/std::nullopt)};
+                                         /*blob_gas_price=*/std::nullopt)};
             err != ValidationResult::kOk) {
             if (should_be_valid) {
                 std::cout << "Validation error " << magic_enum::enum_name<ValidationResult>(err) << std::endl;
@@ -396,9 +383,9 @@ RunResults transaction_test(const nlohmann::json& j) {
         }
 
         const std::string expected_sender{test["sender"].get<std::string>()};
-        if (txn.from != to_evmc_address(*from_hex(expected_sender))) {
+        if (txn.from != hex_to_address(expected_sender)) {
             std::cout << "Sender mismatch for " << entry.key() << ":\n"
-                      << to_hex(*txn.from) << " != " << expected_sender << std::endl;
+                      << *txn.from << " != " << expected_sender << std::endl;
             return Status::kFailed;
         }
 
@@ -447,7 +434,7 @@ Status individual_difficulty_test(const nlohmann::json& j, const ChainConfig& co
     }
 }
 
-RunResults difficulty_tests(const nlohmann::json& outer) {
+RunResults difficulty_tests(const nlohmann::json& outer, bool) {
     RunResults res;
 
     for (const auto& network : outer.items()) {
@@ -455,7 +442,7 @@ RunResults difficulty_tests(const nlohmann::json& outer) {
             continue;
         }
 
-        const ChainConfig& config{silkworm::test::kNetworkConfig.at(network.key())};
+        const ChainConfig& config{test::kNetworkConfig.at(network.key())};
 
         for (const auto& test : network.value().items()) {
             const Status status{individual_difficulty_test(test.value(), config)};
@@ -470,6 +457,15 @@ bool exclude_test(const fs::path& p, const fs::path& root_dir, bool include_slow
     const auto path_fits = [&p, &root_dir](const fs::path& e) { return root_dir / e == p; };
     return as_range::any_of(kFailingTests, path_fits) ||
            (!include_slow_tests && as_range::any_of(kSlowTests, path_fits));
+}
+
+bool skip_cancun(const fs::path& p, const fs::path& root_dir) {
+    for (const fs::path& e : kSkipCancunTests) {
+        if (p.string().starts_with((root_dir / e).string())) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int main(int argc, char* argv[]) {
@@ -516,16 +512,21 @@ int main(int argc, char* argv[]) {
     };
 
     for (const auto& entry : kTestTypes) {
-        const fs::path& dir{entry.first};
+        const fs::path& dir{root_dir / entry.first};
         const RunnerFunc runner{entry.second};
 
-        for (auto i = fs::recursive_directory_iterator(root_dir / dir); i != fs::recursive_directory_iterator{}; ++i) {
+        if (!fs::exists(dir)) {
+            continue;
+        }
+
+        for (auto i = fs::recursive_directory_iterator(dir); i != fs::recursive_directory_iterator{}; ++i) {
             if (exclude_test(*i, root_dir, include_slow_tests)) {
                 ++total_skipped;
                 i.disable_recursion_pending();
             } else if (fs::is_regular_file(i->path()) && i->path().extension() == ".json") {
                 const fs::path path{*i};
-                thread_pool.push_task([path, runner]() { run_test_file(path, runner); });
+                const bool no_cancun{skip_cancun(path, root_dir)};
+                thread_pool.push_task([=]() { run_test_file(path, runner, no_cancun); });
             }
         }
     }

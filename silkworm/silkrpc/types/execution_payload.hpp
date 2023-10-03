@@ -24,6 +24,7 @@
 #include <intx/intx.hpp>
 
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 #include <silkworm/core/types/bloom.hpp>
 #include <silkworm/core/types/withdrawal.hpp>
 
@@ -42,7 +43,7 @@ struct ExecutionPayload {
         V2 = 2
     } version{V1};
 
-    uint64_t number;
+    BlockNum number;
     uint64_t timestamp;
     uint64_t gas_limit;
     uint64_t gas_used;
@@ -116,7 +117,7 @@ struct ForkChoiceUpdatedReply {
 struct TransitionConfiguration {
     intx::uint256 terminal_total_difficulty;
     evmc::bytes32 terminal_block_hash;
-    uint64_t terminal_block_number{0};
+    BlockNum terminal_block_number{0};
 };
 
 //! Response for engine_getPayloadV2 as specified in https://github.com/ethereum/execution-apis/blob/main/src/engine/shanghai.md#response-2

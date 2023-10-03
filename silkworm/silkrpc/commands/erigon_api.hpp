@@ -16,15 +16,14 @@
 
 #pragma once
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
-#include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
 #include <nlohmann/json.hpp>
 
+#include <silkworm/core/common/block_cache.hpp>
 #include <silkworm/infra/concurrency/private_service.hpp>
 #include <silkworm/infra/concurrency/shared_service.hpp>
-#include <silkworm/silkrpc/common/block_cache.hpp>
 #include <silkworm/silkrpc/core/rawdb/accessors.hpp>
 #include <silkworm/silkrpc/ethbackend/backend.hpp>
 #include <silkworm/silkrpc/ethdb/database.hpp>
@@ -36,8 +35,6 @@ class RequestHandler;
 }
 
 namespace silkworm::rpc::commands {
-
-using boost::asio::awaitable;
 
 class ErigonRpcApi {
   public:
@@ -51,15 +48,19 @@ class ErigonRpcApi {
     ErigonRpcApi& operator=(const ErigonRpcApi&) = delete;
 
   protected:
-    awaitable<void> handle_erigon_block_number(const nlohmann::json& request, nlohmann::json& reply);
-    awaitable<void> handle_erigon_get_block_by_timestamp(const nlohmann::json& request, nlohmann::json& reply);
-    awaitable<void> handle_erigon_get_header_by_hash(const nlohmann::json& request, nlohmann::json& reply);
-    awaitable<void> handle_erigon_get_header_by_number(const nlohmann::json& request, nlohmann::json& reply);
-    awaitable<void> handle_erigon_get_logs_by_hash(const nlohmann::json& request, nlohmann::json& reply);
-    awaitable<void> handle_erigon_forks(const nlohmann::json& request, nlohmann::json& reply);
-    awaitable<void> handle_erigon_watch_the_burn(const nlohmann::json& request, nlohmann::json& reply);
-    awaitable<void> handle_erigon_cumulative_chain_traffic(const nlohmann::json& request, nlohmann::json& reply);
-    awaitable<void> handle_erigon_node_info(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_block_number(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_cache_check(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_get_balance_changes_in_block(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_get_block_by_timestamp(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_get_block_receipts_by_block_hash(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_get_header_by_hash(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_get_header_by_number(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_get_latest_logs(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_get_logs_by_hash(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_forks(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_watch_the_burn(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_cumulative_chain_traffic(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_erigon_node_info(const nlohmann::json& request, nlohmann::json& reply);
 
   private:
     BlockCache* block_cache_;

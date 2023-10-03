@@ -20,7 +20,10 @@
 
 #include <magic_enum.hpp>
 
+#include <silkworm/core/common/bytes_to_string.hpp>
 #include <silkworm/core/common/endian.hpp>
+#include <silkworm/core/execution/address.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/infra/common/decoding_exception.hpp>
 #include <silkworm/node/db/access_layer.hpp>
 
@@ -46,8 +49,7 @@ Stage::Result HashState::forward(db::RWTxn& txn) {
                              std::to_string(execution_stage_progress)};
             throw StageError(Stage::Result::kInvalidProgress, what);
         }
-
-        BlockNum segment_width{execution_stage_progress - previous_progress};
+        const BlockNum segment_width{execution_stage_progress - previous_progress};
         if (segment_width > db::stages::kSmallBlockSegmentWidth) {
             log::Info(log_prefix_,
                       {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
@@ -66,7 +68,7 @@ Stage::Result HashState::forward(db::RWTxn& txn) {
             txn->clear_map(db::table::kHashedStorage.name);
             log::Info(log_prefix_, {"clearing", db::table::kHashedCodeHash.name});
             txn->clear_map(db::table::kHashedCodeHash.name);
-            txn.commit();
+            txn.commit_and_renew();
 
             success_or_throw(hash_from_plainstate(txn));
             collector_->clear();
@@ -86,7 +88,7 @@ Stage::Result HashState::forward(db::RWTxn& txn) {
 
         throw_if_stopping();
         db::stages::write_stage_progress(txn, db::stages::kHashStateKey, execution_stage_progress);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -125,7 +127,7 @@ Stage::Result HashState::unwind(db::RWTxn& txn) {
             // Nothing to unwind actually
             return ret;
         }
-        BlockNum segment_width{previous_progress - to};
+        const BlockNum segment_width{previous_progress - to};
         if (segment_width > db::stages::kSmallBlockSegmentWidth) {
             log::Info(log_prefix_,
                       {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
@@ -142,7 +144,7 @@ Stage::Result HashState::unwind(db::RWTxn& txn) {
 
         throw_if_stopping();
         update_progress(txn, to);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -206,7 +208,7 @@ Stage::Result HashState::hash_from_plainstate(db::RWTxn& txn) {
             // Rehash the address only when changes
             if (std::memcmp(data_key_view.data(), last_address.bytes, kAddressLength) != 0) {
                 throw_if_stopping();
-                last_address = to_evmc_address(data_key_view);
+                last_address = bytes_to_address(data_key_view);
                 address_hash = keccak256(last_address.bytes);
                 log_lck.lock();
                 current_key_ = to_hex(last_address.bytes, /*with_prefix=*/true);
@@ -360,7 +362,7 @@ Stage::Result HashState::hash_from_plaincode(db::RWTxn& txn) {
             // Rehash the address only when changes
             if (std::memcmp(data_key_view.data(), last_address.bytes, kAddressLength) != 0) {
                 throw_if_stopping();
-                last_address = to_evmc_address(data_key_view);
+                last_address = bytes_to_address(data_key_view);
                 log_lck.lock();
                 current_key_ = to_hex(last_address.bytes, /*with_prefix=*/true);
                 log_lck.unlock();
@@ -457,10 +459,10 @@ Stage::Result HashState::hash_from_account_changeset(db::RWTxn& txn, BlockNum pr
 
             while (changeset_data) {
                 auto changeset_value_view{db::from_slice(changeset_data.value)};
-                evmc::address address{to_evmc_address(changeset_value_view)};
+                evmc::address address{bytes_to_address(changeset_value_view)};
                 if (!changed_addresses.contains(address)) {
                     auto address_hash{to_bytes32(keccak256(address.bytes).bytes)};
-                    auto plainstate_data{source_plainstate->find(db::to_slice(address.bytes), /*throw_notfound=*/false)};
+                    auto plainstate_data{source_plainstate->find(db::to_slice(address), /*throw_notfound=*/false)};
                     if (plainstate_data.done) {
                         Bytes current_value{db::from_slice(plainstate_data.value)};
                         changed_addresses[address] = std::make_pair(address_hash, current_value);
@@ -547,7 +549,7 @@ Stage::Result HashState::hash_from_storage_changeset(db::RWTxn& txn, BlockNum pr
             }
 
             changeset_key_view.remove_prefix(8);
-            evmc::address address{to_evmc_address(changeset_key_view)};
+            evmc::address address{bytes_to_address(changeset_key_view)};
             changeset_key_view.remove_prefix(kAddressLength);
 
             const auto incarnation{endian::load_big_u64(changeset_key_view.data())};
@@ -565,7 +567,7 @@ Stage::Result HashState::hash_from_storage_changeset(db::RWTxn& txn, BlockNum pr
                 auto changeset_value_view{db::from_slice(changeset_data.value)};
                 auto location{to_bytes32(changeset_value_view)};
                 if (!storage_changes[address][incarnation].contains(location)) {
-                    auto plain_state_value{db::find_value_suffix(*source_plainstate, plain_storage_prefix, location)};
+                    auto plain_state_value{db::find_value_suffix(*source_plainstate, plain_storage_prefix, location.bytes)};
                     storage_changes[address][incarnation].insert_or_assign(location,
                                                                            plain_state_value.value_or(Bytes()));
                 }
@@ -624,12 +626,10 @@ Stage::Result HashState::unwind_from_account_changeset(db::RWTxn& txn, BlockNum 
 
         throw_if_stopping();
 
-        auto source_changeset = txn.ro_cursor_dup_sort(db::table::kAccountChangeSet);
-        auto source_initial_key{db::block_key(expected_blocknum)};
-        // Original comment: Initial record MUST be found
+        auto changeset_cursor = txn.ro_cursor_dup_sort(db::table::kAccountChangeSet);
+        auto initial_key{db::block_key(expected_blocknum)};
         // Our comment: A block can contain no accounts changes (no mining reward) in it so we don't throw an exception in that case
-        auto changeset_data{source_changeset->lower_bound(db::to_slice(source_initial_key),
-                                                          /*throw_notfound=*/false)};
+        auto changeset_data{changeset_cursor->find(db::to_slice(initial_key), /*throw_notfound=*/false)};
 
         while (changeset_data.done) {
             reached_blocknum = endian::load_big_u64(db::from_slice(changeset_data.key).data());
@@ -646,9 +646,12 @@ Stage::Result HashState::unwind_from_account_changeset(db::RWTxn& txn, BlockNum 
                 log_lck.unlock();
             }
 
-            while (changeset_data) {
+            while (changeset_data.done) {
                 auto changeset_value_view{db::from_slice(changeset_data.value)};
-                evmc::address address{to_evmc_address(changeset_value_view)};
+                ensure(changeset_value_view.length() >= kAddressLength,
+                       "invalid account changeset value size=" + std::to_string(changeset_value_view.length()) +
+                           " at block " + std::to_string(reached_blocknum));
+                evmc::address address{bytes_to_address(changeset_value_view)};
 
                 if (!changed_addresses.contains(address)) {
                     changeset_value_view.remove_prefix(kAddressLength);
@@ -656,11 +659,11 @@ Stage::Result HashState::unwind_from_account_changeset(db::RWTxn& txn, BlockNum 
                     Bytes previous_value(changeset_value_view.data(), changeset_value_view.length());
                     changed_addresses[address] = std::make_pair(address_hash, previous_value);
                 }
-                changeset_data = source_changeset->to_current_next_multi(/*throw_notfound=*/false);
+                changeset_data = changeset_cursor->to_current_next_multi(/*throw_notfound=*/false);
             }
 
             ++expected_blocknum;
-            changeset_data = source_changeset->to_next(/*throw_notfound=*/false);
+            changeset_data = changeset_cursor->to_next(/*throw_notfound=*/false);
         }
 
         ret = write_changes_from_changed_addresses(txn, changed_addresses);
@@ -714,12 +717,14 @@ Stage::Result HashState::unwind_from_storage_changeset(db::RWTxn& txn, BlockNum 
         current_key_ = std::to_string(to + 1);
         log_lck.unlock();
 
-        auto source_changeset = txn.ro_cursor_dup_sort(db::table::kStorageChangeSet);
-        auto source_initial_key{db::block_key(to + 1)};
-        auto changeset_data{source_changeset->lower_bound(db::to_slice(source_initial_key), /*throw_notfound=*/false)};
+        auto changeset_cursor = txn.ro_cursor_dup_sort(db::table::kStorageChangeSet);
+        auto initial_key_prefix{db::block_key(to + 1)};
+        auto changeset_data{changeset_cursor->lower_bound(db::to_slice(initial_key_prefix), /*throw_notfound=*/false)};
 
         while (changeset_data.done) {
             auto changeset_key_view{db::from_slice(changeset_data.key)};
+            ensure(changeset_key_view.length() == sizeof(BlockNum) + db::kPlainStoragePrefixLength,
+                   "invalid storage changeset key size=" + std::to_string(changeset_key_view.length()));
             reached_blocknum = endian::load_big_u64(changeset_key_view.data());
             if (reached_blocknum > previous_progress) {
                 break;
@@ -732,8 +737,8 @@ Stage::Result HashState::unwind_from_storage_changeset(db::RWTxn& txn, BlockNum 
                 log_lck.unlock();
             }
 
-            changeset_key_view.remove_prefix(8);
-            evmc::address address{to_evmc_address(changeset_key_view)};
+            changeset_key_view.remove_prefix(sizeof(BlockNum));
+            evmc::address address{bytes_to_address(changeset_key_view)};
             changeset_key_view.remove_prefix(kAddressLength);
             const auto incarnation{endian::load_big_u64(changeset_key_view.data())};
             if (!incarnation) {
@@ -746,15 +751,18 @@ Stage::Result HashState::unwind_from_storage_changeset(db::RWTxn& txn, BlockNum 
 
             while (changeset_data.done) {
                 auto changeset_value_view{db::from_slice(changeset_data.value)};
+                ensure(changeset_value_view.length() >= kHashLength,
+                       "invalid storage changeset value size=" + std::to_string(changeset_value_view.length()) +
+                           " at block " + std::to_string(reached_blocknum));
                 auto location{to_bytes32(changeset_value_view)};
                 if (!storage_changes[address][incarnation].contains(location)) {
                     changeset_value_view.remove_prefix(kHashLength);
                     Bytes previous_value{changeset_value_view};
                     storage_changes[address][incarnation].insert_or_assign(location, previous_value);
                 }
-                changeset_data = source_changeset->to_current_next_multi(/*throw_notfound=*/false);
+                changeset_data = changeset_cursor->to_current_next_multi(/*throw_notfound=*/false);
             }
-            changeset_data = source_changeset->to_next(/*throw_notfound=*/false);
+            changeset_data = changeset_cursor->to_next(/*throw_notfound=*/false);
         }
 
         ret = write_changes_from_changed_storage(txn, storage_changes, hashed_addresses);
@@ -803,14 +811,14 @@ Stage::Result HashState::write_changes_from_changed_addresses(db::RWTxn& txn, co
             throw_if_stopping();
             last_address = address;
             log_lck.lock();
-            current_key_ = to_hex(address, true);
+            current_key_ = address_to_hex(address);
             log_lck.unlock();
         }
 
         auto& [address_hash, current_encoded_value] = pair;
         if (!current_encoded_value.empty()) {
             // Update HashedAccounts table
-            target_hashed_accounts->upsert(db::to_slice(address_hash.bytes), db::to_slice(current_encoded_value));
+            target_hashed_accounts->upsert(db::to_slice(address_hash), db::to_slice(current_encoded_value));
 
             // Lookup value in PlainCodeHash for Contract
             const auto incarnation{Account::incarnation_from_encoded_storage(current_encoded_value)};
@@ -829,7 +837,7 @@ Stage::Result HashState::write_changes_from_changed_addresses(db::RWTxn& txn, co
                 }
             }
         } else {
-            target_hashed_accounts->erase(db::to_slice(address_hash.bytes));
+            target_hashed_accounts->erase(db::to_slice(address_hash));
         }
     }
 
@@ -856,7 +864,7 @@ Stage::Result HashState::write_changes_from_changed_storage(
             std::memcpy(&hashed_storage_prefix[0], hashed_addresses.at(last_address).bytes, kHashLength);
 
             log_lck.lock();
-            current_key_ = to_hex(address, true);
+            current_key_ = address_to_hex(address);
             log_lck.unlock();
         }
 

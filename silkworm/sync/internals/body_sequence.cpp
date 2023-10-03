@@ -59,7 +59,7 @@ size_t BodySequence::outstanding_requests(time_point_t tp) const {
     return (requested_bodies + kMaxBlocksPerMessage - 1) / kMaxBlocksPerMessage;
 }
 
-Penalty BodySequence::accept_requested_bodies(BlockBodiesPacket66& packet, const PeerId&) {
+Penalty BodySequence::accept_requested_bodies(BlockBodiesPacket66& packet, const PeerId& peer) {
     Penalty penalty = NoPenalty;
     BlockNum start_block = std::numeric_limits<BlockNum>::max();
     size_t count = 0;
@@ -99,6 +99,9 @@ Penalty BodySequence::accept_requested_bodies(BlockBodiesPacket66& packet, const
         }
 
         BodyRequest& request = exact_request->second;
+        if (!body.withdrawals) {
+            SILK_WARN << "BodySequence: body " << request.block_height << " w/o withdrawals received from peer " << to_hex(human_readable_id(peer));
+        }
         if (!request.ready) {
             request.body = std::move(body);
             request.ready = true;
@@ -134,7 +137,7 @@ Penalty BodySequence::accept_new_block(const Block& block, const PeerId&) {
     return Penalty::NoPenalty;
 }
 
-auto BodySequence::request_bodies(time_point_t tp) -> std::shared_ptr<OutboundMessage> {
+std::shared_ptr<OutboundMessage> BodySequence::request_bodies(time_point_t tp) {
     if (tp - last_nack_ < SentryClient::kNoPeerDelay)
         return nullptr;
 
@@ -171,8 +174,11 @@ auto BodySequence::request_bodies(time_point_t tp) -> std::shared_ptr<OutboundMe
 }
 
 //! Re-evaluate past (stale) requests
-auto BodySequence::renew_stale_requests(GetBlockBodiesPacket66& packet, BlockNum& min_block,
-                                        time_point_t tp, seconds_t timeout) -> std::vector<PeerPenalization> {
+std::vector<PeerPenalization> BodySequence::renew_stale_requests(
+    GetBlockBodiesPacket66& packet,
+    BlockNum& min_block,
+    time_point_t tp,
+    seconds_t timeout) {
     std::vector<PeerPenalization> penalizations;
     BlockNum start_block = std::numeric_limits<BlockNum>::max();
     size_t count = 0;
@@ -346,7 +352,7 @@ size_t BodySequence::AnnouncedBlocks::size() {
     return blocks_.size();
 }
 
-auto BodySequence::IncreasingHeightOrderedRequestContainer::find_by_request_id(uint64_t request_id) -> std::list<Iter> {
+std::list<BodySequence::IncreasingHeightOrderedRequestContainer::Iter> BodySequence::IncreasingHeightOrderedRequestContainer::find_by_request_id(uint64_t request_id) {
     std::list<Impl::iterator> matching_requests;
     for (auto elem = begin(); elem != end(); elem++) {
         const BodyRequest& request = elem->second;
@@ -355,7 +361,7 @@ auto BodySequence::IncreasingHeightOrderedRequestContainer::find_by_request_id(u
     return matching_requests;
 }
 
-auto BodySequence::IncreasingHeightOrderedRequestContainer::find_by_hash(Hash oh, Hash tr) -> Iter {
+BodySequence::IncreasingHeightOrderedRequestContainer::Iter BodySequence::IncreasingHeightOrderedRequestContainer::find_by_hash(Hash oh, Hash tr) {
     auto r = std::find_if(begin(), end(), [&oh, &tr](const auto& elem) {
         const BodyRequest& request = elem.second;
         return (request.header.ommers_hash == oh && request.header.transactions_root == tr);

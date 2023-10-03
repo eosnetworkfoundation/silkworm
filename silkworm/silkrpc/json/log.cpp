@@ -21,6 +21,8 @@
 #include <utility>
 
 #include <silkworm/core/common/util.hpp>
+#include <silkworm/core/execution/address.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
 
 #include "types.hpp"
@@ -37,6 +39,9 @@ void to_json(nlohmann::json& json, const Log& log) {
     json["transactionIndex"] = to_quantity(log.tx_index);
     json["logIndex"] = to_quantity(log.index);
     json["removed"] = log.removed;
+    if (log.timestamp) {
+        json["timestamp"] = to_quantity(*(log.timestamp));
+    }
 }
 
 void from_json(const nlohmann::json& json, Log& log) {
@@ -48,13 +53,13 @@ void from_json(const nlohmann::json& json, Log& log) {
             throw std::system_error{std::make_error_code(std::errc::invalid_argument), "Log CBOR: binary expected in [0]"};
         }
         auto address_bytes = json[0].get_binary();
-        log.address = silkworm::to_evmc_address(silkworm::Bytes{address_bytes.begin(), address_bytes.end()});
+        log.address = bytes_to_address(silkworm::Bytes{address_bytes.begin(), address_bytes.end()});
         if (!json[1].is_array()) {
             throw std::system_error{std::make_error_code(std::errc::invalid_argument), "Log CBOR: array expected in [1]"};
         }
         std::vector<evmc::bytes32> topics{};
         topics.reserve(json[1].size());
-        for (auto topic : json[1]) {
+        for (auto& topic : json[1]) {
             auto topic_bytes = topic.get_binary();
             topics.push_back(silkworm::to_bytes32(silkworm::Bytes{topic_bytes.begin(), topic_bytes.end()}));
         }
@@ -83,6 +88,7 @@ struct GlazeJsonLogItem {
     char index[int64Size];
     char data[dataSize];
     bool removed;
+    std::optional<std::string> timestamp;
     std::vector<std::string> topics;
 
     struct glaze {
@@ -96,7 +102,8 @@ struct GlazeJsonLogItem {
             "logIndex", &T::index,
             "data", &T::data,
             "removed", &T::removed,
-            "topics", &T::topics);
+            "topics", &T::topics,
+            "timestamp", &T::timestamp);
     };
 };
 
@@ -121,16 +128,19 @@ void make_glaze_json_content(std::string& reply, const nlohmann::json& id, const
 
     for (const auto& l : logs) {
         GlazeJsonLogItem item{};
-        to_hex(std::span(item.address), l.address);
-        to_hex(std::span(item.tx_hash), l.tx_hash);
-        to_hex(std::span(item.block_hash), l.block_hash);
+        to_hex(std::span(item.address), l.address.bytes);
+        to_hex(std::span(item.tx_hash), l.tx_hash.bytes);
+        to_hex(std::span(item.block_hash), l.block_hash.bytes);
         to_quantity(std::span(item.block_number), l.block_number);
         to_quantity(std::span(item.tx_index), l.tx_index);
         to_quantity(std::span(item.index), l.index);
         item.removed = l.removed;
         to_hex(item.data, l.data);
+        if (l.timestamp) {
+            item.timestamp = to_quantity(*(l.timestamp));
+        }
         for (const auto& t : l.topics) {
-            item.topics.push_back("0x" + silkworm::to_hex(t));
+            item.topics.push_back(silkworm::to_hex(t, true));
         }
         log_json_data.log_json_list.push_back(item);
     }

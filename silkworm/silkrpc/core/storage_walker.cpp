@@ -19,9 +19,8 @@
 #include <set>
 #include <sstream>
 
-#include <boost/endian/conversion.hpp>
-
 #include <silkworm/core/common/endian.hpp>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/infra/common/decoding_exception.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/node/db/bitmap.hpp>
@@ -43,7 +42,7 @@ silkworm::Bytes make_key(const evmc::address& address, const evmc::bytes32& loca
 silkworm::Bytes make_key(const evmc::address& address, uint64_t incarnation) {
     silkworm::Bytes res(silkworm::kAddressLength + 8, '\0');
     std::memcpy(&res[0], address.bytes, silkworm::kAddressLength);
-    boost::endian::store_big_u64(&res[silkworm::kAddressLength], incarnation);
+    endian::store_big_u64(&res[silkworm::kAddressLength], incarnation);
     return res;
 }
 
@@ -57,12 +56,12 @@ bool operator<(const StorageItem& k1, const StorageItem& k2) {
     return k1.key < k2.key;
 }
 
-boost::asio::awaitable<ethdb::SplittedKeyValue> next(ethdb::SplitCursor& cursor, uint64_t number) {
+Task<ethdb::SplittedKeyValue> next(ethdb::SplitCursor& cursor, BlockNum number) {
     auto kv = co_await cursor.next();
     if (kv.key2.empty()) {
         co_return kv;
     }
-    uint64_t block = silkworm::endian::load_big_u64(kv.key3.data());
+    BlockNum block = silkworm::endian::load_big_u64(kv.key3.data());
     while (block < number) {
         kv = co_await cursor.next();
         if (kv.key2.empty()) {
@@ -73,7 +72,7 @@ boost::asio::awaitable<ethdb::SplittedKeyValue> next(ethdb::SplitCursor& cursor,
     co_return kv;
 }
 
-boost::asio::awaitable<ethdb::SplittedKeyValue> next(ethdb::SplitCursor& cursor, uint64_t number, uint64_t block, silkworm::Bytes loc) {
+Task<ethdb::SplittedKeyValue> next(ethdb::SplitCursor& cursor, BlockNum number, BlockNum block, silkworm::Bytes loc) {
     ethdb::SplittedKeyValue skv;
     auto tmp_loc = loc;
     while (!loc.empty() && (tmp_loc == loc || block < number)) {
@@ -88,15 +87,19 @@ boost::asio::awaitable<ethdb::SplittedKeyValue> next(ethdb::SplitCursor& cursor,
     co_return skv;
 }
 
-boost::asio::awaitable<void> StorageWalker::walk_of_storages(uint64_t block_number, const evmc::address& address,
-                                                             const evmc::bytes32& location_hash, uint64_t incarnation, AccountCollector& collector) {
+Task<void> StorageWalker::walk_of_storages(
+    BlockNum block_number,
+    const evmc::address& address,
+    const evmc::bytes32& location_hash,
+    uint64_t incarnation,
+    AccountCollector& collector) {
     SILK_TRACE << "block_number=" << block_number << " address=" << address << " START";
 
     auto ps_cursor = co_await transaction_.cursor_dup_sort(db::table::kPlainStateName);
     auto ps_key{make_key(address, incarnation)};
     ethdb::SplitCursorDupSort ps_split_cursor{*ps_cursor,
                                               ps_key,
-                                              location_hash,            /* subkey */
+                                              location_hash.bytes,      /* subkey */
                                               8 * (kAddressLength + 8), /* match_bits */
                                               kAddressLength,           /* part1_end */
                                               kHashLength};             /* value_offset */
@@ -114,7 +117,7 @@ boost::asio::awaitable<void> StorageWalker::walk_of_storages(uint64_t block_numb
     auto sh_skv = co_await sh_split_cursor.seek();
     auto h_loc = sh_skv.key2;
 
-    uint64_t block = silkworm::endian::load_big_u64(sh_skv.key3.data());
+    BlockNum block = silkworm::endian::load_big_u64(sh_skv.key3.data());
     auto cs_cursor = co_await transaction_.cursor_dup_sort(db::table::kStorageChangeSetName);
 
     if (block < block_number) {
@@ -134,7 +137,7 @@ boost::asio::awaitable<void> StorageWalker::walk_of_storages(uint64_t block_numb
             cmp = ps_skv.key2.compare(h_loc);
         }
         if (cmp < 0) {
-            const auto ps_address = silkworm::to_evmc_address(ps_skv.key1);
+            const auto ps_address = bytes_to_address(ps_skv.key1);
             go_on = collector(ps_address, ps_skv.key2, ps_skv.value);
         } else {
             std::optional<uint64_t> found;
@@ -149,11 +152,11 @@ boost::asio::awaitable<void> StorageWalker::walk_of_storages(uint64_t block_numb
                 auto data = co_await cs_cursor->seek_both(dup_key, h_loc);
                 if (data.length() > silkworm::kHashLength) {  // Skip deleted entries
                     data = data.substr(silkworm::kHashLength);
-                    const auto ps_address = silkworm::to_evmc_address(ps_skv.key1);
+                    const auto ps_address = bytes_to_address(ps_skv.key1);
                     go_on = collector(ps_address, ps_skv.key2, data);
                 }
             } else if (cmp == 0) {
-                const auto ps_address = silkworm::to_evmc_address(ps_skv.key1);
+                const auto ps_address = bytes_to_address(ps_skv.key1);
                 go_on = collector(ps_address, ps_skv.key2, ps_skv.value);
             }
         }
@@ -172,8 +175,12 @@ boost::asio::awaitable<void> StorageWalker::walk_of_storages(uint64_t block_numb
     co_return;
 }
 
-boost::asio::awaitable<void> StorageWalker::storage_range_at(uint64_t block_number, const evmc::address& address,
-                                                             const evmc::bytes32& start_location, size_t max_result, StorageCollector& collector) {
+Task<void> StorageWalker::storage_range_at(
+    BlockNum block_number,
+    const evmc::address& address,
+    const evmc::bytes32& start_location,
+    size_t max_result,
+    StorageCollector& collector) {
     ethdb::TransactionDatabase tx_database{transaction_};
     auto account_data = co_await tx_database.get_one(db::table::kPlainStateName, full_view(address));
 

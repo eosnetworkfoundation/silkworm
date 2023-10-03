@@ -24,10 +24,10 @@
 #endif
 
 namespace silkworm {
+
 void abort_due_to_assertion_failure(char const* expr, char const* file, long line) {
     #ifndef ANTELOPE
-    std::cerr << "Assert failed: " << expr << " "
-              << "Source: " << file << ", line " << line;
+    std::cerr << "Assert failed: " << expr << " Source: " << file << ", line " << line << "\n";
     std::abort();
     #else
     std::string msg = "Assert failed: ";
@@ -39,4 +39,5 @@ void abort_due_to_assertion_failure(char const* expr, char const* file, long lin
     eosio::check(false, msg.c_str());
     #endif
 }
+
 }  // namespace silkworm

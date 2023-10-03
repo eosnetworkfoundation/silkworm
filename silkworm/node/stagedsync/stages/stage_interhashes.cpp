@@ -24,7 +24,9 @@
 
 #include <silkworm/core/common/endian.hpp>
 #include <silkworm/core/common/lru_cache.hpp>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/trie/nibbles.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/infra/common/decoding_exception.hpp>
 #include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/node/db/access_layer.hpp>
@@ -54,8 +56,7 @@ Stage::Result InterHashes::forward(db::RWTxn& txn) {
                              "InterHashes progress " + std::to_string(previous_progress) +
                                  " greater than HashState progress " + std::to_string(hashstate_stage_progress));
         }
-
-        BlockNum segment_width{hashstate_stage_progress - previous_progress};
+        const BlockNum segment_width{hashstate_stage_progress - previous_progress};
         if (segment_width > db::stages::kSmallBlockSegmentWidth) {
             log::Info(log_prefix_ + " begin",
                       {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
@@ -96,7 +97,7 @@ Stage::Result InterHashes::forward(db::RWTxn& txn) {
         success_or_throw(ret);
         throw_if_stopping();
         db::stages::write_stage_progress(txn, db::stages::kIntermediateHashesKey, hashstate_stage_progress);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -138,8 +139,7 @@ Stage::Result InterHashes::unwind(db::RWTxn& txn) {
             operation_ = OperationType::None;
             return Stage::Result::kSuccess;
         }
-
-        BlockNum segment_width{previous_progress - to};
+        const BlockNum segment_width{previous_progress - to};
         if (segment_width > db::stages::kSmallBlockSegmentWidth) {
             log::Info(log_prefix_ + " begin",
                       {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
@@ -176,7 +176,7 @@ Stage::Result InterHashes::unwind(db::RWTxn& txn) {
         success_or_throw(ret);
         throw_if_stopping();
         db::stages::write_stage_progress(txn, db::stages::kIntermediateHashesKey, to);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -251,11 +251,11 @@ trie::PrefixSet InterHashes::collect_account_changes(db::RWTxn& txn, BlockNum fr
             auto changeset_value_view{db::from_slice(changeset_data.value)};
 
             // Extract address and hash if needed
-            const evmc::address address{to_evmc_address(changeset_value_view)};
+            const evmc::address address{bytes_to_address(changeset_value_view)};
             changeset_value_view.remove_prefix(kAddressLength);
             auto hashed_addresses_it{hashed_addresses.find(address)};
             if (hashed_addresses_it == hashed_addresses.end()) {
-                const auto hashed_address{keccak256(address)};
+                const auto hashed_address{keccak256(address.bytes)};
                 hashed_addresses_it = hashed_addresses.insert_or_assign(address, hashed_address).first;
             }
 
@@ -265,7 +265,7 @@ trie::PrefixSet InterHashes::collect_account_changes(db::RWTxn& txn, BlockNum fr
             if (auto item{plainstate_accounts.get(address)}; item != nullptr) {
                 plainstate_account = *item;
             } else {
-                auto ps_data{plain_state->find(db::to_slice(address.bytes), false)};
+                auto ps_data{plain_state->find(db::to_slice(address), false)};
                 if (ps_data && ps_data.value.length()) {
                     const auto account{Account::from_encoded_storage(db::from_slice(ps_data.value))};
                     success_or_throw(account);
@@ -388,7 +388,7 @@ trie::PrefixSet InterHashes::collect_storage_changes(db::RWTxn& txn, BlockNum fr
 
         changeset_key_view.remove_prefix(sizeof(BlockNum));
 
-        const evmc::address address{to_evmc_address(changeset_key_view)};
+        const evmc::address address{bytes_to_address(changeset_key_view)};
         hashed_addresses_it = hashed_addresses.find(address);
         if (hashed_addresses_it == hashed_addresses.end()) {
             const auto hashed_address{keccak256(address.bytes)};
@@ -440,7 +440,7 @@ Stage::Result InterHashes::regenerate_intermediate_hashes(db::RWTxn& txn, const 
         txn->clear_map(db::table::kTrieOfAccounts.name);
         log::Info(log_prefix_, {"clearing", db::table::kTrieOfStorage.name});
         txn->clear_map(db::table::kTrieOfStorage.name);
-        txn.commit();
+        txn.commit_and_renew();
 
         account_collector_ = std::make_unique<etl::Collector>(node_settings_);
         storage_collector_ = std::make_unique<etl::Collector>(node_settings_);

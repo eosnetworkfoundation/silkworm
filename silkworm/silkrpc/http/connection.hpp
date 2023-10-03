@@ -25,9 +25,8 @@
 #include <array>
 #include <string>
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
-#include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/thread_pool.hpp>
@@ -51,6 +50,7 @@ class Connection {
     Connection(boost::asio::io_context& io_context,
                commands::RpcApi& api,
                commands::RpcApiTable& handler_table,
+               const std::vector<std::string>& allowed_origins,
                std::optional<std::string> jwt_secret);
 
     ~Connection();
@@ -58,17 +58,17 @@ class Connection {
     boost::asio::ip::tcp::socket& socket() { return socket_; }
 
     //! Start the asynchronous read loop for the connection.
-    boost::asio::awaitable<void> read_loop();
+    Task<void> read_loop();
 
   private:
     //! Reset connection data
     void clean();
 
     //! Perform an asynchronous read operation.
-    boost::asio::awaitable<void> do_read();
+    Task<void> do_read();
 
     //! Perform an asynchronous write operation.
-    boost::asio::awaitable<void> do_write();
+    Task<void> do_write();
 
     //! Socket for the connection.
     boost::asio::ip::tcp::socket socket_;

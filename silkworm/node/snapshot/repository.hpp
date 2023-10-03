@@ -44,6 +44,15 @@ using HeaderSnapshotWalker = SnapshotWalker<HeaderSnapshot>;
 using BodySnapshotWalker = SnapshotWalker<BodySnapshot>;
 using TransactionSnapshotWalker = SnapshotWalker<TransactionSnapshot>;
 
+struct SnapshotBundle {
+    SnapshotPath headers_snapshot_path;
+    std::unique_ptr<HeaderSnapshot> headers_snapshot;
+    SnapshotPath bodies_snapshot_path;
+    std::unique_ptr<BodySnapshot> bodies_snapshot;
+    SnapshotPath tx_snapshot_path;
+    std::unique_ptr<TransactionSnapshot> tx_snapshot;
+};
+
 //! Read-only repository for all snapshot files.
 //! @details Some simplifications are currently in place:
 //! - it opens snapshots only on startup and they are immutable
@@ -60,6 +69,14 @@ class SnapshotRepository {
 
     [[nodiscard]] BlockNum max_block_available() const { return std::min(segment_max_block_, idx_max_block_); }
 
+    [[nodiscard]] SnapshotPathList get_segment_files() const {
+        return get_files(kSegmentExtension);
+    }
+
+    void add_snapshot_bundle(SnapshotBundle&& bundle);
+
+    void reopen_list(const SnapshotPathList& segment_files, bool optimistic = false);
+    void reopen_file(const SnapshotPath& segment_path, bool optimistic = false);
     void reopen_folder();
     void close();
 
@@ -69,6 +86,9 @@ class SnapshotRepository {
     [[nodiscard]] std::size_t header_snapshots_count() const { return header_segments_.size(); }
     [[nodiscard]] std::size_t body_snapshots_count() const { return body_segments_.size(); }
     [[nodiscard]] std::size_t tx_snapshots_count() const { return tx_segments_.size(); }
+    [[nodiscard]] std::size_t total_snapshots_count() const {
+        return header_snapshots_count() + body_snapshots_count() + tx_snapshots_count();
+    }
 
     [[nodiscard]] std::vector<BlockNumRange> missing_block_ranges() const;
     enum ViewResult {
@@ -84,6 +104,10 @@ class SnapshotRepository {
     std::size_t view_body_segments(const BodySnapshotWalker& walker);
     std::size_t view_tx_segments(const TransactionSnapshotWalker& walker);
 
+    [[nodiscard]] const HeaderSnapshot* get_header_segment(const SnapshotPath& path) const;
+    [[nodiscard]] const BodySnapshot* get_body_segment(const SnapshotPath& path) const;
+    [[nodiscard]] const TransactionSnapshot* get_tx_segment(const SnapshotPath& path) const;
+
     [[nodiscard]] const HeaderSnapshot* find_header_segment(BlockNum number) const;
     [[nodiscard]] const BodySnapshot* find_body_segment(BlockNum number) const;
     [[nodiscard]] const TransactionSnapshot* find_tx_segment(BlockNum number) const;
@@ -93,30 +117,18 @@ class SnapshotRepository {
     [[nodiscard]] BlockNum segment_max_block() const { return segment_max_block_; }
     [[nodiscard]] BlockNum idx_max_block() const { return idx_max_block_; }
 
-  private:
-    void reopen_list(const SnapshotPathList& segment_files, bool optimistic);
+    [[nodiscard]] std::optional<BlockNum> find_block_number(Hash txn_hash) const;
 
+  private:
     bool reopen_header(const SnapshotPath& seg_file);
     bool reopen_body(const SnapshotPath& seg_file);
     bool reopen_transaction(const SnapshotPath& seg_file);
-
-    void close_segments_not_in_list(const SnapshotPathList& segment_files);
-
-    template <ConcreteSnapshot T>
-    static ViewResult view(const SnapshotsByPath<T>& segments, BlockNum number, const SnapshotWalker<T>& walker);
-
-    template <ConcreteSnapshot T>
-    static std::size_t view(const SnapshotsByPath<T>& segments, const SnapshotWalker<T>& walker);
 
     template <ConcreteSnapshot T>
     const T* find_segment(const SnapshotsByPath<T>& segments, BlockNum number) const;
 
     template <ConcreteSnapshot T>
     static bool reopen(SnapshotsByPath<T>& segments, const SnapshotPath& seg_file);
-
-    [[nodiscard]] SnapshotPathList get_segment_files() const {
-        return get_files(kSegmentExtension);
-    }
 
     [[nodiscard]] SnapshotPathList get_idx_files() const {
         return get_files(kIdxExtension);

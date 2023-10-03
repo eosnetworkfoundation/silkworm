@@ -25,6 +25,8 @@
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/grpc/client/client_context_pool.hpp>
 #include <silkworm/infra/grpc/common/version.hpp>
+#include <silkworm/node/db/mdbx.hpp>
+#include <silkworm/node/snapshot/repository.hpp>
 #include <silkworm/silkrpc/common/constants.hpp>
 #include <silkworm/silkrpc/ethdb/kv/state_changes_stream.hpp>
 #include <silkworm/silkrpc/http/server.hpp>
@@ -48,12 +50,16 @@ class Daemon {
   public:
     static int run(const DaemonSettings& settings, const DaemonInfo& info = {});
 
-    explicit Daemon(DaemonSettings settings, std::shared_ptr<mdbx::env_managed> chaindata_env = nullptr);
+    explicit Daemon(DaemonSettings settings,
+                    std::shared_ptr<mdbx::env_managed> chaindata_env = nullptr,
+                    std::shared_ptr<snapshot::SnapshotRepository> snapshot_repository = nullptr);
 
     Daemon(const Daemon&) = delete;
     Daemon& operator=(const Daemon&) = delete;
 
-    void add_backend_service(std::unique_ptr<ethbackend::BackEnd>&& backend);
+    ClientContextPool& context_pool() { return context_pool_; }
+
+    void add_backend_services(std::vector<std::unique_ptr<ethbackend::BackEnd>>&& backends);
 
     DaemonChecklist run_checklist();
 
@@ -83,6 +89,9 @@ class Daemon {
 
     //! The chaindata MDBX environment or \code nullptr if working remotely
     std::shared_ptr<mdbx::env_managed> chaindata_env_;
+
+    //! The snapshot repository or \code nullptr if working remotely
+    std::shared_ptr<snapshot::SnapshotRepository> snapshot_repository_;
 
     //! The JSON RPC API services.
     std::vector<std::unique_ptr<http::Server>> rpc_services_;

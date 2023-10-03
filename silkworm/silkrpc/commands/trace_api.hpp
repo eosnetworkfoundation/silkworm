@@ -16,16 +16,15 @@
 
 #pragma once
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
-#include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/thread_pool.hpp>
 #include <nlohmann/json.hpp>
 
+#include <silkworm/core/common/block_cache.hpp>
 #include <silkworm/infra/concurrency/private_service.hpp>
 #include <silkworm/infra/concurrency/shared_service.hpp>
-#include <silkworm/silkrpc/common/block_cache.hpp>
 #include <silkworm/silkrpc/core/rawdb/accessors.hpp>
 #include <silkworm/silkrpc/ethdb/database.hpp>
 #include <silkworm/silkrpc/ethdb/kv/state_cache.hpp>
@@ -46,23 +45,25 @@ class TraceRpcApi {
           block_cache_{must_use_shared_service<BlockCache>(io_context_)},
           state_cache_{must_use_shared_service<ethdb::kv::StateCache>(io_context_)},
           database_{must_use_private_service<ethdb::Database>(io_context_)},
-          workers_{workers} {}
+          workers_{workers},
+          backend_{must_use_private_service<ethbackend::BackEnd>(io_context_)} {}
+
     virtual ~TraceRpcApi() = default;
 
     TraceRpcApi(const TraceRpcApi&) = delete;
     TraceRpcApi& operator=(const TraceRpcApi&) = delete;
 
   protected:
-    boost::asio::awaitable<void> handle_trace_call(const nlohmann::json& request, nlohmann::json& reply);
-    boost::asio::awaitable<void> handle_trace_call_many(const nlohmann::json& request, nlohmann::json& reply);
-    boost::asio::awaitable<void> handle_trace_raw_transaction(const nlohmann::json& request, nlohmann::json& reply);
-    boost::asio::awaitable<void> handle_trace_replay_block_transactions(const nlohmann::json& request, nlohmann::json& reply);
-    boost::asio::awaitable<void> handle_trace_replay_transaction(const nlohmann::json& request, nlohmann::json& reply);
-    boost::asio::awaitable<void> handle_trace_block(const nlohmann::json& request, nlohmann::json& reply);
-    boost::asio::awaitable<void> handle_trace_get(const nlohmann::json& request, nlohmann::json& reply);
-    boost::asio::awaitable<void> handle_trace_transaction(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_trace_call(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_trace_call_many(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_trace_raw_transaction(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_trace_replay_block_transactions(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_trace_replay_transaction(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_trace_block(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_trace_get(const nlohmann::json& request, nlohmann::json& reply);
+    Task<void> handle_trace_transaction(const nlohmann::json& request, nlohmann::json& reply);
 
-    boost::asio::awaitable<void> handle_trace_filter(const nlohmann::json& request, json::Stream& stream);
+    Task<void> handle_trace_filter(const nlohmann::json& request, json::Stream& stream);
 
   private:
     boost::asio::io_context& io_context_;
@@ -70,6 +71,7 @@ class TraceRpcApi {
     ethdb::kv::StateCache* state_cache_;
     ethdb::Database* database_;
     boost::asio::thread_pool& workers_;
+    ethbackend::BackEnd* backend_;
 
     friend class silkworm::http::RequestHandler;
 };

@@ -19,11 +19,12 @@
 #include <set>
 #include <thread>
 
+#include <magic_enum.hpp>
+
 #include <silkworm/infra/common/ensure.hpp>
 #include <silkworm/infra/common/environment.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/common/measure.hpp>
-#include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/node/db/db_utils.hpp>
 #include <silkworm/node/db/stages.hpp>
 
@@ -64,9 +65,6 @@ void HeadersStage::HeaderDataModel::update_tables(const BlockHeader& header) {
     // Save progress
     db::write_total_difficulty(tx_, height, hash, td);
 
-    // Save header number
-    // db::write_header_number(tx_, hash.bytes, header.number);  // already done in stage block-hashes
-
     previous_hash_ = hash;
     previous_td_ = td;
     previous_height_ = height;
@@ -96,7 +94,7 @@ HeadersStage::HeadersStage(NodeSettings* ns, SyncContext* sc)
     }
 }
 
-auto HeadersStage::forward(db::RWTxn& tx) -> Stage::Result {
+Stage::Result HeadersStage::forward(db::RWTxn& tx) {
     using std::shared_ptr;
     using namespace std::chrono_literals;
     using namespace std::chrono;
@@ -109,24 +107,30 @@ auto HeadersStage::forward(db::RWTxn& tx) -> Stage::Result {
         auto initial_height = current_height_ = db::stages::read_stage_progress(tx, db::stages::kHeadersKey);
         BlockNum target_height = sync_context_->target_height;
 
-        HeaderDataModel header_persistence(tx, current_height_);
-
         if (forced_target_block_ && current_height_ >= *forced_target_block_) {
-            tx.commit();
+            tx.commit_and_renew();
             log::Info(log_prefix_) << "End, forward skipped due to 'stop-at-block', current block= "
                                    << current_height_.load() << ")";
             return Stage::Result::kSuccess;
         }
-
         if (current_height_ >= target_height) {
-            tx.commit();
+            tx.commit_and_renew();
             log::Info(log_prefix_) << "End, forward skipped, we are already at the target block (" << target_height << ")";
             return Stage::Result::kSuccess;
         }
+        const BlockNum segment_width{target_height - current_height_};
+        if (segment_width > db::stages::kSmallBlockSegmentWidth) {
+            log::Info(log_prefix_,
+                      {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
+                       "from", std::to_string(current_height_),
+                       "to", std::to_string(target_height),
+                       "span", std::to_string(segment_width)});
+        }
+
+        HeaderDataModel header_persistence(tx, current_height_);
 
         get_log_progress();  // this is a trick to set log progress initial value, please improve
         RepeatedMeasure<BlockNum> height_progress(current_height_);
-        log::Info(log_prefix_) << "Updating headers from=" << height_progress.get();
 
         // header processing
         while (current_height_ < target_height && !is_stopping()) {
@@ -147,10 +151,9 @@ auto HeadersStage::forward(db::RWTxn& tx) -> Stage::Result {
         result = Stage::Result::kSuccess;  // no reason to raise unwind
 
         auto headers_processed = current_height_ - initial_height;
-        log::Info(log_prefix_) << "Updating completed, wrote " << headers_processed << " headers,"
-                               << " last=" << current_height_;
+        log::Trace(log_prefix_) << "Update completed wrote " << headers_processed << " headers last=" << current_height_;
 
-        tx.commit();  // this will commit or not depending on the creator of txn
+        tx.commit_and_renew();
 
     } catch (const std::exception& e) {
         log::Error(log_prefix_) << "Forward aborted due to exception: " << e.what();
@@ -161,7 +164,7 @@ auto HeadersStage::forward(db::RWTxn& tx) -> Stage::Result {
     return result;
 }
 
-auto HeadersStage::unwind(db::RWTxn& tx) -> Stage::Result {
+Stage::Result HeadersStage::unwind(db::RWTxn& tx) {
     current_height_ = db::stages::read_stage_progress(tx, db::stages::kHeadersKey);
     get_log_progress();  // this is a trick to set log progress initial value, please improve
 
@@ -170,8 +173,18 @@ auto HeadersStage::unwind(db::RWTxn& tx) -> Stage::Result {
     auto new_height = sync_context_->unwind_point.value();
     if (current_height_ <= new_height) return Stage::Result::kSuccess;
 
-    Stage::Result result{Stage::Result::kSuccess};
     operation_ = OperationType::Unwind;
+
+    const BlockNum segment_width{current_height_ - new_height};
+    if (segment_width > db::stages::kSmallBlockSegmentWidth) {
+        log::Info(log_prefix_,
+                  {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
+                   "from", std::to_string(current_height_),
+                   "to", std::to_string(new_height),
+                   "span", std::to_string(segment_width)});
+    }
+
+    Stage::Result result{Stage::Result::kSuccess};
 
     try {
         // std::optional<Hash> bad_block = sync_context_->bad_block_hash;
@@ -184,7 +197,7 @@ auto HeadersStage::unwind(db::RWTxn& tx) -> Stage::Result {
 
         result = Stage::Result::kSuccess;
 
-        tx.commit();
+        tx.commit_and_renew();
 
     } catch (const std::exception& e) {
         log::Error(log_prefix_) << "Unwind aborted due to exception: " << e.what();
@@ -197,7 +210,7 @@ auto HeadersStage::unwind(db::RWTxn& tx) -> Stage::Result {
     return result;
 }
 
-auto HeadersStage::prune(db::RWTxn&) -> Stage::Result {
+Stage::Result HeadersStage::prune(db::RWTxn&) {
     return Stage::Result::kSuccess;
 }
 

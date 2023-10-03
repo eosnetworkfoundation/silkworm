@@ -20,11 +20,11 @@
 #include <catch2/catch.hpp>
 
 #include <silkworm/core/common/as_range.hpp>
-#include <silkworm/core/common/cast.hpp>
+#include <silkworm/core/common/bytes_to_string.hpp>
 #include <silkworm/core/protocol/rule_set.hpp>
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/infra/common/environment.hpp>
-#include <silkworm/infra/test/log.hpp>
+#include <silkworm/infra/test_util/log.hpp>
 #include <silkworm/node/db/genesis.hpp>
 #include <silkworm/node/stagedsync/execution_engine.hpp>
 #include <silkworm/node/test/context.hpp>
@@ -60,13 +60,17 @@ class DummyRuleSet : public protocol::IRuleSet {
 
     ValidationResult validate_seal(const BlockHeader&) override { return ValidationResult::kOk; }
 
+    void initialize(EVM&) override {}
+
     void finalize(IntraBlockState&, const Block&) override {}
+
+    protocol::BlockReward compute_reward(const Block&) override { return {0, {}}; }
 
     evmc::address get_beneficiary(const BlockHeader&) override { return {}; }
 };
 
 TEST_CASE("Headers receiving and saving") {
-    test::SetLogVerbosityGuard log_guard(log::Level::kNone);
+    test_util::SetLogVerbosityGuard log_guard(log::Level::kNone);
 
     asio::io_context io;
     asio::executor_work_guard<decltype(io.get_executor())> work{io.get_executor()};

@@ -28,6 +28,7 @@
 #include <absl/functional/function_ref.h>
 
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/common/memory_mapped_file.hpp>
 
@@ -98,7 +99,7 @@ class PatternTable : public DecodingTable {
     explicit PatternTable(std::size_t max_depth);
 
     [[nodiscard]] const CodeWord* codeword(std::size_t code) const {
-        return code < codewords_.size() ? codewords_[code].get() : nullptr;
+        return code < codewords_.size() ? codewords_[code] : nullptr;
     }
 
     [[nodiscard]] std::size_t num_codewords() const { return codewords_.size(); }
@@ -120,9 +121,10 @@ class PatternTable : public DecodingTable {
         int bits,
         uint64_t depth);
 
-    [[maybe_unused]] CodeWord* insert_word(std::shared_ptr<CodeWord> codeword);
+    [[maybe_unused]] CodeWord* insert_word(CodeWord* codeword);
 
-    std::vector<std::shared_ptr<CodeWord>> codewords_;
+    std::vector<CodeWord*> codewords_;
+    std::vector<std::unique_ptr<CodeWord>> codewords_list_;
     mutable CodeWord* head_{nullptr};
 
     friend std::ostream& operator<<(std::ostream& out, const PatternTable& pt);
@@ -183,7 +185,12 @@ class Decompressor {
         explicit Iterator(const Decompressor* decoder);
 
         [[nodiscard]] std::size_t data_size() const { return decoder_->words_length_; }
+
+        //! Check if any next word is present in the data stream
         [[nodiscard]] bool has_next() const { return word_offset_ < decoder_->words_length_; }
+
+        //! Check if the word at the current offset has the specified prefix (this does not move offset to the next)
+        [[nodiscard]] bool has_prefix(ByteView prefix);
 
         //! Extract one *compressed* word from current offset in the file and append it to buffer
         //! After extracting current word, move at the beginning of the next one
@@ -231,7 +238,7 @@ class Decompressor {
 
     using ReadAheadFuncRef = absl::FunctionRef<bool(Iterator)>;
 
-    explicit Decompressor(std::filesystem::path compressed_file);
+    explicit Decompressor(std::filesystem::path compressed_path, std::optional<MemoryMappedRegion> compressed_region = {});
     ~Decompressor();
 
     [[nodiscard]] const std::filesystem::path& compressed_path() const { return compressed_path_; }
@@ -247,6 +254,8 @@ class Decompressor {
     }
 
     [[nodiscard]] bool is_open() const { return bool(compressed_file_); }
+
+    [[nodiscard]] const MemoryMappedFile* memory_file() const { return compressed_file_.get(); }
 
     void open();
 
@@ -265,6 +274,7 @@ class Decompressor {
 
     //! The path to the compressed file
     std::filesystem::path compressed_path_;
+    std::optional<MemoryMappedRegion> compressed_region_;
 
     //! The memory-mapped compressed file
     std::unique_ptr<MemoryMappedFile> compressed_file_;

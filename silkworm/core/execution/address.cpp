@@ -18,10 +18,23 @@
 
 #include <ethash/keccak.hpp>
 
+#include <silkworm/core/common/assert.hpp>
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/core/rlp/encode.hpp>
 
 namespace silkworm {
+
+namespace rlp {
+
+    void encode(Bytes& to, const evmc::address& address) {
+        encode(to, ByteView{address.bytes});
+    }
+
+    size_t length(const evmc::address& address) noexcept {
+        return length(ByteView{address.bytes});
+    }
+
+}  // namespace rlp
 
 evmc::address create_address(const evmc::address& caller, uint64_t nonce) noexcept {
     rlp::Header h{true, 1 + kAddressLength};
@@ -55,4 +68,38 @@ evmc::address create2_address(const evmc::address& caller, const evmc::bytes32& 
     std::memcpy(address.bytes, hash.bytes + 12, kAddressLength);
     return address;
 }
+
+evmc::address bytes_to_address(ByteView bytes) {
+    evmc::address out;
+    if (!bytes.empty()) {
+        size_t n{std::min(bytes.length(), kAddressLength)};
+        std::memcpy(out.bytes + kAddressLength - n, bytes.data(), n);
+    }
+    return out;
+}
+
+evmc::address hex_to_address(std::string_view hex, bool return_zero_on_err) {
+    const std::optional<Bytes> bytes{from_hex(hex)};
+    if (!bytes) {
+        if (return_zero_on_err) {
+            return evmc::address{};
+        } else {
+            abort_due_to_assertion_failure("invalid hex encoding", __FILE__, __LINE__);
+        }
+    }
+    return bytes_to_address(*bytes);
+}
+
+std::string address_to_hex(const evmc::address& address) {
+    return to_hex(ByteView{address.bytes}, true);
+}
+
 }  // namespace silkworm
+
+namespace evmc {
+
+std::ostream& operator<<(std::ostream& out, const evmc::address& address) {
+    return out << silkworm::address_to_hex(address);
+}
+
+}  // namespace evmc

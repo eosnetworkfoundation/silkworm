@@ -16,19 +16,23 @@
 
 #include "timeout.hpp"
 
-#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/this_coro.hpp>
 #include <boost/asio/use_awaitable.hpp>
-#include <boost/date_time/posix_time/posix_time_duration.hpp>
 #include <boost/system/errc.hpp>
 #include <boost/system/system_error.hpp>
 
+#include <silkworm/infra/common/log.hpp>
+
 namespace silkworm::concurrency {
 
-boost::asio::awaitable<void> timeout(std::chrono::milliseconds duration) {
+Task<void> timeout(
+    std::chrono::milliseconds duration,
+    const char* source_file_path,
+    int source_file_line) {
     auto executor = co_await boost::asio::this_coro::executor;
-    boost::asio::deadline_timer timer(executor);
-    timer.expires_from_now(boost::posix_time::milliseconds(duration.count()));
+    boost::asio::steady_timer timer(executor);
+    timer.expires_after(duration);
 
     try {
         co_await timer.async_wait(boost::asio::use_awaitable);
@@ -37,6 +41,10 @@ boost::asio::awaitable<void> timeout(std::chrono::milliseconds duration) {
         if (ex.code() == boost::system::errc::operation_canceled)
             co_return;
         throw;
+    }
+
+    if (source_file_path) {
+        log::Trace() << "TimeoutExpiredError in " << source_file_path << ":" << source_file_line;
     }
 
     throw TimeoutExpiredError();

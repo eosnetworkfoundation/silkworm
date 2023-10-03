@@ -16,9 +16,10 @@
 
 #include "intra_block_state.hpp"
 
+#include <bit>
+
 #include <ethash/keccak.hpp>
 
-#include <silkworm/core/common/cast.hpp>
 #include <silkworm/core/common/util.hpp>
 
 namespace silkworm {
@@ -64,6 +65,10 @@ state::Object& IntraBlockState::get_or_create_object(const evmc::address& addres
     } else if (obj->current == std::nullopt) {
         journal_.emplace_back(new state::UpdateDelta{address, *obj});
         obj->current = Account{};
+
+        if (obj->initial) {
+            obj->current->incarnation = obj->initial->incarnation;
+        }
     }
 
     return *obj;
@@ -182,6 +187,10 @@ void IntraBlockState::add_to_balance(const evmc::address& address, const intx::u
 
 void IntraBlockState::subtract_from_balance(const evmc::address& address, const intx::uint256& subtrahend) noexcept {
     auto& obj{get_or_create_object(address)};
+    if (subtrahend == 0) {
+        // See https://github.com/ethereum/go-ethereum/blob/v1.13.0/core/state/state_object.go#L419
+        return;
+    }
     journal_.emplace_back(new state::UpdateBalanceDelta{address, obj.current->balance});
     obj.current->balance -= subtrahend;
     touch(address);
@@ -231,7 +240,7 @@ evmc::bytes32 IntraBlockState::get_code_hash(const evmc::address& address) const
 void IntraBlockState::set_code(const evmc::address& address, ByteView code) noexcept {
     auto& obj{get_or_create_object(address)};
     journal_.emplace_back(new state::UpdateDelta{address, obj});
-    obj.current->code_hash = bit_cast<evmc_bytes32>(keccak256(code));
+    obj.current->code_hash = std::bit_cast<evmc_bytes32>(keccak256(code));
 
     // Don't overwrite already existing code so that views of it
     // that were previously returned by get_code() are still valid.
@@ -309,6 +318,17 @@ void IntraBlockState::set_storage(const evmc::address& address, const evmc::byte
     journal_.emplace_back(new state::StorageChangeDelta{address, key, prev});
 }
 
+evmc::bytes32 IntraBlockState::get_transient_storage(const evmc::address& addr, const evmc::bytes32& key) {
+    return transient_storage_[addr][key];
+}
+
+void IntraBlockState::set_transient_storage(const evmc::address& addr, const evmc::bytes32& key, const evmc::bytes32& value) {
+    auto& v = transient_storage_[addr][key];
+    const auto prev = v;
+    v = value;
+    journal_.emplace_back(std::make_unique<state::TransientStorageChangeDelta>(addr, key, prev));
+}
+
 void IntraBlockState::write_to_db(uint64_t block_number) {
     db_.begin_block(block_number);
 
@@ -365,7 +385,11 @@ void IntraBlockState::revert_to_snapshot(const IntraBlockState::Snapshot& snapsh
     filtered_messages_.resize(snapshot.filtered_messages_size_);
 }
 
-void IntraBlockState::finalize_transaction() {
+void IntraBlockState::finalize_transaction(evmc_revision rev) {
+    destruct_suicides();
+    if (rev >= EVMC_SPURIOUS_DRAGON) {
+        destruct_touched_dead();
+    }
     for (auto& x : storage_) {
         state::Storage& storage{x.second};
         for (const auto& [key, val] : storage.current) {
@@ -395,6 +419,8 @@ void IntraBlockState::clear_journal_and_substate() {
     // EIP-2929
     accessed_addresses_.clear();
     accessed_storage_keys_.clear();
+
+    transient_storage_.clear();
 }
 
 void IntraBlockState::add_log(const Log& log) noexcept { logs_.push_back(log); }
