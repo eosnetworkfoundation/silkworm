@@ -23,15 +23,16 @@
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/thread_pool.hpp>
 #include <boost/asio/use_future.hpp>
-#include <boost/endian/conversion.hpp>
 #include <catch2/catch.hpp>
 #include <evmc/evmc.hpp>
 #include <gmock/gmock.h>
 
-#include <silkworm/infra/test/log.hpp>
+#include <silkworm/infra/test_util/log.hpp>
 #include <silkworm/silkrpc/ethdb/kv/remote_database.hpp>
 #include <silkworm/silkrpc/ethdb/kv/remote_transaction.hpp>
+#include <silkworm/silkrpc/storage/remote_chain_storage.hpp>
 #include <silkworm/silkrpc/test/kv_test_base.hpp>
+#include <silkworm/silkrpc/test/mock_back_end.hpp>
 #include <silkworm/silkrpc/test/mock_estimate_gas_oracle.hpp>
 #include <silkworm/silkrpc/types/block.hpp>
 
@@ -39,7 +40,7 @@ namespace silkworm::rpc {
 
 struct RemoteDatabaseTest : test::KVTestBase {
   public:
-    // RemoteDatabase holds the KV stub by std::unique_ptr so we cannot rely on mock stub from base class
+    // RemoteDatabase holds the KV stub by std::unique_ptr, so we cannot rely on mock stub from base class
     StrictMockKVStub* kv_stub_ = new StrictMockKVStub;
     ethdb::kv::RemoteDatabase remote_db_{grpc_context_, std::unique_ptr<StrictMockKVStub>{kv_stub_}};
 };
@@ -50,7 +51,7 @@ using testing::InvokeWithoutArgs;
 using testing::Return;
 
 TEST_CASE("EstimateGasException") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
 
     SECTION("EstimateGasException(int64_t, std::string const&)") {
         const char* kErrorMessage{"insufficient funds for transfer"};
@@ -73,7 +74,7 @@ TEST_CASE("EstimateGasException") {
 }
 
 TEST_CASE("estimate gas") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    silkworm::test_util::SetLogVerbosityGuard log_guard{log::Level::kNone};
     boost::asio::thread_pool pool{1};
     boost::asio::thread_pool workers{1};
 
@@ -84,11 +85,11 @@ TEST_CASE("estimate gas") {
 
     silkworm::Account kAccount{0, kBalance};
 
-    BlockHeaderProvider block_header_provider = [&kBlockHeader](uint64_t /*block_number*/) -> boost::asio::awaitable<silkworm::BlockHeader> {
+    BlockHeaderProvider block_header_provider = [&kBlockHeader](BlockNum /*block_number*/) -> Task<std::optional<BlockHeader>> {
         co_return kBlockHeader;
     };
 
-    AccountReader account_reader = [&kAccount](const evmc::address& /*address*/, uint64_t /*block_number*/) -> boost::asio::awaitable<std::optional<silkworm::Account>> {
+    AccountReader account_reader = [&kAccount](const evmc::address& /*address*/, BlockNum /*block_number*/) -> Task<std::optional<silkworm::Account>> {
         co_return kAccount;
     };
 
@@ -98,7 +99,9 @@ TEST_CASE("estimate gas") {
     RemoteDatabaseTest remote_db_test;
     auto tx = std::make_unique<ethdb::kv::RemoteTransaction>(*remote_db_test.stub_, remote_db_test.grpc_context_);
     ethdb::TransactionDatabase tx_database{*tx};
-    MockEstimateGasOracle estimate_gas_oracle{block_header_provider, account_reader, config, workers, *tx, tx_database};
+    const auto backend = std::make_unique<test::BackEndMock>();
+    const RemoteChainStorage storage{tx_database, backend.get()};
+    MockEstimateGasOracle estimate_gas_oracle{block_header_provider, account_reader, config, workers, *tx, tx_database, storage};
 
     SECTION("Call empty, always fails but success in last step") {
         ExecutionResult expect_result_ok{.error_code = evmc_status_code::EVMC_SUCCESS};

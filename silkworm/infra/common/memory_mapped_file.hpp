@@ -46,6 +46,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <istream>
+#include <optional>
 #include <streambuf>
 #include <tuple>
 
@@ -68,10 +69,23 @@ using FileDescriptor = HANDLE;
 using FileDescriptor = int;
 #endif
 
+struct MemoryMappedRegion {
+    uint8_t* address{nullptr};
+    std::size_t length{0};
+};
+
 class MemoryMappedFile {
   public:
-    explicit MemoryMappedFile(std::filesystem::path path, bool read_only = true);
+    explicit MemoryMappedFile(std::filesystem::path path, std::optional<MemoryMappedRegion> region = {}, bool read_only = true);
     ~MemoryMappedFile();
+
+    // Not copyable
+    MemoryMappedFile(const MemoryMappedFile&) = delete;
+    MemoryMappedFile& operator=(const MemoryMappedFile&) = delete;
+
+    // Only movable
+    MemoryMappedFile(MemoryMappedFile&& source) noexcept;
+    MemoryMappedFile& operator=(MemoryMappedFile&& other) noexcept;
 
     [[nodiscard]] std::filesystem::path path() const {
         return path_;
@@ -107,6 +121,9 @@ class MemoryMappedFile {
 
     //! The file size
     std::size_t length_{0};
+
+    //! Flag indicating if memory-mapping is managed internally or not
+    bool managed_;
 
 #ifdef _WIN32
     void cleanup();

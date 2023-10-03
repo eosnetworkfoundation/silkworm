@@ -20,11 +20,12 @@
 #include <span>
 #include <utility>
 
-#include <boost/endian/conversion.hpp>
 #include <intx/intx.hpp>
 
 #include <silkworm/core/common/endian.hpp>
 #include <silkworm/core/common/util.hpp>
+#include <silkworm/core/execution/address.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
 
@@ -82,7 +83,7 @@ void to_quantity(std::span<char> quantity_hex_bytes, silkworm::ByteView bytes) {
     to_hex_no_leading_zeros(quantity_hex_bytes, bytes);
 }
 
-void to_quantity(std::span<char> quantity_hex_bytes, uint64_t number) {
+void to_quantity(std::span<char> quantity_hex_bytes, BlockNum number) {
     silkworm::Bytes number_bytes(8, '\0');
     silkworm::endian::store_big_u64(number_bytes.data(), number);
     to_hex_no_leading_zeros(quantity_hex_bytes, number_bytes);
@@ -138,14 +139,24 @@ uint64_t from_quantity(const std::string& hex_quantity) {
     return std::stoul(hex_quantity, nullptr, 16);
 }
 
+std::string to_hex(uint64_t number) {
+    silkworm::Bytes number_bytes(8, '\0');
+    endian::store_big_u64(&number_bytes[0], number);
+    return silkworm::to_hex(number_bytes, /*with_prefix=*/true);
+}
+
 std::string to_hex_no_leading_zeros(uint64_t number) {
     silkworm::Bytes number_bytes(8, '\0');
-    boost::endian::store_big_u64(&number_bytes[0], number);
+    endian::store_big_u64(&number_bytes[0], number);
     return to_hex_no_leading_zeros(number_bytes);
 }
 
 std::string to_quantity(silkworm::ByteView bytes) {
     return "0x" + to_hex_no_leading_zeros(bytes);
+}
+
+std::string to_quantity(const evmc::bytes32& bytes) {
+    return to_quantity(silkworm::ByteView{bytes.bytes});
 }
 
 std::string to_quantity(uint64_t number) {
@@ -164,16 +175,15 @@ std::string to_quantity(intx::uint256 number) {
 namespace evmc {
 
 void to_json(nlohmann::json& json, const address& addr) {
-    json = "0x" + silkworm::to_hex(addr);
+    json = silkworm::address_to_hex(addr);
 }
 
 void from_json(const nlohmann::json& json, address& addr) {
-    const auto address_bytes = silkworm::from_hex(json.get<std::string>());
-    addr = silkworm::to_evmc_address(address_bytes.value_or(silkworm::Bytes{}));
+    addr = silkworm::hex_to_address(json.get<std::string>(), /*return_zero_on_err=*/true);
 }
 
 void to_json(nlohmann::json& json, const bytes32& b32) {
-    json = "0x" + silkworm::to_hex(b32);
+    json = silkworm::to_hex(b32, true);
 }
 
 void from_json(const nlohmann::json& json, bytes32& b32) {
@@ -263,20 +273,6 @@ void to_json(nlohmann::json& json, const PeerInfo& info) {
     json["network"]["static"] = info.is_connection_static;
     json["network"]["trusted"] = info.is_connection_trusted;
     json["protocols"] = nullptr;
-}
-
-void to_json(nlohmann::json& json, const struct CallBundleTxInfo& tx_info) {
-    json["gasUsed"] = tx_info.gas_used;
-    json["txHash"] = silkworm::to_bytes32({tx_info.hash.bytes, silkworm::kHashLength});
-    if (!tx_info.error_message.empty())
-        json["error"] = tx_info.error_message;
-    else
-        json["value"] = silkworm::to_bytes32({tx_info.value.bytes, silkworm::kHashLength});
-}
-
-void to_json(nlohmann::json& json, const struct CallBundleInfo& bundle_info) {
-    json["bundleHash"] = silkworm::to_bytes32({bundle_info.bundle_hash.bytes, silkworm::kHashLength});
-    json["results"] = bundle_info.txs_info;
 }
 
 void to_json(nlohmann::json& json, const AccessListResult& access_list_result) {
@@ -378,6 +374,25 @@ void to_json(nlohmann::json& json, const BlockTransactionsResponse& b) {
     }
 }
 
+void to_json(nlohmann::json& json, const TransactionsWithReceipts& b) {
+    json["firstPage"] = b.first_page;
+    json["lastPage"] = b.last_page;
+    json["txs"] = b.transactions;
+    for (std::size_t i{0}; i < json["txs"].size(); i++) {
+        auto& json_txn = json["txs"][i];
+        json_txn["transactionIndex"] = to_quantity(b.receipts.at(i).tx_index);
+        json_txn["blockHash"] = b.blocks.at(i).hash;
+        json_txn["blockNumber"] = to_quantity(b.blocks.at(i).header.number);
+        json_txn["gasPrice"] = to_quantity(b.transactions[i].effective_gas_price(b.blocks.at(i).header.base_fee_per_gas.value_or(0)));
+    }
+    json["receipts"] = b.receipts;
+    for (std::size_t i{0}; i < json["receipts"].size(); i++) {
+        auto& json_txn = json["receipts"][i];
+        json_txn["effectiveGasPrice"] = to_quantity(b.transactions[i].effective_gas_price(b.blocks.at(i).header.base_fee_per_gas.value_or(0)));
+        json_txn["timestamp"] = b.blocks.at(i).header.timestamp;
+    }
+}
+
 void to_json(nlohmann::json& json, const PayloadStatus& payload_status) {
     json["status"] = payload_status.status;
 
@@ -444,7 +459,7 @@ void to_json(nlohmann::json& json, const RevertError& error) {
 void to_json(nlohmann::json& json, const std::set<evmc::address>& addresses) {
     json = nlohmann::json::array();
     for (const auto& address : addresses) {
-        json.push_back("0x" + silkworm::to_hex(address));
+        json.push_back(address_to_hex(address));
     }
 }
 

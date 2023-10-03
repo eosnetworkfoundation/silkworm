@@ -21,6 +21,7 @@
 #include <vector>
 
 #include <silkworm/core/common/util.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
 #include <silkworm/silkrpc/core/blocks.hpp>
@@ -35,7 +36,7 @@
 namespace silkworm::rpc::commands {
 
 // https://eth.wiki/json-rpc/API#trace_call
-boost::asio::awaitable<void> TraceRpcApi::handle_trace_call(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TraceRpcApi::handle_trace_call(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.size() < 3) {
         auto error_msg = "invalid trace_call params: " + params.dump();
@@ -48,18 +49,25 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_call(const nlohmann::json
     const auto config = params[1].get<trace::TraceConfig>();
     const auto block_number_or_hash = params[2].get<BlockNumberOrHash>();
 
-    SILK_INFO << "call: " << call << " block_number_or_hash: " << block_number_or_hash << " config: " << config;
+    SILK_TRACE << "call: " << call << " block_number_or_hash: " << block_number_or_hash << " config: " << config;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
         ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
-        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+
+        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, *chain_storage, tx_database, block_number_or_hash);
+        if (!block_with_hash) {
+            reply = make_json_error(request["id"], 100, "block not found");
+            co_await tx->close();  // RAII not (yet) available with coroutines
+            co_return;
+        }
         const bool is_latest_block = co_await core::is_latest_block_number(block_with_hash->block.header.number, tx_database);
         const core::rawdb::DatabaseReader& db_reader =
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database);
-        trace::TraceCallExecutor executor{*block_cache_, db_reader, workers_, *tx};
+        trace::TraceCallExecutor executor{*block_cache_, db_reader, *chain_storage, workers_, *tx};
         const auto result = co_await executor.trace_call(block_with_hash->block, call, config);
 
         if (result.pre_check_error) {
@@ -80,7 +88,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_call(const nlohmann::json
 }
 
 // https://eth.wiki/json-rpc/API#trace_callmany
-boost::asio::awaitable<void> TraceRpcApi::handle_trace_call_many(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TraceRpcApi::handle_trace_call_many(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.size() < 2) {
         auto error_msg = "invalid trace_callMany params: " + params.dump();
@@ -91,19 +99,25 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_call_many(const nlohmann:
     const auto trace_calls = params[0].get<std::vector<trace::TraceCall>>();
     const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
 
-    SILK_INFO << "#trace_calls: " << trace_calls.size() << " block_number_or_hash: " << block_number_or_hash;
+    SILK_TRACE << "#trace_calls: " << trace_calls.size() << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
         ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
-        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, *chain_storage, tx_database, block_number_or_hash);
+        if (!block_with_hash) {
+            reply = make_json_error(request["id"], 100, "block not found");
+            co_await tx->close();  // RAII not (yet) available with coroutines
+            co_return;
+        }
         const bool is_latest_block = co_await core::is_latest_block_number(block_with_hash->block.header.number, tx_database);
 
         const core::rawdb::DatabaseReader& db_reader =
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database);
-        trace::TraceCallExecutor executor{*block_cache_, db_reader, workers_, *tx};
+        trace::TraceCallExecutor executor{*block_cache_, db_reader, *chain_storage, workers_, *tx};
         const auto result = co_await executor.trace_calls(block_with_hash->block, trace_calls);
 
         if (result.pre_check_error) {
@@ -124,7 +138,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_call_many(const nlohmann:
 }
 
 // https://eth.wiki/json-rpc/API#trace_rawtransaction
-boost::asio::awaitable<void> TraceRpcApi::handle_trace_raw_transaction(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TraceRpcApi::handle_trace_raw_transaction(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.size() < 2) {
         const auto error_msg = "invalid trace_rawTransaction params: " + params.dump();
@@ -177,7 +191,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_raw_transaction(const nlo
 
     const auto config = params[1].get<trace::TraceConfig>();
 
-    SILK_INFO << "transaction: " << transaction << " config: " << config;
+    SILK_TRACE << "transaction: " << transaction << " config: " << config;
 
     auto tx = co_await database_->begin();
 
@@ -185,9 +199,15 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_raw_transaction(const nlo
         ethdb::TransactionDatabase tx_database{*tx};
 
         const auto block_number = co_await core::get_latest_block_number(tx_database);
-        const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+        const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, *chain_storage, block_number);
+        if (!block_with_hash) {
+            reply = make_json_error(request["id"], 100, "block not found");
+            co_await tx->close();  // RAII not (yet) available with coroutines
+            co_return;
+        }
 
-        trace::TraceCallExecutor executor{*block_cache_, tx_database, workers_, *tx};
+        trace::TraceCallExecutor executor{*block_cache_, tx_database, *chain_storage, workers_, *tx};
         const auto result = co_await executor.trace_transaction(block_with_hash->block, transaction, config);
 
         if (result.pre_check_error) {
@@ -208,7 +228,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_raw_transaction(const nlo
 }
 
 // https://eth.wiki/json-rpc/API#trace_replayblocktransactions
-boost::asio::awaitable<void> TraceRpcApi::handle_trace_replay_block_transactions(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TraceRpcApi::handle_trace_replay_block_transactions(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.size() < 2) {
         auto error_msg = "invalid trace_replayBlockTransactions params: " + params.dump();
@@ -219,18 +239,21 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_replay_block_transactions
     const auto block_number_or_hash = params[0].get<BlockNumberOrHash>();
     const auto config = params[1].get<trace::TraceConfig>();
 
-    SILK_INFO << " block_number_or_hash: " << block_number_or_hash << " config: " << config;
+    SILK_TRACE << " block_number_or_hash: " << block_number_or_hash << " config: " << config;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-
-        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
-
-        trace::TraceCallExecutor executor{*block_cache_, tx_database, workers_, *tx};
-        const auto result = co_await executor.trace_block_transactions(block_with_hash->block, config);
-        reply = make_json_content(request["id"], result);
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, *chain_storage, tx_database, block_number_or_hash);
+        if (block_with_hash) {
+            trace::TraceCallExecutor executor{*block_cache_, tx_database, *chain_storage, workers_, *tx};
+            const auto result = co_await executor.trace_block_transactions(block_with_hash->block, config);
+            reply = make_json_content(request["id"], result);
+        } else {
+            reply = make_json_error(request["id"], 100, "block not found");
+        }
     } catch (const std::exception& e) {
         SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
         reply = make_json_error(request["id"], 100, e.what());
@@ -244,7 +267,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_replay_block_transactions
 }
 
 // https://eth.wiki/json-rpc/API#trace_replaytransaction
-boost::asio::awaitable<void> TraceRpcApi::handle_trace_replay_transaction(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TraceRpcApi::handle_trace_replay_transaction(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.size() < 2) {
         auto error_msg = "invalid trace_replayTransaction params: " + params.dump();
@@ -255,19 +278,20 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_replay_transaction(const 
     const auto transaction_hash = params[0].get<evmc::bytes32>();
     const auto config = params[1].get<trace::TraceConfig>();
 
-    SILK_INFO << "transaction_hash: " << transaction_hash << " config: " << config;
+    SILK_TRACE << "transaction_hash: " << silkworm::to_hex(transaction_hash) << " config: " << config;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-        const auto tx_with_block = co_await core::read_transaction_by_hash(*block_cache_, tx_database, transaction_hash);
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+        const auto tx_with_block = co_await core::read_transaction_by_hash(*block_cache_, *chain_storage, transaction_hash);
         if (!tx_with_block) {
             std::ostringstream oss;
-            oss << "transaction 0x" << transaction_hash << " not found";
+            oss << "transaction " << silkworm::to_hex(transaction_hash, true) << " not found";
             reply = make_json_error(request["id"], -32000, oss.str());
         } else {
-            trace::TraceCallExecutor executor{*block_cache_, tx_database, workers_, *tx};
+            trace::TraceCallExecutor executor{*block_cache_, tx_database, *chain_storage, workers_, *tx};
             const auto result = co_await executor.trace_transaction(tx_with_block->block_with_hash.block, tx_with_block->transaction, config);
 
             if (result.pre_check_error) {
@@ -289,7 +313,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_replay_transaction(const 
 }
 
 // https://eth.wiki/json-rpc/API#trace_block
-boost::asio::awaitable<void> TraceRpcApi::handle_trace_block(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TraceRpcApi::handle_trace_block(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.empty()) {
         auto error_msg = "invalid trace_block params: " + params.dump();
@@ -299,16 +323,21 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_block(const nlohmann::jso
     }
     const auto block_number_or_hash = params[0].get<BlockNumberOrHash>();
 
-    SILK_INFO << " block_number_or_hash: " << block_number_or_hash;
+    SILK_TRACE << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, *chain_storage, tx_database, block_number_or_hash);
+        if (!block_with_hash) {
+            reply = make_json_error(request["id"], 100, "block not found");
+            co_await tx->close();  // RAII not (yet) available with coroutines
+            co_return;
+        }
 
-        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
-
-        trace::TraceCallExecutor executor{*block_cache_, tx_database, workers_, *tx};
+        trace::TraceCallExecutor executor{*block_cache_, tx_database, *chain_storage, workers_, *tx};
         trace::Filter filter;
         const auto result = co_await executor.trace_block(*block_with_hash, filter);
         reply = make_json_content(request["id"], result);
@@ -325,7 +354,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_block(const nlohmann::jso
 }
 
 // https://eth.wiki/json-rpc/API#trace_filter
-boost::asio::awaitable<void> TraceRpcApi::handle_trace_filter(const nlohmann::json& request, json::Stream& stream) {
+Task<void> TraceRpcApi::handle_trace_filter(const nlohmann::json& request, json::Stream& stream) {
     const auto& params = request["params"];
     if (params.empty()) {
         auto error_msg = "invalid trace_filter params: " + params.dump();
@@ -337,7 +366,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_filter(const nlohmann::js
 
     const auto trace_filter = params[0].get<trace::TraceFilter>();
 
-    SILK_INFO << "trace_filter: " << trace_filter;
+    SILK_TRACE << "trace_filter: " << trace_filter;
 
     stream.open_object();
     stream.write_field("id", request["id"]);
@@ -347,10 +376,11 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_filter(const nlohmann::js
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
 
-        trace::TraceCallExecutor executor{*block_cache_, tx_database, workers_, *tx};
+        trace::TraceCallExecutor executor{*block_cache_, tx_database, *chain_storage, workers_, *tx};
 
-        co_await executor.trace_filter(trace_filter, &stream);
+        co_await executor.trace_filter(trace_filter, *chain_storage, &stream);
     } catch (const std::exception& e) {
         SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
 
@@ -370,7 +400,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_filter(const nlohmann::js
 }
 
 // https://eth.wiki/json-rpc/API#trace_get
-boost::asio::awaitable<void> TraceRpcApi::handle_trace_get(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TraceRpcApi::handle_trace_get(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.size() < 2) {
         auto error_msg = "invalid trace_get params: " + params.dump();
@@ -384,7 +414,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_get(const nlohmann::json&
     std::vector<uint16_t> indices;
     std::transform(str_indices.begin(), str_indices.end(), std::back_inserter(indices),
                    [](const std::string& str) { return std::stoi(str, nullptr, 16); });
-    SILK_INFO << "transaction_hash: " << transaction_hash << ", #indices: " << indices.size();
+    SILK_TRACE << "transaction_hash: " << silkworm::to_hex(transaction_hash) << ", #indices: " << indices.size();
 
     // Erigon RpcDaemon compatibility
     // Parity fails if it gets more than a single index. It returns nothing in this case. Must we?
@@ -397,12 +427,13 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_get(const nlohmann::json&
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
 
-        const auto tx_with_block = co_await core::read_transaction_by_hash(*block_cache_, tx_database, transaction_hash);
+        const auto tx_with_block = co_await core::read_transaction_by_hash(*block_cache_, *chain_storage, transaction_hash);
         if (!tx_with_block) {
             reply = make_json_content(request["id"]);
         } else {
-            trace::TraceCallExecutor executor{*block_cache_, tx_database, workers_, *tx};
+            trace::TraceCallExecutor executor{*block_cache_, tx_database, *chain_storage, workers_, *tx};
             const auto result = co_await executor.trace_transaction(tx_with_block->block_with_hash, tx_with_block->transaction);
 
             uint16_t index = indices[0] + 1;  // Erigon RpcDaemon compatibility
@@ -424,7 +455,7 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_get(const nlohmann::json&
 }
 
 // https://eth.wiki/json-rpc/API#trace_transaction
-boost::asio::awaitable<void> TraceRpcApi::handle_trace_transaction(const nlohmann::json& request, nlohmann::json& reply) {
+Task<void> TraceRpcApi::handle_trace_transaction(const nlohmann::json& request, nlohmann::json& reply) {
     const auto& params = request["params"];
     if (params.empty()) {
         auto error_msg = "invalid trace_transaction params: " + params.dump();
@@ -434,17 +465,18 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_transaction(const nlohman
     }
     const auto transaction_hash = params[0].get<evmc::bytes32>();
 
-    SILK_INFO << "transaction_hash: " << transaction_hash;
+    SILK_TRACE << "transaction_hash: " << silkworm::to_hex(transaction_hash);
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-        const auto tx_with_block = co_await core::read_transaction_by_hash(*block_cache_, tx_database, transaction_hash);
+        const auto chain_storage = tx->create_storage(tx_database, backend_);
+        const auto tx_with_block = co_await core::read_transaction_by_hash(*block_cache_, *chain_storage, transaction_hash);
         if (!tx_with_block) {
             reply = make_json_content(request["id"]);
         } else {
-            trace::TraceCallExecutor executor{*block_cache_, tx_database, workers_, *tx};
+            trace::TraceCallExecutor executor{*block_cache_, tx_database, *chain_storage, workers_, *tx};
             auto result = co_await executor.trace_transaction(tx_with_block->block_with_hash, tx_with_block->transaction);
             reply = make_json_content(request["id"], result);
         }

@@ -16,10 +16,9 @@
 
 #pragma once
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
-#include <boost/asio.hpp>
-#include <boost/asio/awaitable.hpp>
+#include <boost/asio/io_context.hpp>
 
 #include <silkworm/infra/concurrency/awaitable_future.hpp>
 
@@ -27,8 +26,6 @@
 #include "silkworm/node/db/memory_mutation.hpp"
 
 namespace silkworm::stagedsync {
-
-namespace asio = boost::asio;
 
 // ExtendingFork is a composition of a Fork, an in-memory database and an io_context.
 // It executes the fork operations on the private io_context, so we can:
@@ -38,7 +35,7 @@ namespace asio = boost::asio;
 
 class ExtendingFork {
   public:
-    explicit ExtendingFork(BlockId forking_point, MainChain&, asio::io_context&);
+    explicit ExtendingFork(BlockId forking_point, MainChain&, boost::asio::io_context&);
     ExtendingFork(const ExtendingFork&) = delete;
     ExtendingFork(ExtendingFork&& orig) = delete;  // not movable, it schedules methods execution in another thread
     ~ExtendingFork();
@@ -51,13 +48,11 @@ class ExtendingFork {
     void extend_with(Hash head_hash, const Block& head);
 
     // verification
-    auto verify_chain()
-        -> concurrency::AwaitableFuture<VerificationResult>;
-    auto fork_choice(Hash head_block_hash, std::optional<Hash> finalized_block_hash = std::nullopt)
-        -> concurrency::AwaitableFuture<bool>;
+    concurrency::AwaitableFuture<VerificationResult> verify_chain();
+    concurrency::AwaitableFuture<bool> fork_choice(Hash head_block_hash, std::optional<Hash> finalized_block_hash = std::nullopt);
 
     // state
-    auto current_head() const -> BlockId;
+    BlockId current_head() const;
 
   protected:
     friend MainChain;
@@ -67,13 +62,13 @@ class ExtendingFork {
     void save_exception(std::exception_ptr);
     void propagate_exception_if_any();
 
-    BlockId forking_point_;                       // starting point
-    MainChain& main_chain_;                       // main chain
-    asio::io_context& io_context_;                // for io
-    std::unique_ptr<Fork> fork_;                  // for domain logic
-    std::unique_ptr<asio::io_context> executor_;  // for pipeline execution
-    std::thread thread_;                          // for executor
-    std::exception_ptr exception_{};              // last exception
+    BlockId forking_point_;                              // starting point
+    MainChain& main_chain_;                              // main chain
+    boost::asio::io_context& io_context_;                // for io
+    std::unique_ptr<Fork> fork_;                         // for domain logic
+    std::unique_ptr<boost::asio::io_context> executor_;  // for pipeline execution
+    std::thread thread_;                                 // for executor
+    std::exception_ptr exception_{};                     // last exception
 
     // cached values provided to avoid thread synchronization
     BlockId current_head_{};
@@ -82,11 +77,9 @@ class ExtendingFork {
 using ForkContainer = std::vector<std::unique_ptr<ExtendingFork>>;
 
 // find the fork with the specified head
-auto find_fork_by_head(ForkContainer& forks, const Hash& requested_head_hash)
-    -> ForkContainer::iterator;
+ForkContainer::iterator find_fork_by_head(ForkContainer& forks, const Hash& requested_head_hash);
 
 // find the fork with the head to extend
-auto find_fork_to_extend(ForkContainer& forks, const BlockHeader& header)
-    -> ForkContainer::iterator;
+ForkContainer::iterator find_fork_to_extend(ForkContainer& forks, const BlockHeader& header);
 
 }  // namespace silkworm::stagedsync

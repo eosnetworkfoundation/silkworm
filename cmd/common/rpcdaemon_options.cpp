@@ -95,8 +95,17 @@ void add_rpcdaemon_options(CLI::App& cli, silkworm::rpc::DaemonSettings& setting
         ->description("JWT secret file to ensure safe connection between CL and EL as file path")
         ->capture_default_str();
 
+    cli.add_option("--http.cors.domain", settings.cors_domain)
+        ->description("Comma separated list of domains from which to accept cross origin requests (browser enforced)")
+        ->delimiter(',')
+        ->required(false);
+
     cli.add_flag("--skip_protocol_check", settings.skip_protocol_check)
         ->description("Flag indicating if gRPC protocol version check should be skipped")
+        ->capture_default_str();
+
+    cli.add_flag("--erigon_compatibility", settings.erigon_json_rpc_compatibility)
+        ->description("Flag indicating if strict compatibility with Erigon RpcDaemon is enabled")
         ->capture_default_str();
 }
 

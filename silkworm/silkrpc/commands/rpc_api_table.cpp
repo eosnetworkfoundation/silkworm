@@ -101,6 +101,11 @@ void RpcApiTable::add_debug_handlers() {
     method_handlers_[http::method::k_debug_getModifiedAccountsByNumber] = &commands::RpcApi::handle_debug_get_modified_accounts_by_number;
     method_handlers_[http::method::k_debug_getModifiedAccountsByHash] = &commands::RpcApi::handle_debug_get_modified_accounts_by_hash;
     method_handlers_[http::method::k_debug_storageRangeAt] = &commands::RpcApi::handle_debug_storage_range_at;
+    method_handlers_[http::method::k_debug_accountAt] = &commands::RpcApi::handle_debug_account_at;
+    method_handlers_[http::method::k_debug_getRawBlock] = &commands::RpcApi::handle_debug_get_raw_block;
+    method_handlers_[http::method::k_debug_getRawHeader] = &commands::RpcApi::handle_debug_get_raw_header;
+    //    method_handlers_[http::method::k_debug_getRawReceipts] = &commands::RpcApi::;
+    method_handlers_[http::method::k_debug_getRawTransaction] = &commands::RpcApi::handle_debug_get_raw_transaction;
 
     stream_handlers_[http::method::k_debug_traceCall] = &commands::RpcApi::handle_debug_trace_call;
     stream_handlers_[http::method::k_debug_traceCallMany] = &commands::RpcApi::handle_debug_trace_call_many;
@@ -178,14 +183,18 @@ void RpcApiTable::add_parity_handlers() {
 }
 
 void RpcApiTable::add_erigon_handlers() {
+    method_handlers_[http::method::k_erigon_blockNumber] = &commands::RpcApi::handle_erigon_block_number;
+    method_handlers_[http::method::k_erigon_cacheCheck] = &commands::RpcApi::handle_erigon_cache_check;
+    method_handlers_[http::method::k_erigon_getBalanceChangesInBlock] = &commands::RpcApi::handle_erigon_get_balance_changes_in_block;
     method_handlers_[http::method::k_erigon_getBlockByTimestamp] = &commands::RpcApi::handle_erigon_get_block_by_timestamp;
+    method_handlers_[http::method::k_erigon_getBlockReceiptsByBlockHash] = &commands::RpcApi::handle_erigon_get_block_receipts_by_block_hash;
     method_handlers_[http::method::k_erigon_getHeaderByHash] = &commands::RpcApi::handle_erigon_get_header_by_hash;
     method_handlers_[http::method::k_erigon_getHeaderByNumber] = &commands::RpcApi::handle_erigon_get_header_by_number;
+    method_handlers_[http::method::k_erigon_getLatestLogs] = &commands::RpcApi::handle_erigon_get_latest_logs;
     method_handlers_[http::method::k_erigon_getLogsByHash] = &commands::RpcApi::handle_erigon_get_logs_by_hash;
     method_handlers_[http::method::k_erigon_forks] = &commands::RpcApi::handle_erigon_forks;
     method_handlers_[http::method::k_erigon_watchTheBurn] = &commands::RpcApi::handle_erigon_watch_the_burn;
     method_handlers_[http::method::k_erigon_cumulative_chain_traffic] = &commands::RpcApi::handle_erigon_cumulative_chain_traffic;
-    method_handlers_[http::method::k_erigon_blockNumber] = &commands::RpcApi::handle_erigon_block_number;
     method_handlers_[http::method::k_erigon_nodeInfo] = &commands::RpcApi::handle_erigon_node_info;
 }
 
@@ -236,6 +245,8 @@ void RpcApiTable::add_ots_handlers() {
     method_handlers_[http::method::k_ots_traceTransaction] = &commands::RpcApi::handle_ots_trace_transaction;
     method_handlers_[http::method::k_ots_getTransactionError] = &commands::RpcApi::handle_ots_get_transaction_error;
     method_handlers_[http::method::k_ots_getInternalOperations] = &commands::RpcApi::handle_ots_get_internal_operations;
+    method_handlers_[http::method::k_ots_search_transactions_before] = &commands::RpcApi::handle_ots_search_transactions_before;
+    method_handlers_[http::method::k_ots_search_transactions_after] = &commands::RpcApi::handle_ots_search_transactions_after;
 }
 
 }  // namespace silkworm::rpc::commands

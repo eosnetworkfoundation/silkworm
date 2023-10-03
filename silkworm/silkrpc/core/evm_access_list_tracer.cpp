@@ -24,6 +24,8 @@
 #include <evmone/instructions.hpp>
 #include <intx/intx.hpp>
 
+#include <silkworm/core/execution/address.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
 
@@ -44,11 +46,6 @@ const char* CALLCODE = evmone::instr::traits[evmc_opcode::OP_CALLCODE].name;
 std::string get_opcode_name(const char* const* names, std::uint8_t opcode) {
     const auto name = names[opcode];
     return (name != nullptr) ? name : "opcode 0x" + evmc::hex(opcode) + " not defined";
-}
-
-inline evmc::address AccessListTracer::address_from_hex_string(const std::string& s) {
-    const auto bytes = silkworm::from_hex(s);
-    return silkworm::to_evmc_address(bytes.value_or(silkworm::Bytes{}));
 }
 
 void AccessListTracer::on_execution_start(evmc_revision rev, const evmc_message& /*msg*/, evmone::bytes_view /*code*/) noexcept {
@@ -81,12 +78,14 @@ void AccessListTracer::on_instruction_start(uint32_t pc, const intx::uint256* st
         const auto address = silkworm::bytes32_from_hex(intx::hex(stack_top[0]));
         add_storage(recipient, address);
     } else if (is_contract_opcode(opcode_name) && stack_height >= 1) {
-        const auto address = address_from_hex_string(intx::hex(stack_top[0]));
+        evmc::address address;
+        intx::be::trunc(address.bytes, stack_top[0]);
         if (!exclude(address)) {
             add_address(address);
         }
     } else if (is_call_opcode(opcode_name) && stack_height >= 5) {
-        const auto address = address_from_hex_string(intx::hex(stack_top[-1]));
+        evmc::address address;
+        intx::be::trunc(address.bytes, stack_top[-1]);
         if (!exclude(address)) {
             add_address(address);
         }
@@ -112,7 +111,7 @@ inline bool AccessListTracer::exclude(const evmc::address& address) {
 }
 
 void AccessListTracer::add_storage(const evmc::address& address, const evmc::bytes32& storage) {
-    SILK_TRACE << "add_storage:" << address << " storage: " << storage;
+    SILK_TRACE << "add_storage:" << address << " storage: " << to_hex(storage);
     for (std::size_t i{0}; i < access_list_.size(); i++) {
         if (access_list_[i].account == address) {
             for (const auto& storage_key : access_list_[i].storage_keys) {
@@ -147,7 +146,7 @@ void AccessListTracer::dump(const std::string& user_string, const AccessList& ac
     for (std::size_t i{0}; i < acl.size(); i++) {
         std::cout << "Address: " << acl[i].account << "\n";
         for (std::size_t z{0}; z < acl[i].storage_keys.size(); z++) {
-            std::cout << "-> StorageKeys: " << acl[i].storage_keys[z] << "\n";
+            std::cout << "-> StorageKeys: " << to_hex(acl[i].storage_keys[z]) << "\n";
         }
     }
 }

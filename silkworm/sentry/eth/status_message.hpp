@@ -19,6 +19,7 @@
 #include <intx/intx.hpp>
 
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 #include <silkworm/sentry/common/message.hpp>
 
 #include "fork_id.hpp"
@@ -29,8 +30,8 @@ struct StatusMessage {
     [[nodiscard]] Bytes rlp_encode() const;
     [[nodiscard]] static StatusMessage rlp_decode(ByteView data);
 
-    [[nodiscard]] common::Message to_message() const;
-    [[nodiscard]] static StatusMessage from_message(const common::Message& message);
+    [[nodiscard]] Message to_message() const;
+    [[nodiscard]] static StatusMessage from_message(const Message& message);
 
     uint8_t version;
     uint64_t network_id;

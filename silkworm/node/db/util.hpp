@@ -29,6 +29,7 @@ see its package dbutils.
 #include <absl/strings/str_cat.h>
 
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/node/db/mdbx.hpp>
 
@@ -67,11 +68,15 @@ inline constexpr size_t kHashedStoragePrefixLength{kHashLength + kIncarnationLen
 using AccountChanges = absl::btree_map<evmc::address, Bytes>;
 
 // address -> incarnation -> location -> zeroless initial value
-using StorageChanges = absl::btree_map<evmc::address, absl::btree_map<uint64_t, absl::btree_map<evmc::bytes32, Bytes>>>;
+using ChangedLocations = absl::btree_map<evmc::bytes32, Bytes>;
+using ChangedIncarnations = absl::btree_map<uint64_t, ChangedLocations>;
+using StorageChanges = absl::btree_map<evmc::address, ChangedIncarnations>;
 
 // Erigon GenerateStoragePrefix, PlainGenerateStoragePrefix
 // address can be either plain account address (20 bytes) or hash thereof (32 bytes)
 Bytes storage_prefix(ByteView address, uint64_t incarnation);
+
+Bytes storage_prefix(const evmc::address& address, uint64_t incarnation);
 
 // Erigon EncodeBlockNumber
 Bytes block_key(BlockNum block_number);
@@ -80,7 +85,7 @@ Bytes block_key(BlockNum block_number);
 Bytes block_key(BlockNum block_number, std::span<const uint8_t, kHashLength> hash);
 
 // Split a block key in BlockNum and Hash
-auto split_block_key(ByteView key) -> std::tuple<BlockNum, evmc::bytes32>;
+std::tuple<BlockNum, evmc::bytes32> split_block_key(ByteView key);
 
 Bytes storage_change_key(BlockNum block_number, const evmc::address& address, uint64_t incarnation);
 
@@ -93,6 +98,23 @@ Bytes storage_history_key(const evmc::address& address, const evmc::bytes32& loc
 // Erigon LogKey
 Bytes log_key(BlockNum block_number, uint32_t transaction_id);
 
+//! Encode LogAddressIndex table key for target address
+Bytes log_address_key(const evmc::address& address, BlockNum block_number);
+
+//! Encode LogTopicIndex table key for target topic
+Bytes log_topic_key(const evmc::bytes32& topic, BlockNum block_number);
+
+BlockNum block_number_from_key(const mdbx::slice& key);
+
+//! Decode TransactionLog table key into block number and transaction index
+std::tuple<BlockNum, uint32_t> split_log_key(const mdbx::slice& key);
+
+//! Decode LogAddressIndex table key into account address and block upper bound
+std::tuple<ByteView, uint32_t> split_log_address_key(const mdbx::slice& key);
+
+//! Decode LogTopicIndex table key into topic hash and block upper bound
+std::tuple<ByteView, uint32_t> split_log_topic_key(const mdbx::slice& key);
+
 //! \brief Converts change set (AccountChangeSet/StorageChangeSet) entry to plain state format.
 //! \param [in] key : Change set key.
 //! \param [in] value : Change set value.
@@ -102,6 +124,14 @@ Bytes log_key(BlockNum block_number, uint32_t transaction_id);
 std::pair<Bytes, Bytes> changeset_to_plainstate_format(ByteView key, ByteView value);
 
 inline mdbx::slice to_slice(ByteView value) { return {value.data(), value.length()}; }
+
+inline mdbx::slice to_slice(const evmc::bytes32& value) {
+    return to_slice(ByteView{value.bytes});
+}
+
+inline mdbx::slice to_slice(const evmc::address& address) {
+    return to_slice(ByteView{address.bytes});
+}
 
 inline ByteView from_slice(const mdbx::slice slice) {
     return {static_cast<const uint8_t*>(slice.data()), slice.length()};

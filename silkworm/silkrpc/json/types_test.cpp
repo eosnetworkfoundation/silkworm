@@ -64,14 +64,14 @@ TEST_CASE("convert positive uint256 to quantity(buff)", "[silkrpc][to_quantity]"
 TEST_CASE("serialize empty address using to_hex(char *)", "[silkrpc][to_json]") {
     evmc::address address{};
     char address_zero[64];
-    to_hex(address_zero, address);
+    to_hex(address_zero, address.bytes);
     CHECK(strcmp(address_zero, "0x0000000000000000000000000000000000000000") == 0);
 }
 
 TEST_CASE("serialize empty address using to_hex(char *) small buffer", "[silkrpc][to_json]") {
     evmc::address address{};
     char address_zero[10];
-    CHECK_THROWS(to_hex(address_zero, address));
+    CHECK_THROWS(to_hex(address_zero, address.bytes));
 }
 
 TEST_CASE("serialize empty address", "[silkrpc][to_json]") {
@@ -200,7 +200,7 @@ TEST_CASE("serialize block header", "[silkrpc][to_json]") {
         0xb02a3b0ee16c858afaa34bcd6770b3c20ee56aa2f75858733eb0e927b5b7126f_bytes32,
         silkworm::Bloom{},
         intx::uint256{0},
-        uint64_t(5),
+        BlockNum(5),
         uint64_t(1000000),
         uint64_t(1000000),
         uint64_t(5405021),
@@ -246,7 +246,7 @@ TEST_CASE("serialize block header with baseFeePerGas", "[silkrpc][to_json]") {
         0xb02a3b0ee16c858afaa34bcd6770b3c20ee56aa2f75858733eb0e927b5b7126f_bytes32,
         silkworm::Bloom{},
         intx::uint256{0},
-        uint64_t(5),
+        BlockNum(5),
         uint64_t(1000000),
         uint64_t(1000000),
         uint64_t(5405021),
@@ -494,46 +494,6 @@ TEST_CASE("serialize block body with ommers", "[silkrpc][to_json]") {
     })"_json);
 }
 
-TEST_CASE("serialize empty call_bundle", "[silkrpc][to_json]") {
-    struct CallBundleInfo bundle_info {};
-
-    nlohmann::json j = bundle_info;
-    CHECK(j == R"({
-        "bundleHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
-        "results":[]
-    })"_json);
-}
-
-TEST_CASE("serialize call_bundle with error", "[silkrpc][to_json]") {
-    struct CallBundleInfo bundle_info {};
-    struct CallBundleTxInfo tx_info {};
-    tx_info.gas_used = 0x234;
-    tx_info.error_message = "operation reverted";
-    bundle_info.txs_info.push_back(tx_info);
-
-    nlohmann::json j = bundle_info;
-    CHECK(j == R"({
-        "bundleHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
-        "results":[{"error": "operation reverted", "gasUsed": 564,
-                    "txHash": "0x0000000000000000000000000000000000000000000000000000000000000000"}]
-    })"_json);
-}
-
-TEST_CASE("serialize call_bundle with value", "[silkrpc][to_json]") {
-    struct CallBundleInfo bundle_info {};
-    struct CallBundleTxInfo tx_info {};
-    tx_info.gas_used = 0x234;
-    tx_info.value = 0x1230000000000000000000000000000000000000000000000000000000000321_bytes32;
-    bundle_info.txs_info.push_back(tx_info);
-
-    nlohmann::json j = bundle_info;
-    CHECK(j == R"({
-        "bundleHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
-        "results":[{"value": "0x1230000000000000000000000000000000000000000000000000000000000321", "gasUsed": 564,
-                    "txHash": "0x0000000000000000000000000000000000000000000000000000000000000000"}]
-    })"_json);
-}
-
 TEST_CASE("serialize filled SyncingData", "[silkrpc][to_json]") {
     SyncingData syncing_data{};
     StageData stage_data;
@@ -732,7 +692,7 @@ TEST_CASE("serialize ForkChoiceUpdatedReplyV1", "[silkworm::json][to_json]") {
             "latestValidHash":"0x0000000000000000000000000000000000000000000000000000000000000040",
             "validationError":"some error"
         },
-        "payloadId":"0x1"
+        "payloadId":"0x0000000000000001"
     })"_json);
 }
 

@@ -49,9 +49,10 @@ enum class [[nodiscard]] ValidationResult{
     kInvalidTimestamp,              // Hs ≤ P(H)Hs
     kExtraDataTooLong,              // ‖Hx‖ > 32
     kWrongDaoExtraData,             // see EIP-779
-    kWrongBaseFee,                  // see EIP-1559
     kInvalidSeal,                   // Nonce or mix_hash (invalid Proof of Work)
-    kInvalidNonce,                  // Hn != 0 (Proof of State, EIP-3675)
+
+    kMissingField,     // e.g. missing withdrawals in a post-Shanghai block
+    kFieldBeforeFork,  // e.g. withdrawals present in a pre-Shanghai block
 
     // [YP] Section 6.2 "Execution", Eq (58)
     kMissingSender,          // S(T) = ∅
@@ -60,14 +61,6 @@ enum class [[nodiscard]] ValidationResult{
     kIntrinsicGas,           // g0 > Tg
     kInsufficientFunds,      // v0 > σ[S(T)]b
     kBlockGasLimitExceeded,  // Tg > BHl - l(BR)u
-
-    // Various other transaction validation
-    kMaxFeeLessThanBase,            // max_fee_per_gas < base_fee_per_gas (EIP-1559)
-    kMaxPriorityFeeGreaterThanMax,  // max_priority_fee_per_gas > max_fee_per_gas (EIP-1559)
-    kInvalidSignature,              // EIP-2
-    kWrongChainId,                  // EIP-155
-    kUnsupportedTransactionType,    // EIP-2718
-    kNonceTooHigh,                  // Tn ≥ 2^64 - 1 (EIP-2681)
 
     // [YP] Section 11.1 "Ommer Validation", Eq (157)
     kTooManyOmmers,       // ‖BU‖ > 2
@@ -78,7 +71,19 @@ enum class [[nodiscard]] ValidationResult{
     // [YP] Section 11.2 "Transaction Validation", Eq (160)
     kWrongBlockGas,  // BHg ≠ l(BR)u
 
+    // Various other transaction validation
+    kInvalidSignature,            // EIP-2
+    kWrongChainId,                // EIP-155
+    kUnsupportedTransactionType,  // EIP-2718
+    kNonceTooHigh,                // Tn ≥ 2^64 - 1 (EIP-2681)
+
+    // EIP-1559: Fee market change for ETH 1.0 chain
+    kWrongBaseFee,
+    kMaxFeeLessThanBase,            // max_fee_per_gas < base_fee_per_gas
+    kMaxPriorityFeeGreaterThanMax,  // max_priority_fee_per_gas > max_fee_per_gas
+
     // EIP-3675: Upgrade consensus to Proof-of-Stake
+    kInvalidNonce,  // Hn != 0 in a PoS block
     kPoSBlockBeforeMerge,
     kPoWBlockAfterMerge,
 
@@ -86,17 +91,16 @@ enum class [[nodiscard]] ValidationResult{
     kMaxInitCodeSizeExceeded,
 
     // EIP-4895: Beacon chain push withdrawals as operations
-    kMissingWithdrawals,
-    kUnexpectedWithdrawals,
     kWrongWithdrawalsRoot,
 
     // EIP-4844: Shard Blob Transactions
-    kWrongDataGasUsed,
-    kWrongExcessDataGas,
+    kWrongBlobGasUsed,
+    kWrongExcessBlobGas,
     kNoBlobs,
     kTooManyBlobs,
     kWrongBlobCommitmentVersion,
-    kMaxFeePerDataGasTooLow,  // max_fee_per_data_gas < data_gas_price
+    kMaxFeePerBlobGasTooLow,  // max_fee_per_blob_gas < blob_gas_price
+    kBlobCreateTransaction,   // Blob transactions cannot have the form of a create transaction
 };
 
 namespace protocol {
@@ -109,7 +113,7 @@ namespace protocol {
     //! \remarks These function is agnostic to whole block validity
     ValidationResult pre_validate_transaction(const Transaction& txn, evmc_revision revision, uint64_t chain_id,
                                               const std::optional<intx::uint256>& base_fee_per_gas,
-                                              const std::optional<intx::uint256>& data_gas_price);
+                                              const std::optional<intx::uint256>& blob_gas_price);
 
     ValidationResult pre_validate_transactions(const Block& block, const ChainConfig& config);
 
@@ -122,10 +126,10 @@ namespace protocol {
                                           uint64_t available_gas) noexcept;
 
     //! \see EIP-1559: Fee market change for ETH 1.0 chain
-    std::optional<intx::uint256> expected_base_fee_per_gas(const BlockHeader& parent, const evmc_revision);
+    intx::uint256 expected_base_fee_per_gas(const BlockHeader& parent);
 
     //! \see EIP-4844: Shard Blob Transactions
-    std::optional<uint64_t> calc_excess_data_gas(const BlockHeader& parent, const evmc_revision);
+    uint64_t calc_excess_blob_gas(const BlockHeader& parent);
 
     //! \brief Calculate the transaction root of a block body
     evmc::bytes32 compute_transaction_root(const BlockBody& body);

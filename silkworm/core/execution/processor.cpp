@@ -18,7 +18,6 @@
 
 #include <cassert>
 
-#include <silkworm/core/chain/dao.hpp>
 #include <silkworm/core/protocol/intrinsic_gas.hpp>
 #include <silkworm/core/protocol/param.hpp>
 #include <silkworm/core/trie/vector_root.hpp>
@@ -66,9 +65,9 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     const intx::uint256 effective_gas_price{txn.effective_gas_price(base_fee_per_gas)};
     state_.subtract_from_balance(*txn.from, txn.gas_limit * effective_gas_price);
 
-    // EIP-4844 data gas cost (calc_data_fee)
-    const intx::uint256 data_gas_price{evm_.block().header.data_gas_price().value_or(0)};
-    state_.subtract_from_balance(*txn.from, txn.total_data_gas() * data_gas_price);
+    // EIP-4844 blob gas cost (calc_data_fee)
+    const intx::uint256 blob_gas_price{evm_.block().header.blob_gas_price().value_or(0)};
+    state_.subtract_from_balance(*txn.from, txn.total_blob_gas() * blob_gas_price);
 
     const intx::uint128 g0{protocol::intrinsic_gas(txn, rev)};
     assert(g0 <= UINT64_MAX);  // true due to the precondition (transaction must be valid)
@@ -81,12 +80,12 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     const intx::uint256 priority_fee_per_gas{txn.priority_fee_per_gas(base_fee_per_gas)};
     state_.add_to_balance(evm_.beneficiary, priority_fee_per_gas * gas_used);
 
-    state_.destruct_suicides();
-    if (rev >= EVMC_SPURIOUS_DRAGON) {
-        state_.destruct_touched_dead();
+    if (rev >= EVMC_LONDON && evm_.config().eip1559_fee_collector) {
+        const intx::uint256 would_be_burnt{gas_used * base_fee_per_gas};
+        state_.add_to_balance(*evm_.config().eip1559_fee_collector, would_be_burnt);
     }
 
-    state_.finalize_transaction();
+    state_.finalize_transaction(rev);
 
     cumulative_gas_used_ += gas_used;
 
@@ -118,14 +117,13 @@ uint64_t ExecutionProcessor::refund_gas(const Transaction& txn, uint64_t gas_lef
 }
 
 ValidationResult ExecutionProcessor::execute_block_no_post_validation(std::vector<Receipt>& receipts) noexcept {
-    const Block& block{evm_.block()};
-
-    if (block.header.number == evm_.config().dao_block) {
-        dao::transfer_balances(state_);
-    }
+    const evmc_revision rev{evm_.revision()};
+    rule_set_.initialize(evm_);
+    state_.finalize_transaction(rev);
 
     cumulative_gas_used_ = 0;
 
+    const Block& block{evm_.block()};
     receipts.resize(block.transactions.size());
     auto receipt_it{receipts.begin()};
     for (const auto& txn : block.transactions) {
@@ -143,11 +141,9 @@ ValidationResult ExecutionProcessor::execute_block_no_post_validation(std::vecto
         ++receipt_it;
     }
 
+    state_.clear_journal_and_substate();
     rule_set_.finalize(state_, block);
-
-    if (evm_.revision() >= EVMC_SPURIOUS_DRAGON) {
-        state_.destruct_touched_dead();
-    }
+    state_.finalize_transaction(rev);
 
     return ValidationResult::kOk;
 }

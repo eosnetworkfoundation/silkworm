@@ -53,6 +53,7 @@ EthStatusDataProvider::HeadInfo EthStatusDataProvider::read_head_info(ROTxn& db_
         head_info.hash = head_hash.value();
     } else {
         log::Warning("EthStatusDataProvider") << "canonical hash at height " << std::to_string(head_height) << " not found in db";
+        return head_info;
     }
 
     auto head_total_difficulty = db::read_total_difficulty(db_tx_, head_height, *head_hash);
@@ -99,7 +100,7 @@ EthStatusDataProvider::StatusData EthStatusDataProvider::get_status_data(uint8_t
     }
 
     auto txn = db_access_.start_ro_tx();
-    auto _ = gsl::finally([&txn] { txn.abort(); });
+    [[maybe_unused]] auto _ = gsl::finally([&txn] { txn.abort(); });
 
     auto head_info = read_head_info(txn);
     head_info.debug_log();
@@ -108,7 +109,7 @@ EthStatusDataProvider::StatusData EthStatusDataProvider::get_status_data(uint8_t
 }
 
 EthStatusDataProvider::StatusDataProvider EthStatusDataProvider::to_factory_function() {
-    return [provider = *this](uint8_t eth_version) mutable -> boost::asio::awaitable<StatusData> {
+    return [provider = *this](uint8_t eth_version) mutable -> Task<StatusData> {
         co_return provider.get_status_data(eth_version);
     };
 }

@@ -20,6 +20,7 @@
 #include <utility>
 
 #include <silkworm/core/common/util.hpp>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
 #include <silkworm/silkrpc/json/types.hpp>
 
@@ -163,7 +164,7 @@ void from_json(const nlohmann::json& json, BlockOverrides& bo) {
         if (jbn.is_string()) {
             bo.block_number = std::stoull(jbn.get<std::string>(), nullptr, /*base=*/16);
         } else {
-            bo.block_number = jbn.get<uint64_t>();
+            bo.block_number = jbn.get<BlockNum>();
         }
     }
     if (json.contains("coinbase")) {
@@ -195,8 +196,7 @@ void from_json(const nlohmann::json& json, BlockOverrides& bo) {
 
 void from_json(const nlohmann::json& json, AccountsOverrides& accounts_overrides) {
     for (const auto& el : json.items()) {
-        const auto address_bytes = silkworm::from_hex(el.key());
-        const auto key = silkworm::to_evmc_address(address_bytes.value_or(silkworm::Bytes{}));
+        const auto key = hex_to_address(el.key(), /*return_zero_on_err=*/true);
         const auto value = el.value().get<AccountOverrides>();
 
         accounts_overrides.emplace(key, value);

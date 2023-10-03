@@ -19,10 +19,11 @@
 #include <string>
 
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 
 #include "ecc_public_key.hpp"
 
-namespace silkworm::sentry::common {
+namespace silkworm::sentry {
 
 class EccKeyPair {
   public:
@@ -39,4 +40,4 @@ class EccKeyPair {
     Bytes private_key_;
 };
 
-}  // namespace silkworm::sentry::common
+}  // namespace silkworm::sentry

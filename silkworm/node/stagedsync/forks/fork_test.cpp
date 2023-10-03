@@ -16,15 +16,14 @@
 
 #include "fork.hpp"
 
-#include <atomic>
-#include <iostream>
+#include <thread>
 
 #include <boost/asio/io_context.hpp>
 #include <catch2/catch.hpp>
 
-#include <silkworm/core/common/cast.hpp>
+#include <silkworm/core/common/bytes_to_string.hpp>
 #include <silkworm/infra/common/environment.hpp>
-#include <silkworm/infra/test/log.hpp>
+#include <silkworm/infra/test_util/log.hpp>
 #include <silkworm/node/common/preverified_hashes.hpp>
 #include <silkworm/node/db/genesis.hpp>
 #include <silkworm/node/db/stages.hpp>
@@ -69,7 +68,7 @@ static Block generateSampleChildrenBlock(const BlockHeader& parent) {
 }
 
 TEST_CASE("Fork") {
-    test::SetLogVerbosityGuard log_guard(log::Level::kNone);
+    test_util::SetLogVerbosityGuard log_guard(log::Level::kNone);
 
     test::Context context;
     context.add_genesis_data();
@@ -133,7 +132,7 @@ TEST_CASE("Fork") {
                 BlockId forking_point = main_chain.last_chosen_head();
 
                 Fork_ForTest fork{forking_point,
-                                  db::ROTxn(main_chain.tx().db()),  // this need to be on a different thread than main_chain
+                                  db::ROTxnManaged(main_chain.tx().db()),  // this need to be on a different thread than main_chain
                                   context.node_settings()};
 
                 CHECK(db::stages::read_stage_progress(fork.memory_tx_, db::stages::kHeadersKey) == 3);

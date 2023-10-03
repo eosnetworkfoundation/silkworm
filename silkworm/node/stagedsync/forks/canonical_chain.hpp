@@ -25,8 +25,6 @@
 #include <silkworm/core/common/as_range.hpp>
 #include <silkworm/core/common/lru_cache.hpp>
 #include <silkworm/core/types/block.hpp>
-#include <silkworm/infra/common/asio_timer.hpp>
-#include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/node/db/access_layer.hpp>
 #include <silkworm/node/stagedsync/execution_pipeline.hpp>
 #include <silkworm/node/stagedsync/stages/stage.hpp>
@@ -42,6 +40,8 @@ class CanonicalChain {
     CanonicalChain(const CanonicalChain&, db::RWTxn&);  // we can copy a CanonicalChain giving a new tx
     CanonicalChain(CanonicalChain&&) noexcept;
 
+    void open();
+
     BlockId find_forking_point(Hash header_hash) const;
     BlockId find_forking_point(const BlockHeader& header, Hash header_hash) const;
 
@@ -53,8 +53,8 @@ class CanonicalChain {
     BlockId initial_head() const;
     BlockId current_head() const;
 
-    auto get_hash(BlockNum height) const -> std::optional<Hash>;
-    auto has(Hash block_hash) const -> bool;
+    std::optional<Hash> get_hash(BlockNum height) const;
+    bool has(Hash block_hash) const;
 
   private:
     db::RWTxn& tx_;

@@ -21,11 +21,10 @@
 #include <boost/asio/io_context.hpp>
 #include <catch2/catch.hpp>
 
-#include <silkworm/core/common/cast.hpp>
-#include <silkworm/core/protocol/validation.hpp>
+#include <silkworm/core/common/bytes_to_string.hpp>
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/infra/common/environment.hpp>
-#include <silkworm/infra/test/log.hpp>
+#include <silkworm/infra/test_util/log.hpp>
 #include <silkworm/node/common/preverified_hashes.hpp>
 #include <silkworm/node/db/genesis.hpp>
 #include <silkworm/node/db/stages.hpp>
@@ -104,7 +103,7 @@ class ExecutionEngine_ForTest : public stagedsync::ExecutionEngine {
 };
 
 TEST_CASE("ExecutionEngine") {
-    test::SetLogVerbosityGuard log_guard(log::Level::kNone);
+    test_util::SetLogVerbosityGuard log_guard(log::Level::kNone);
 
     asio::io_context io;
     asio::executor_work_guard<decltype(io.get_executor())> work{io.get_executor()};
@@ -129,6 +128,11 @@ TEST_CASE("ExecutionEngine") {
     REQUIRE(header0.has_value());
 
     BlockId block0_id{0, *header0_hash};
+
+    // check db
+    BlockBody block0_body;
+    const bool block0_present = db::read_body(tx, *header0_hash, block0_id.number, block0_body);
+    CHECK(block0_present);
 
     /* status:
      *         h0
@@ -156,8 +160,8 @@ TEST_CASE("ExecutionEngine") {
 
         // check db
         BlockBody saved_body;
-        bool present = db::read_body(tx, header1_hash, block1->header.number, saved_body);
-        CHECK(present);
+        const bool block1_present = db::read_body(tx, header1_hash, block1->header.number, saved_body);
+        CHECK(block1_present);
 
         auto progress = exec_engine.block_progress();
         CHECK(progress == 1);

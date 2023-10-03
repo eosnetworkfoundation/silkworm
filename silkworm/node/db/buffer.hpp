@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <absl/container/btree_map.h>
+#include <absl/container/btree_set.h>
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/flat_hash_set.h>
 
@@ -28,6 +29,7 @@
 #include <silkworm/core/types/account.hpp>
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/core/types/receipt.hpp>
+#include <silkworm/node/db/access_layer.hpp>
 #include <silkworm/node/db/mdbx.hpp>
 #include <silkworm/node/db/util.hpp>
 
@@ -38,7 +40,7 @@ class Buffer : public State {
     // txn must be valid (its handle != nullptr)
     explicit Buffer(RWTxn& txn, BlockNum prune_history_threshold,
                     std::optional<BlockNum> historical_block = std::nullopt)
-        : txn_{txn}, prune_history_threshold_{prune_history_threshold}, historical_block_{historical_block} {}
+        : txn_{txn}, access_layer_{txn_}, prune_history_threshold_{prune_history_threshold}, historical_block_{historical_block} {}
 
     /** @name Readers */
     //!@{
@@ -77,6 +79,8 @@ class Buffer : public State {
     void decanonize_block(uint64_t block_number) override;
 
     void insert_receipts(uint64_t block_number, const std::vector<Receipt>& receipts) override;
+
+    void insert_call_traces(BlockNum block_number, const CallTraces& traces) override;
 
     /** @name State changes
      *  Change sets are backward changes of the state, i.e. account/storage values <em>at the beginning of a block</em>.
@@ -119,16 +123,19 @@ class Buffer : public State {
 
     //! \brief Persists *all* accrued contents into db
     //! \remarks write_history_to_db is implicitly called
-    void write_to_db();
+    //! @param write_change_sets flag indicating if state changes should be written or not (default: true)
+    void write_to_db(bool write_change_sets = true);
 
-    //! \brief Persists *history* accrued contents into db
-    void write_history_to_db();
+    //! \brief Persist *history* accrued contents into db
+    //! @param write_change_sets flag indicating if state changes should be written or not (default: true)
+    void write_history_to_db(bool write_change_sets = true);
 
   private:
     //! \brief Persists *state* accrued contents into db
     void write_state_to_db();
 
     RWTxn& txn_;
+    db::DataModel access_layer_;
     uint64_t prune_history_threshold_;
     std::optional<uint64_t> historical_block_{};
 
@@ -151,10 +158,11 @@ class Buffer : public State {
 
     // History and changesets
 
-    absl::btree_map<uint64_t, AccountChanges> block_account_changes_;  // per block
-    absl::btree_map<uint64_t, StorageChanges> block_storage_changes_;  // per block
+    absl::btree_map<BlockNum, AccountChanges> block_account_changes_;  // per block
+    absl::btree_map<BlockNum, StorageChanges> block_storage_changes_;  // per block
     absl::btree_map<Bytes, Bytes> receipts_;
     absl::btree_map<Bytes, Bytes> logs_;
+    absl::btree_map<BlockNum, absl::btree_set<Bytes>> call_traces_;
 
     mutable size_t batch_state_size_{0};    // Accounts in memory data for state
     mutable size_t batch_history_size_{0};  // Accounts in memory data for history

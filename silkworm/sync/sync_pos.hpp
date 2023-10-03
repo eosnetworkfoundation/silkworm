@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include <silkworm/infra/concurrency/coroutine.hpp>
-
-#include <boost/asio/awaitable.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
 
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/concurrency/active_component.hpp>
@@ -39,22 +37,22 @@ class PoSSync : public ChainSync {
   public:
     PoSSync(BlockExchange&, execution::Client&);
 
-    asio::awaitable<void> async_run() override;
+    Task<void> async_run() override;
 
     // public interface to download blocks
-    auto download_blocks() -> asio::awaitable<void>; /*[[long_running]]*/
+    Task<void> download_blocks(); /*[[long_running]]*/
 
     // public interface called by the external PoS client
-    auto new_payload(const rpc::ExecutionPayload&) -> asio::awaitable<rpc::PayloadStatus>;
-    auto fork_choice_update(const rpc::ForkChoiceState&, const std::optional<rpc::PayloadAttributes>&) -> asio::awaitable<rpc::ForkChoiceUpdatedReply>;
-    auto get_payload(uint64_t payloadId) -> asio::awaitable<rpc::ExecutionPayloadAndValue>;
-    auto get_payload_bodies_by_hash(const std::vector<Hash>& block_hashes) -> asio::awaitable<rpc::ExecutionPayloadBodies>;
-    auto get_payload_bodies_by_range(BlockNum start, uint64_t count) -> asio::awaitable<rpc::ExecutionPayloadBodies>;
+    Task<rpc::PayloadStatus> new_payload(const rpc::ExecutionPayload&, std::chrono::milliseconds timeout);
+    Task<rpc::ForkChoiceUpdatedReply> fork_choice_update(const rpc::ForkChoiceState&, const std::optional<rpc::PayloadAttributes>&, std::chrono::milliseconds timeout);
+    Task<rpc::ExecutionPayloadAndValue> get_payload(uint64_t payloadId, std::chrono::milliseconds timeout);
+    Task<rpc::ExecutionPayloadBodies> get_payload_bodies_by_hash(const std::vector<Hash>& block_hashes, std::chrono::milliseconds timeout);
+    Task<rpc::ExecutionPayloadBodies> get_payload_bodies_by_range(BlockNum start, uint64_t count, std::chrono::milliseconds timeout);
 
   private:
-    static auto make_execution_block(const rpc::ExecutionPayload& payload) -> std::shared_ptr<Block>;
+    static std::shared_ptr<Block> make_execution_block(const rpc::ExecutionPayload& payload);
     void do_sanity_checks(const BlockHeader& header, TotalDifficulty parent_td);
-    auto has_valid_ancestor(const Hash& block_hash) -> std::tuple<bool, Hash>;
+    std::tuple<bool, Hash> has_valid_ancestor(const Hash& block_hash);
 };
 
 }  // namespace silkworm::chainsync

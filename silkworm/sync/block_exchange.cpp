@@ -31,7 +31,7 @@
 
 namespace silkworm {
 
-using silkworm::sentry::api::api_common::MessageFromPeer;
+using silkworm::sentry::api::MessageFromPeer;
 
 BlockExchange::BlockExchange(SentryClient& sentry, const db::ROAccess& dba, const ChainConfig& chain_config)
     : db_access_{dba},
@@ -68,7 +68,6 @@ void BlockExchange::receive_message(std::shared_ptr<InboundMessage> message) {
 void BlockExchange::execution_loop() {
     using namespace std::chrono;
     using namespace std::chrono_literals;
-    log::set_thread_name("block-exchg");
 
     auto announcement_receiving_callback = [this](std::shared_ptr<InboundMessage> msg) {
         statistics_.nonsolic_msgs++;
@@ -142,7 +141,7 @@ void BlockExchange::execution_loop() {
             }
         }
 
-        log::Warning("BlockExchange") << "execution_loop is stopping...";
+        log::Debug("BlockExchange") << "execution_loop is stopping...";
     } catch (std::exception& e) {
         log::Error("BlockExchange") << "execution loop aborted due to exception: " << e.what();
     }

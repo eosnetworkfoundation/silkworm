@@ -23,7 +23,7 @@
 #include <silkworm/infra/concurrency/active_component.hpp>
 #include <silkworm/infra/concurrency/containers.hpp>
 #include <silkworm/node/db/access_layer.hpp>
-#include <silkworm/sentry/api/api_common/message_from_peer.hpp>
+#include <silkworm/sentry/api/common/message_from_peer.hpp>
 #include <silkworm/sync/internals/body_sequence.hpp>
 #include <silkworm/sync/internals/header_chain.hpp>
 #include <silkworm/sync/messages/inbound_message.hpp>
@@ -33,7 +33,7 @@ namespace silkworm {
 class SentryClient;
 
 //! \brief Implement the logic needed to download headers and bodies
-class BlockExchange final : public ActiveComponent {
+class BlockExchange : public ActiveComponent {
   public:
     BlockExchange(SentryClient&, const db::ROAccess&, const ChainConfig&);
     ~BlockExchange() override;

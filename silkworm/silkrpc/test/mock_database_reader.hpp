@@ -19,10 +19,12 @@
 #include <memory>
 #include <string>
 
-#include <boost/asio/awaitable.hpp>
+#include <silkworm/infra/concurrency/task.hpp>
+
 #include <gmock/gmock.h>
 
 #include <silkworm/core/common/base.hpp>
+#include <silkworm/core/common/bytes.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
 #include <silkworm/silkrpc/core/rawdb/accessors.hpp>
 
@@ -30,13 +32,13 @@ namespace silkworm::rpc::test {
 
 class MockDatabaseReader : public core::rawdb::DatabaseReader {
   public:
-    MOCK_METHOD((boost::asio::awaitable<KeyValue>), get, (const std::string&, silkworm::ByteView), (const));
-    MOCK_METHOD((boost::asio::awaitable<silkworm::Bytes>), get_one, (const std::string&, silkworm::ByteView), (const));
-    MOCK_METHOD((boost::asio::awaitable<std::optional<silkworm::Bytes>>), get_both_range,
+    MOCK_METHOD((Task<KeyValue>), get, (const std::string&, silkworm::ByteView), (const));
+    MOCK_METHOD((Task<silkworm::Bytes>), get_one, (const std::string&, silkworm::ByteView), (const));
+    MOCK_METHOD((Task<std::optional<silkworm::Bytes>>), get_both_range,
                 (const std::string&, silkworm::ByteView, silkworm::ByteView), (const));
-    MOCK_METHOD((boost::asio::awaitable<void>), walk, (const std::string&, silkworm::ByteView, uint32_t, core::rawdb::Walker),
+    MOCK_METHOD((Task<void>), walk, (const std::string&, silkworm::ByteView, uint32_t, core::rawdb::Walker),
                 (const));
-    MOCK_METHOD((boost::asio::awaitable<void>), for_prefix, (const std::string&, silkworm::ByteView, core::rawdb::Walker),
+    MOCK_METHOD((Task<void>), for_prefix, (const std::string&, silkworm::ByteView, core::rawdb::Walker),
                 (const));
 };
 

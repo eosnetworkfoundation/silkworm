@@ -23,7 +23,6 @@
 #include <gsl/util>
 #include <magic_enum.hpp>
 
-#include <silkworm/core/common/assert.hpp>
 #include <silkworm/core/crypto/ecdsa.h>
 #include <silkworm/core/crypto/secp256k1n.hpp>
 #include <silkworm/core/protocol/validation.hpp>
@@ -31,6 +30,8 @@
 #include <silkworm/node/db/access_layer.hpp>
 
 namespace silkworm::stagedsync {
+
+using namespace std::chrono_literals;
 
 Senders::Senders(NodeSettings* node_settings, SyncContext* sync_context)
     : Stage(sync_context, db::stages::kSendersKey, node_settings),
@@ -44,11 +45,13 @@ Senders::Senders(NodeSettings* node_settings, SyncContext* sync_context)
 Stage::Result Senders::forward(db::RWTxn& txn) {
     std::unique_lock log_lock(sl_mutex_);
     operation_ = OperationType::Forward;
+    total_processed_blocks_ = 0;
+    total_collected_transactions_ = 0;
     log_lock.unlock();
 
     const auto res{parallel_recover(txn)};
     if (res == Stage::Result::kSuccess) {
-        txn.commit();
+        txn.commit_and_renew();
     }
 
     log_lock.lock();
@@ -121,7 +124,7 @@ Stage::Result Senders::unwind(db::RWTxn& txn) {
         }
 
         update_progress(txn, to);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -213,7 +216,7 @@ Stage::Result Senders::prune(db::RWTxn& txn) {
             log::Trace(log_prefix_, {"source", db::table::kSenders.name, "erased", std::to_string(erased), "in", StopWatch::format(duration)});
         }
         db::stages::write_stage_prune_progress(txn, stage_name_, forward_progress);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -239,6 +242,12 @@ Stage::Result Senders::prune(db::RWTxn& txn) {
 
 Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
     Stage::Result ret{Stage::Result::kSuccess};
+
+    collected_senders_ = 0;
+    collector_.clear();
+    batch_->clear();
+    results_.clear();
+
     try {
         db::DataModel data_model{txn};
 
@@ -249,6 +258,15 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
         auto target_block_num{std::min(block_hashes_progress, block_bodies_progress)};
         // note: it would be better to use sync_context_->target_height instead of target_block
 
+        const BlockNum segment_width{target_block_num - previous_progress};
+        if (segment_width > db::stages::kSmallBlockSegmentWidth) {
+            log::Info(log_prefix_, {"op", std::string(magic_enum::enum_name<OperationType>(operation_)),
+                                    "from", std::to_string(previous_progress),
+                                    "to", std::to_string(target_block_num),
+                                    "span", std::to_string(segment_width),
+                                    "max_batch_size", std::to_string(max_batch_size_)});
+        }
+
         if (previous_progress == target_block_num) {
             // Nothing to process
             return ret;
@@ -258,34 +276,18 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
                                                                   " > target progress " + std::to_string(target_block_num));
         }
 
-        log::Info(log_prefix_, {"op", "parallel_recover",
-                                "num_threads", std::to_string(std::thread::hardware_concurrency()),
-                                "max_batch_size", std::to_string(max_batch_size_)});
-
         secp256k1_context* context = secp256k1_context_create(SILKWORM_SECP256K1_CONTEXT_FLAGS);
         if (!context) throw std::runtime_error("Could not create elliptic curve context");
-        auto _ = gsl::finally([&]() { if (context) std::free(context); });
+        [[maybe_unused]] auto _ = gsl::finally([&]() { if (context) std::free(context); });
 
         BlockNum start_block_num{previous_progress + 1u};
-
-        // Load canonical headers from db
-        log::Trace(log_prefix_, {"op", "read canonical hashes",
-                                 "from", std::to_string(start_block_num), "to", std::to_string(target_block_num)});
-
-        // success_or_throw(read_canonical_hashes(txn, start_block, target_block));  too many hashes to load in memory at first cycle
 
         // Create the pool of worker threads crunching the address recovery tasks
         ThreadPool worker_pool;
 
         // Load block transactions from db and recover tx senders in batches
-        log::Trace(log_prefix_, {"op", "read bodies",
-                                 "from", std::to_string(start_block_num), "to", std::to_string(target_block_num)});
-
-        // auto bodies_cursor = txn.ro_cursor(db::table::kBlockBodies);
-        // auto transactions_cursor = txn.ro_cursor(db::table::kBlockTransactions);
-
         uint64_t total_collected_senders{0};
-        collected_senders_ = 0;
+        uint64_t total_empty_blocks{0};
 
         // Start from first block and read all in sequence
         for (auto current_block_num = start_block_num; current_block_num <= target_block_num; ++current_block_num) {
@@ -303,10 +305,13 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
             }
 
             // Get the body and its transactions
-            if (block_body.transactions.empty()) continue;
+            if (block_body.transactions.empty()) {
+                ++total_empty_blocks;
+                continue;
+            }
 
             total_collected_senders += block_body.transactions.size();
-            success_or_throw(add_to_batch(current_block_num, *current_hash, std::move(block_body.transactions)));
+            success_or_throw(add_to_batch(current_block_num, std::make_shared<Hash>(*current_hash), std::move(block_body.transactions)));
 
             // Process batch in parallel if max size has been reached
             if (batch_->size() >= max_batch_size_) {
@@ -324,8 +329,12 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
         // Wait for all senders to be recovered and collected in ETL
         while (collected_senders_ != total_collected_senders) {
             collect_senders();
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::this_thread::sleep_for(100ms);
         }
+
+        ensure(collector_.size() + total_empty_blocks == segment_width,
+               "Senders: invalid number of ETL keys expected=" + std::to_string(segment_width) +
+                   "got=" + std::to_string(collector_.size() + total_empty_blocks));
 
         // Store all recovered senders into db
         log::Trace(log_prefix_, {"op", "store senders", "reached_block_num", std::to_string(target_block_num)});
@@ -354,7 +363,7 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
     return ret;
 }
 
-Stage::Result Senders::add_to_batch(BlockNum block_num, Hash block_hash, std::vector<Transaction>&& transactions) {
+Stage::Result Senders::add_to_batch(BlockNum block_num, std::shared_ptr<Hash> block_hash, std::vector<Transaction>&& transactions) {
     if (is_stopping()) {
         return Stage::Result::kAborted;
     }
@@ -414,7 +423,7 @@ void Senders::recover_batch(ThreadPool& worker_pool, secp256k1_context* context)
     // Wait until total unfinished tasks in worker pool falls below 2 * num workers
     static const auto kMaxUnfinishedTasks{2 * worker_pool.get_thread_count()};
     while (worker_pool.get_tasks_total() >= kMaxUnfinishedTasks) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(100ms);
     }
 
     // Swap the waiting batch w/ an empty one and submit a new recovery task to the worker pool
@@ -475,7 +484,7 @@ void Senders::collect_senders(std::shared_ptr<AddressRecoveryBatch>& batch) {
                 key.clear();
                 value.clear();
             }
-            key = db::block_key(package.block_num, package.hash.bytes);
+            key = db::block_key(package.block_num, package.block_hash->bytes);
             value.clear();
             block_num = package.block_num;
         }

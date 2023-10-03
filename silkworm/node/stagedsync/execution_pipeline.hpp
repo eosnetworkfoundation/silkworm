@@ -21,8 +21,6 @@
 #include <vector>
 
 #include <silkworm/core/types/hash.hpp>
-#include <silkworm/infra/common/asio_timer.hpp>
-#include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/node/stagedsync/stages/stage.hpp>
 
 namespace silkworm::stagedsync {
@@ -47,12 +45,13 @@ class ExecutionPipeline : public Stoppable {
     silkworm::NodeSettings* node_settings_;
     std::unique_ptr<SyncContext> sync_context_;  // context shared across stages
 
-    using Stage_Container = std::map<const char*, std::unique_ptr<stagedsync::Stage>>;
-    Stage_Container stages_;
+    using StageContainer = std::map<const char*, std::unique_ptr<stagedsync::Stage>>;
+    StageContainer stages_;
+    StageContainer::iterator current_stage_;
 
-    Stage_Container::iterator current_stage_;
-    std::vector<const char*> stages_forward_order_;
-    std::vector<const char*> stages_unwind_order_;
+    using StageNames = std::vector<const char*>;
+    StageNames stages_forward_order_;
+    StageNames stages_unwind_order_;
     std::atomic<size_t> current_stages_count_{0};
     std::atomic<size_t> current_stage_number_{0};
 
@@ -64,4 +63,5 @@ class ExecutionPipeline : public Stoppable {
     std::string get_log_prefix() const;  // Returns the current log lines prefix on behalf of current stage
     class LogTimer;                      // Timer for async log scheduling
 };
+
 }  // namespace silkworm::stagedsync

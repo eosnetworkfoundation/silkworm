@@ -19,6 +19,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <stdexcept>
 
 namespace silkworm {
@@ -104,27 +105,36 @@ std::atomic_uint32_t SignalHandler::sig_count_{0};
 std::atomic_int SignalHandler::sig_code_{0};
 std::atomic_bool SignalHandler::signalled_{false};
 std::function<void(int)> SignalHandler::custom_handler_;
+bool SignalHandler::silent_{false};
+std::map<int, void (*)(int)> previous_signal_handlers;
 
-void SignalHandler::init(std::function<void(int)> custom_handler) {
+void SignalHandler::init(std::function<void(int)> custom_handler, bool silent) {
     for (const int sig_code : kHandleableCodes) {
-        signal(sig_code, &SignalHandler::handle);
+        // Register our signal handler and remember the existing ones
+        auto previous_handler{signal(sig_code, &SignalHandler::handle)};
+        if (previous_handler != SIG_ERR) {
+            previous_signal_handlers[sig_code] = previous_handler;
+        }
     }
     custom_handler_ = std::move(custom_handler);
+    silent_ = silent;
 }
 
 void SignalHandler::handle(int sig_code) {
     bool expected{false};
     if (signalled_.compare_exchange_strong(expected, true)) {
         sig_code_ = sig_code;
-        std::fputs("\nGot ", stderr);
-        std::fputs(sig_name(sig_code), stderr);
-        std::fputs(". Shutting down ...\n", stderr);
+        if (!silent_) {
+            std::fputs("\nGot ", stderr);
+            std::fputs(sig_name(sig_code), stderr);
+            std::fputs(". Shutting down ...\n", stderr);
+        }
     }
     uint32_t sig_count = ++sig_count_;
     if (sig_count >= 10) {
         std::abort();
     }
-    if (sig_count > 1) {
+    if (sig_count > 1 && !silent_) {
         std::fputs("Already shutting down. Interrupt more to panic. ", stderr);
         char digit_with_endl[3];
         digit_with_endl[0] = static_cast<char>('0' + (10 - sig_count));
@@ -141,6 +151,12 @@ void SignalHandler::handle(int sig_code) {
 void SignalHandler::reset() {
     signalled_ = false;
     sig_count_ = 0;
+    // Restore any previous signal handlers
+    for (const int sig_code : kHandleableCodes) {
+        if (previous_signal_handlers.contains(sig_code)) {
+            signal(sig_code, previous_signal_handlers[sig_code]);
+        }
+    }
 }
 
 void SignalHandler::throw_if_signalled() {

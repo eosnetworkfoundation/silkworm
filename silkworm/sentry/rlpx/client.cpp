@@ -32,43 +32,47 @@ using namespace std::chrono_literals;
 using namespace boost::asio;
 
 Task<std::unique_ptr<Peer>> Client::connect(
-    common::EnodeUrl peer_url,
+    EnodeUrl peer_url,
     bool is_static_peer) {
-    log::Debug("sentry") << "rlpx::Client connecting to " << peer_url.to_string();
+    log::Trace("sentry") << "rlpx::Client connecting to " << peer_url.to_string();
 
     auto client_context = co_await boost::asio::this_coro::executor;
 
     ip::tcp::resolver resolver{client_context};
     auto endpoints = co_await resolver.async_resolve(
         peer_url.ip().to_string(),
-        std::to_string(peer_url.port()),
+        std::to_string(peer_url.port_rlpx()),
         use_awaitable);
     const ip::tcp::endpoint& endpoint = *endpoints.cbegin();
 
-    common::SocketStream stream{client_context};
+    SocketStream stream{client_context};
 
     bool is_connected = false;
+    size_t attempt_num = 0;
+
     while (!is_connected) {
         try {
+            attempt_num++;
             co_await stream.socket().async_connect(endpoint, use_awaitable);
             is_connected = true;
         } catch (const boost::system::system_error& ex) {
             if (ex.code() == boost::system::errc::operation_canceled)
                 throw;
-            log::Warning("sentry") << "rlpx::Client failed to connect"
-                                   << " to " << peer_url.to_string()
-                                   << " due to exception: " << ex.what()
-                                   << ", reconnecting...";
+            if (attempt_num >= max_retries_)
+                throw;
+            log::Debug("sentry") << "rlpx::Client failed to connect"
+                                 << " to " << peer_url.to_string()
+                                 << " due to exception: " << ex.what()
+                                 << ", reconnecting...";
         }
         if (!is_connected) {
-            stream = common::SocketStream{client_context};
-            co_await common::sleep(10s);
+            stream = SocketStream{client_context};
+            co_await sleep(10s);
         }
     }
 
     auto remote_endpoint = stream.socket().remote_endpoint();
-    log::Debug("sentry") << "rlpx::Client connected to "
-                         << remote_endpoint.address().to_string() << ":" << remote_endpoint.port();
+    log::Trace("sentry") << "rlpx::Client connected to " << remote_endpoint;
 
     co_return std::make_unique<Peer>(
         client_context,

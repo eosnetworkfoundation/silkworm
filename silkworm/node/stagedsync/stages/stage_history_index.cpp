@@ -18,7 +18,7 @@
 
 #include <magic_enum.hpp>
 
-#include <silkworm/core/common/cast.hpp>
+#include <silkworm/core/common/bytes_to_string.hpp>
 #include <silkworm/core/common/endian.hpp>
 
 namespace silkworm::stagedsync {
@@ -67,15 +67,15 @@ Stage::Result HistoryIndex::forward(db::RWTxn& txn) {
         collector_ = std::make_unique<etl::Collector>(node_settings_);
         if (previous_progress_accounts < target_progress) {
             success_or_throw(forward_impl(txn, previous_progress_accounts, target_progress, false));
-            txn.commit();
+            txn.commit_and_renew();
         }
         if (previous_progress_storage < target_progress) {
             success_or_throw(forward_impl(txn, previous_progress_storage, target_progress, true));
-            txn.commit();
+            txn.commit_and_renew();
         }
         reset_log_progress();
         update_progress(txn, target_progress);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -106,7 +106,7 @@ Stage::Result HistoryIndex::unwind(db::RWTxn& txn) {
     if (!sync_context_->unwind_point.has_value()) return ret;
     const BlockNum to{sync_context_->unwind_point.value()};
 
-    operation_ = OperationType::None;
+    operation_ = OperationType::Unwind;
     try {
         throw_if_stopping();
 
@@ -140,7 +140,7 @@ Stage::Result HistoryIndex::unwind(db::RWTxn& txn) {
 
         reset_log_progress();
         update_progress(txn, to);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -213,7 +213,7 @@ Stage::Result HistoryIndex::prune(db::RWTxn& txn) {
 
         reset_log_progress();
         db::stages::write_stage_prune_progress(txn, stage_name_, forward_progress);
-        txn.commit();
+        txn.commit_and_renew();
 
     } catch (const StageError& ex) {
         log::Error(log_prefix_,
@@ -400,8 +400,7 @@ void HistoryIndex::collect_bitmaps_from_changeset(db::RWTxn& txn, const db::MapC
     }
 
     if (bitmaps_size) {
-        db::bitmap::IndexLoader::flush_bitmaps_to_etl(bitmaps, collector_.get(), flush_count++);
-        bitmaps_size = 0;
+        db::bitmap::IndexLoader::flush_bitmaps_to_etl(bitmaps, collector_.get(), flush_count);
     }
 }
 
@@ -413,20 +412,18 @@ std::map<Bytes, bool> HistoryIndex::collect_unique_keys_from_changeset(
     std::map<Bytes, bool> ret;
     Bytes unique_key{};
 
-    BlockNum expected_block_number{std::min(from, to) + 1};
     const BlockNum max_block_number{std::max(from, to)};
-    BlockNum reached_block_number{0};
 
-    auto start_key{db::block_key(expected_block_number)};
+    auto start_key{db::block_key(std::min(from, to) + 1)};
     auto source = txn.ro_cursor_dup_sort(source_config);
     //auto source_data{storage ? source->lower_bound(db::to_slice(start_key), false)
     //                         : source->find(db::to_slice(start_key), false)};
     auto source_data{source->lower_bound(db::to_slice(start_key), false)};
 
+    BlockNum reached_block_number;
     while (source_data) {
         auto source_data_key_view{db::from_slice(source_data.key)};
         reached_block_number = endian::load_big_u64(source_data_key_view.data());
-        //check_block_sequence(expected_block_number, reached_block_number);
         if (reached_block_number > max_block_number) break;
         source_data_key_view.remove_prefix(sizeof(BlockNum));
 
@@ -456,7 +453,6 @@ std::map<Bytes, bool> HistoryIndex::collect_unique_keys_from_changeset(
             source_data = source->to_current_next_multi(false);
         }
 
-        ++expected_block_number;
         source_data = source->to_next(false);
     }
 
