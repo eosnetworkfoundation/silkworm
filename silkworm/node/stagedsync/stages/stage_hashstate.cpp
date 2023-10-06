@@ -782,6 +782,7 @@ Stage::Result HashState::unwind_from_storage_changeset(db::RWTxn& txn, BlockNum 
 
 Stage::Result HashState::write_changes_from_changed_addresses(db::RWTxn& txn, const ChangedAddresses& changed_addresses) {
     throw_if_stopping();
+    if(changed_addresses.size() == 0) return Stage::Result::kSuccess;
 
     std::unique_lock log_lck(log_mtx_);
     current_target_ = std::string(db::table::kHashedAccounts.name) + " " + std::string(db::table::kHashedCodeHash.name);
