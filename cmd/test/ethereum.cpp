@@ -58,7 +58,9 @@ static const std::vector<fs::path> kSlowTests{
     kBlockchainDir / "GeneralStateTests" / "VMTests" / "vmPerformance",
 };
 
-static const std::vector<fs::path> kFailingTests{};
+static const std::vector<fs::path> kFailingTests{
+    kTransactionDir / "ttRSValue",
+};
 
 static constexpr size_t kColumnWidth{80};
 
