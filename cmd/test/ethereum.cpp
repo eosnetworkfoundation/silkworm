@@ -59,7 +59,7 @@ static const std::vector<fs::path> kSlowTests{
 };
 
 static const std::vector<fs::path> kFailingTests{
-    kTransactionDir / "ttRSValue",
+    kTransactionDir / "ttRSValue" / "TransactionWithRSvalue0.json",
 };
 
 static constexpr size_t kColumnWidth{80};
