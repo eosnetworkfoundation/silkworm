@@ -47,7 +47,7 @@ class EthashRuleSet : public BaseRuleSet {
     // Canonical difficulty of a Proof-of-Work block header.
     // See Section 4.3.4 "Block Header Validity" of the Yellow Paper and also
     // EIP-2, EIP-100, EIP-649, EIP-1234, EIP-2384, EIP-3554, EIP-4345.
-    static intx::uint256 difficulty(uint64_t block_number, uint64_t block_timestamp,
+    static intx::uint256 difficulty(const BlockHeader& header,
                                     const intx::uint256& parent_difficulty, uint64_t parent_timestamp,
                                     bool parent_has_uncles, const ChainConfig& config);
 

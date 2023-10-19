@@ -23,7 +23,7 @@ namespace silkworm::protocol {
 
 MergeRuleSet::MergeRuleSet(RuleSetPtr pre_merge_rule_set, const ChainConfig& chain_config)
     : BaseRuleSet{chain_config, /*prohibit_ommers=*/true},
-      terminal_total_difficulty_{*chain_config.terminal_total_difficulty},
+      terminal_total_difficulty_{*chain_config.terminal_total_difficulty()},
       pre_merge_rule_set_{std::move(pre_merge_rule_set)} {}
 
 ValidationResult MergeRuleSet::pre_validate_block_body(const Block& block, const BlockState& state) {

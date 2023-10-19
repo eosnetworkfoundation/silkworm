@@ -42,10 +42,11 @@ static RuleSetPtr pre_merge_rule_set(const ChainConfig& chain_config) {
 RuleSetPtr rule_set_factory(const ChainConfig& chain_config) {
     RuleSetPtr rule_set{pre_merge_rule_set(chain_config)};
     if (!rule_set) {
+        std::cerr << "ERRORORORORR" << std::endl;
         return nullptr;
     }
 
-    if (chain_config.terminal_total_difficulty) {
+    if (chain_config.protocol_rule_set != protocol::RuleSetType::kTrust && chain_config.terminal_total_difficulty()) {
         rule_set = std::make_unique<MergeRuleSet>(std::move(rule_set), chain_config);
     }
     return rule_set;

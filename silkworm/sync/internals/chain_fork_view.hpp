@@ -18,6 +18,7 @@
 
 #include <boost/asio/awaitable.hpp>
 
+#include <silkworm/core/chain/config.hpp>
 #include <silkworm/core/common/lru_cache.hpp>
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/sync/internals/types.hpp>
@@ -51,7 +52,7 @@ class ChainForkView {
     std::optional<TotalDifficulty> get_total_difficulty(const Hash& hash);
     std::optional<TotalDifficulty> get_total_difficulty(BlockNum height, const Hash& hash);
 
-    static ChainHead head_at_genesis(const ChainConfig& chain_config);
+    static ChainHead head_at_genesis(const silkworm::ChainConfig& chain_config);
 
   private:
     ChainHead initial_head_{};

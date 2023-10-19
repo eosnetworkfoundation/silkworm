@@ -663,7 +663,7 @@ intx::uint256 OtsRpcApi::get_block_fees(const ChainConfig& chain_config, const s
         auto txn = block.block.transactions[receipt.tx_index];
 
         intx::uint256 effective_gas_price;
-        if (config.london_block && block_number >= config.london_block.value()) {
+        if (config.london_block() && block_number >= config.london_block().value()) {
             intx::uint256 base_fee = block.block.header.base_fee_per_gas.value_or(0);
             intx::uint256 gas_price = txn.effective_gas_price(base_fee);
             effective_gas_price = base_fee + gas_price;

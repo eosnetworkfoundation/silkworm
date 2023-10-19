@@ -294,6 +294,11 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
             auto current_hash = db::read_canonical_hash(txn, current_block_num);
             if (!current_hash) throw StageError(Stage::Result::kBadChainSequence,
                                                 "Canonical hash at height " + std::to_string(current_block_num) + " not found");
+
+            auto header = db::read_header(txn, current_block_num, *current_hash);
+            if (!header) throw StageError(Stage::Result::kBadChainSequence,
+                                                "Canonical header at height " + std::to_string(current_block_num) + " not found");
+
             BlockBody block_body;
             auto found = data_model.read_body(*current_hash, current_block_num, block_body);
             if (!found) throw StageError(Stage::Result::kBadChainSequence,
@@ -308,7 +313,7 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
             if (block_body.transactions.empty()) continue;
 
             total_collected_senders += block_body.transactions.size();
-            success_or_throw(add_to_batch(current_block_num, *current_hash, std::move(block_body.transactions)));
+            success_or_throw(add_to_batch(*header, current_block_num, *current_hash, std::move(block_body.transactions)));
 
             // Process batch in parallel if max size has been reached
             if (batch_->size() >= max_batch_size_) {
@@ -356,13 +361,13 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
     return ret;
 }
 
-Stage::Result Senders::add_to_batch(BlockNum block_num, Hash block_hash, std::vector<Transaction>&& transactions) {
+Stage::Result Senders::add_to_batch(const BlockHeader& header, BlockNum block_num, Hash block_hash, std::vector<Transaction>&& transactions) {
     if (is_stopping()) {
         return Stage::Result::kAborted;
     }
 
     // We're only interested in revisions up to London, so it's OK to not detect time-based forks.
-    const evmc_revision rev{node_settings_->chain_config->revision(block_num, /*block_time=*/0)};
+    const evmc_revision rev{node_settings_->chain_config->revision(header)};
     const bool has_homestead{rev >= EVMC_HOMESTEAD};
     const bool has_spurious_dragon{rev >= EVMC_SPURIOUS_DRAGON};
 

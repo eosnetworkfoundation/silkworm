@@ -262,17 +262,17 @@ awaitable<void> EngineRpcApi::handle_engine_new_payload_v2(const nlohmann::json&
         const auto config = silkworm::ChainConfig::from_json(chain_config.config);
 
         ensure(config.has_value(), "execution layer has invalid configuration");
-        ensure(config->shanghai_time.has_value(), "execution layer has no Shanghai timestamp in configuration");
+        ensure(config->shanghai_time().has_value(), "execution layer has no Shanghai timestamp in configuration");
 
         // We MUST check that CL has sent the expected ExecutionPayload version [Specification for params]
-        if (payload.timestamp < config->shanghai_time and payload.version != ExecutionPayload::V1) {
+        if (payload.timestamp < config->shanghai_time() and payload.version != ExecutionPayload::V1) {
             const auto error_msg = "consensus layer must use ExecutionPayloadV1 if timestamp lower than Shanghai";
             SILK_ERROR << error_msg;
             reply = make_json_error(request.at("id"), kInvalidParams, error_msg);
             co_await tx->close();
             co_return;
         }
-        if (payload.timestamp >= config->shanghai_time and payload.version != ExecutionPayload::V2) {
+        if (payload.timestamp >= config->shanghai_time() and payload.version != ExecutionPayload::V2) {
             const auto error_msg = "consensus layer must use ExecutionPayloadV2 if timestamp greater or equal to Shanghai";
             SILK_ERROR << error_msg;
             reply = make_json_error(request.at("id"), kInvalidParams, error_msg);
@@ -383,16 +383,16 @@ awaitable<void> EngineRpcApi::handle_engine_forkchoice_updated_v2(const nlohmann
             const auto config = silkworm::ChainConfig::from_json(chain_config.config);
 
             ensure(config.has_value(), "execution layer has invalid configuration");
-            ensure(config->shanghai_time.has_value(), "execution layer has no Shanghai timestamp in configuration");
+            ensure(config->shanghai_time().has_value(), "execution layer has no Shanghai timestamp in configuration");
 
             // We MUST check that CL has sent the expected PayloadAttributes version [Specification for params]
-            if (attributes.timestamp < config->shanghai_time and attributes.version != PayloadAttributes::V1) {
+            if (attributes.timestamp < config->shanghai_time() and attributes.version != PayloadAttributes::V1) {
                 const auto error_msg = "consensus layer must use PayloadAttributesV1 if timestamp lower than Shanghai";
                 SILK_ERROR << error_msg;
                 reply = make_json_error(request.at("id"), kInvalidParams, error_msg);
                 co_return;
             }
-            if (attributes.timestamp >= config->shanghai_time and attributes.version != PayloadAttributes::V2) {
+            if (attributes.timestamp >= config->shanghai_time() and attributes.version != PayloadAttributes::V2) {
                 const auto error_msg = "consensus layer must use PayloadAttributesV2 if timestamp greater or equal to Shanghai";
                 SILK_ERROR << error_msg;
                 reply = make_json_error(request.at("id"), kInvalidParams, error_msg);
@@ -437,12 +437,12 @@ awaitable<void> EngineRpcApi::handle_engine_exchange_transition_configuration_v1
         SILK_DEBUG << "chain config: " << chain_config;
         const auto config = silkworm::ChainConfig::from_json(chain_config.config);
         ensure(config.has_value(), "execution layer has invalid configuration");
-        ensure(config->terminal_total_difficulty.has_value(), "execution layer does not have terminal total difficulty");
+        ensure(config->terminal_total_difficulty().has_value(), "execution layer does not have terminal total difficulty");
 
         // We SHOULD check for any configuration mismatch except `terminalBlockNumber` [Specification 2.]
-        if (config->terminal_total_difficulty != cl_configuration.terminal_total_difficulty) {
+        if (config->terminal_total_difficulty() != cl_configuration.terminal_total_difficulty) {
             SILK_ERROR << "execution layer has the incorrect terminal total difficulty, expected: "
-                       << cl_configuration.terminal_total_difficulty << " got: " << config->terminal_total_difficulty.value();
+                       << cl_configuration.terminal_total_difficulty << " got: " << config->terminal_total_difficulty().value();
             reply = make_json_error(request.at("id"), kInvalidParams, "consensus layer terminal total difficulty does not match");
             co_await tx->close();
             co_return;
@@ -457,7 +457,7 @@ awaitable<void> EngineRpcApi::handle_engine_exchange_transition_configuration_v1
 
         // We MUST respond with configurable setting values set according to EIP-3675 [Specification 1.]
         const TransitionConfiguration transition_configuration{
-            .terminal_total_difficulty = config->terminal_total_difficulty.value(),
+            .terminal_total_difficulty = config->terminal_total_difficulty().value(),
             .terminal_block_hash = kZeroHash,  // terminal_block_hash removed from chain_config, return zero
             .terminal_block_number = 0         // terminal_block_number removed from chain_config, return zero
         };

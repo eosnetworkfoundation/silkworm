@@ -33,7 +33,7 @@ Sync::Sync(boost::asio::io_context& io_context,
     : sync_sentry_client_{io_context, sentry_client},
       block_exchange_{sync_sentry_client_, db::ROAccess{chaindata_env}, config} {
     // If terminal total difficulty is present in chain config, the network will use Proof-of-Stake sooner or later
-    if (config.terminal_total_difficulty) {
+    if (config.terminal_total_difficulty()) {
         // Configure and activate the Execution Layer Engine API RPC server
         rpc::DaemonSettings engine_rpc_settings{
             .log_settings = {

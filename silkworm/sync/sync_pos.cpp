@@ -156,7 +156,7 @@ std::shared_ptr<Block> PoSSync::make_execution_block(const rpc::ExecutionPayload
 }
 
 void PoSSync::do_sanity_checks(const BlockHeader&, /*const BlockHeader& parent,*/ TotalDifficulty parent_td) {
-    auto terminal_total_difficulty = block_exchange_.chain_config().terminal_total_difficulty;
+    auto terminal_total_difficulty = block_exchange_.chain_config().terminal_total_difficulty();
 
     if (parent_td < terminal_total_difficulty) throw PayloadValidationError("ignoring pre-merge payload");
 
@@ -177,7 +177,7 @@ auto PoSSync::new_payload(const rpc::ExecutionPayload& payload) -> asio::awaitab
     // Implementation of engine_new_payloadVx method
     using namespace execution;
     constexpr evmc::bytes32 kZeroHash = 0x0000000000000000000000000000000000000000000000000000000000000000_bytes32;
-    auto terminal_total_difficulty = block_exchange_.chain_config().terminal_total_difficulty;
+    auto terminal_total_difficulty = block_exchange_.chain_config().terminal_total_difficulty();
     auto no_latest_valid_hash = std::nullopt;
 
     try {
@@ -265,7 +265,7 @@ auto PoSSync::fork_choice_update(const rpc::ForkChoiceState& state,
     // Implementation of engine_forkchoiceUpdatedVx method
     using namespace execution;
     constexpr evmc::bytes32 kZeroHash = 0x0000000000000000000000000000000000000000000000000000000000000000_bytes32;
-    auto terminal_total_difficulty = block_exchange_.chain_config().terminal_total_difficulty;
+    auto terminal_total_difficulty = block_exchange_.chain_config().terminal_total_difficulty();
     auto no_latest_valid_hash = std::nullopt;
     auto no_payload_id = std::nullopt;
     try {
