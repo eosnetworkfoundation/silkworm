@@ -636,21 +636,18 @@ boost::asio::awaitable<void> OtsRpcApi::handle_ots_get_internal_operations(const
     co_return;
 }
 
-IssuanceDetails OtsRpcApi::get_issuance(const ChainConfig& chain_config, const silkworm::BlockWithHash& block) {
+IssuanceDetails OtsRpcApi::get_issuance(const ChainConfig& chain_config, const silkworm::BlockWithHash& ) {
     auto config = silkworm::ChainConfig::from_json(chain_config.config).value();
 
     if (config.protocol_rule_set != protocol::RuleSetType::kEthash) {
         return IssuanceDetails{};
     }
 
-    auto block_reward = protocol::EthashRuleSet::compute_reward(config, block.block);
-
-    intx::uint256 ommers_reward = std::accumulate(block_reward.ommers.begin(), block_reward.ommers.end(), intx::uint256{0});
-
     IssuanceDetails issuance{
-        .miner_reward = block_reward.miner,
-        .ommers_reward = ommers_reward,
-        .total_reward = block_reward.miner + ommers_reward};
+        .miner_reward = 0,
+        .ommers_reward = 0,
+        .total_reward = 0
+    };
 
     return issuance;
 }

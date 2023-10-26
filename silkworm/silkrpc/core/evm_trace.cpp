@@ -1193,12 +1193,11 @@ awaitable<std::vector<Trace>> TraceCallExecutor::trace_block(const BlockWithHash
         if (!cc) {
             throw std::runtime_error("Invalid chain config");
         }
-        const auto block_rewards = protocol::EthashRuleSet::compute_reward(*cc, block_with_hash.block);
 
         RewardAction action;
         action.author = block_with_hash.block.header.beneficiary;
         action.reward_type = "block";
-        action.value = block_rewards.miner;
+        action.value = 0;
 
         Trace trace;
         trace.block_number = block_with_hash.block.header.number;

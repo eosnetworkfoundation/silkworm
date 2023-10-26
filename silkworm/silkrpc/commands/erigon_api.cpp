@@ -272,15 +272,10 @@ awaitable<void> ErigonRpcApi::handle_erigon_watch_the_burn(const nlohmann::json&
             if (!cc) {
                 throw std::runtime_error("Invalid chain config");
             }
-            const auto block_reward{protocol::EthashRuleSet::compute_reward(*cc, block_with_hash->block)};
-            intx::uint256 total_ommer_reward = 0;
-            for (const auto ommer_reward : block_reward.ommers) {
-                total_ommer_reward += ommer_reward;
-            }
-            intx::uint256 block_issuance = block_reward.miner + total_ommer_reward;
-            issuance.block_reward = "0x" + intx::hex(block_reward.miner);
-            issuance.ommer_reward = "0x" + intx::hex(total_ommer_reward);
-            issuance.issuance = "0x" + intx::hex(block_issuance);
+            
+            issuance.block_reward = "0x0";
+            issuance.ommer_reward = "0x0";
+            issuance.issuance = "0x0";
             intx::uint256 burnt;
             if (block_with_hash->block.header.base_fee_per_gas) {
                 burnt = *block_with_hash->block.header.base_fee_per_gas * block_with_hash->block.header.gas_used;
