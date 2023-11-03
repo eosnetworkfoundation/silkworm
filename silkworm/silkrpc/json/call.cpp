@@ -63,7 +63,7 @@ void from_json(const nlohmann::json& json, Call& call) {
         const auto json_data = json.at("data").get<std::string>();
         
         if (json.count("input") != 0 && !json.at("input").is_null()) {
-            const auto json_input = json.at("data").get<std::string>();
+            const auto json_input = json.at("input").get<std::string>();
             if (json_data != json_input) {
                 throw std::system_error{std::make_error_code(std::errc::invalid_argument), "Call: conflicting data and input field"};
             }
