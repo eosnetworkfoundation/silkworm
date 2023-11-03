@@ -61,7 +61,19 @@ void from_json(const nlohmann::json& json, Call& call) {
     }
     if (json.count("data") != 0 && !json.at("data").is_null()) {
         const auto json_data = json.at("data").get<std::string>();
+        
+        if (json.count("input") != 0 && !json.at("input").is_null()) {
+            const auto json_input = json.at("data").get<std::string>();
+            if (json_data != json_input) {
+                throw std::system_error{std::make_error_code(std::errc::invalid_argument), "Call: conflicting data and input field"};
+            }
+        }
+        
         call.data = silkworm::from_hex(json_data);
+    }
+    else if (json.count("input") != 0 && !json.at("input").is_null()) {
+        const auto json_input = json.at("input").get<std::string>();
+        call.data = silkworm::from_hex(json_input);
     }
     if (json.count("accessList") != 0) {
         call.access_list = json.at("accessList").get<AccessList>();
