@@ -44,15 +44,15 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_call(const nlohmann::json
         co_return;
     }
 
-    const auto call = params[0].get<Call>();
-    const auto config = params[1].get<trace::TraceConfig>();
-    const auto block_number_or_hash = params[2].get<BlockNumberOrHash>();
-
-    SILK_INFO << "call: " << call << " block_number_or_hash: " << block_number_or_hash << " config: " << config;
-
     auto tx = co_await database_->begin();
 
     try {
+        const auto call = params[0].get<Call>();
+        const auto config = params[1].get<trace::TraceConfig>();
+        const auto block_number_or_hash = params[2].get<BlockNumberOrHash>();
+
+        SILK_INFO << "call: " << call << " block_number_or_hash: " << block_number_or_hash << " config: " << config;
+
         ethdb::TransactionDatabase tx_database{*tx};
         ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
         const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
