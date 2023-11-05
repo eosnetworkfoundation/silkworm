@@ -387,25 +387,6 @@ awaitable<void> DebugRpcApi::handle_debug_trace_call_many(const nlohmann::json& 
 
         co_return;
     }
-    const auto bundles = params[0].get<Bundles>();
-
-    if (bundles.empty()) {
-        const auto error_msg = "invalid debug_traceCallMany bundle list: " + params.dump();
-        SILK_ERROR << error_msg;
-        const auto reply = make_json_error(request["id"], 100, error_msg);
-        stream.write_json(reply);
-
-        co_return;
-    }
-
-    const auto simulation_context = params[1].get<SimulationContext>();
-
-    debug::DebugConfig config;
-    if (params.size() > 2) {
-        config = params[2].get<debug::DebugConfig>();
-    }
-
-    SILK_DEBUG << "bundles: " << bundles << " simulation_context: " << simulation_context << " config: {" << config << "}";
 
     stream.open_object();
     stream.write_field("id", request["id"]);
@@ -414,10 +395,35 @@ awaitable<void> DebugRpcApi::handle_debug_trace_call_many(const nlohmann::json& 
     auto tx = co_await database_->begin();
 
     try {
+        const auto bundles = params[0].get<Bundles>();
+
+        if (bundles.empty()) {
+            const auto error_msg = "invalid debug_traceCallMany bundle list: " + params.dump();
+            SILK_ERROR << error_msg;
+            const auto reply = make_json_error(request["id"], 100, error_msg);
+            stream.write_json(reply);
+
+            co_return;
+        }
+
+        const auto simulation_context = params[1].get<SimulationContext>();
+
+        debug::DebugConfig config;
+        if (params.size() > 2) {
+            config = params[2].get<debug::DebugConfig>();
+        }
+
+        SILK_DEBUG << "bundles: " << bundles << " simulation_context: " << simulation_context << " config: {" << config << "}";
+
         ethdb::TransactionDatabase tx_database{*tx};
         debug::DebugExecutor executor{tx_database, *block_cache_, workers_, *tx, config};
         co_await executor.trace_call_many(stream, bundles, simulation_context);
-    } catch (...) {
+    } 
+    catch (const std::exception& e){
+        const Error error{100, e.what()};
+        stream.write_field("error", error);
+    }
+    catch (...) {
         SILK_ERROR << "unexpected exception processing request: " << request.dump();
         const Error error{100, "unexpected exception"};
         stream.write_field("error", error);
