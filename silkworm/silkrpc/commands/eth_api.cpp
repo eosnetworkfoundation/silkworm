@@ -867,13 +867,12 @@ awaitable<void> EthereumRpcApi::handle_eth_estimate_gas(const nlohmann::json& re
         reply = make_json_error(request["id"], 100, error_msg);
         co_return;
     }
-    
+    const auto call = params[0].get<Call>();
+    SILK_DEBUG << "call: " << call;
+
     auto tx = co_await database_->begin();
 
     try {
-        const auto call = params[0].get<Call>();
-        SILK_DEBUG << "call: " << call;
-
         const BlockNumberOrHash block_number_or_hash{core::kLatestBlockId};
         ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
         ethdb::TransactionDatabase tx_database{*tx};
@@ -1096,15 +1095,13 @@ awaitable<void> EthereumRpcApi::handle_eth_call(const nlohmann::json& request, s
         make_glaze_json_error(reply, request["id"], -32602, error_msg);
         co_return;
     }
-    
+    const auto call = params[0].get<Call>();
+    const auto block_id = params[1].get<std::string>();
+    SILK_DEBUG << "call: " << call << " block_id: " << block_id;
 
     auto tx = co_await database_->begin();
 
     try {
-        const auto call = params[0].get<Call>();
-        const auto block_id = params[1].get<std::string>();
-        SILK_DEBUG << "call: " << call << " block_id: " << block_id;
-
         ethdb::TransactionDatabase tx_database{*tx};
         ethdb::kv::CachedDatabase cached_database{BlockNumberOrHash{block_id}, *tx, *state_cache_};
 
@@ -1248,14 +1245,14 @@ awaitable<void> EthereumRpcApi::handle_eth_create_access_list(const nlohmann::js
         reply = make_json_error(request["id"], 100, error_msg);
         co_return;
     }
-    
+    auto call = params[0].get<Call>();
+    const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
+
+    SILK_DEBUG << "call: " << call << " block_number_or_hash: " << block_number_or_hash;
+
     auto tx = co_await database_->begin();
 
     try {
-        auto call = params[0].get<Call>();
-        const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
-
-        SILK_DEBUG << "call: " << call << " block_number_or_hash: " << block_number_or_hash;
         ethdb::TransactionDatabase tx_database{*tx};
         ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
 

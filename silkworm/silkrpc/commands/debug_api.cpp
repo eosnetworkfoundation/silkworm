@@ -313,6 +313,14 @@ awaitable<void> DebugRpcApi::handle_debug_trace_call(const nlohmann::json& reque
 
         co_return;
     }
+    const auto call = params[0].get<Call>();
+    const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
+    debug::DebugConfig config;
+    if (params.size() > 2) {
+        config = params[2].get<debug::DebugConfig>();
+    }
+
+    SILK_DEBUG << "call: " << call << " block_number_or_hash: " << block_number_or_hash << " config: {" << config << "}";
 
     stream.open_object();
     stream.write_field("id", request["id"]);
@@ -321,46 +329,27 @@ awaitable<void> DebugRpcApi::handle_debug_trace_call(const nlohmann::json& reque
     auto tx = co_await database_->begin();
 
     try {
-        const auto call = params[0].get<Call>();
-        const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
-        debug::DebugConfig config;
-        if (params.size() > 2) {
-            config = params[2].get<debug::DebugConfig>();
-        }
+        ethdb::TransactionDatabase tx_database{*tx};
+        ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
 
-        SILK_DEBUG << "call: " << call << " block_number_or_hash: " << block_number_or_hash << " config: {" << config << "}";
-        try {
-            ethdb::TransactionDatabase tx_database{*tx};
-            ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
+        const bool is_latest_block = co_await core::is_latest_block_number(block_number_or_hash, tx_database);
+        const core::rawdb::DatabaseReader& db_reader =
+            is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database);
 
-            const bool is_latest_block = co_await core::is_latest_block_number(block_number_or_hash, tx_database);
-            const core::rawdb::DatabaseReader& db_reader =
-                is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database);
-
-            debug::DebugExecutor executor{db_reader, *block_cache_, workers_, *tx, config};
-            co_await executor.trace_call(stream, block_number_or_hash, call);
-        } catch (const std::exception& e) {
-            SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
-            std::ostringstream oss;
-            oss << "block " << block_number_or_hash.number() << "(" << block_number_or_hash.hash() << ") not found";
-            const Error error{-32000, oss.str()};
-            stream.write_field("error", error);
-        } catch (...) {
-            SILK_ERROR << "unexpected exception processing request: " << request.dump();
-            const Error error{100, "unexpected exception"};
-            stream.write_field("error", error);
-        }
-
-    }
-    catch (const std::exception& e){
-        const Error error{100, e.what()};
+        debug::DebugExecutor executor{db_reader, *block_cache_, workers_, *tx, config};
+        co_await executor.trace_call(stream, block_number_or_hash, call);
+    } catch (const std::exception& e) {
+        SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
+        std::ostringstream oss;
+        oss << "block " << block_number_or_hash.number() << "(" << block_number_or_hash.hash() << ") not found";
+        const Error error{-32000, oss.str()};
+        stream.write_field("error", error);
+    } catch (...) {
+        SILK_ERROR << "unexpected exception processing request: " << request.dump();
+        const Error error{100, "unexpected exception"};
         stream.write_field("error", error);
     }
-    catch (...) {
-            SILK_ERROR << "unexpected exception processing request: " << request.dump();
-            const Error error{100, "unexpected exception"};
-            stream.write_field("error", error);
-    }
+
     stream.close_object();
 
     co_await tx->close();  // RAII not (yet) available with coroutines
