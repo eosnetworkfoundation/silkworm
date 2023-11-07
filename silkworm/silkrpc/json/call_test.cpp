@@ -99,6 +99,153 @@ TEST_CASE("deserialize full call", "[silkworm::json][from_json]") {
     CHECK(c2.nonce == intx::uint256{1});
 }
 
+TEST_CASE("deserialize full call with input field", "[silkworm::json][from_json]") {
+    auto j1 = R"({
+        "from": "0x52c24586c31cff0485a6208bb63859290fba5bce",
+        "to": "0x0715a7794a1dc8e42615f059dd6e406a6594651a",
+        "gas": "0xF4240",
+        "gasPrice": "0x10C388C00",
+        "value": "0x10C388C00",
+        "nonce": "0x1",
+        "input": "0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000",
+        "accessList":[
+            {
+               "address":"0x52c24586c31cff0485a6208bb63859290fba5bce",
+               "storageKeys":["0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c"]
+            },
+            {
+               "address": "0x62c24586c31cff0485a6208bb63859290fba5bce",
+               "storageKeys":[]
+            }
+         ]
+    })"_json;
+    auto c1 = j1.get<Call>();
+    CHECK(c1.from == 0x52c24586c31cff0485a6208bb63859290fba5bce_address);
+    CHECK(c1.to == 0x0715a7794a1dc8e42615f059dd6e406a6594651a_address);
+    CHECK(c1.gas == intx::uint256{1000000});
+    CHECK(c1.gas_price == intx::uint256{4499999744});
+    CHECK(c1.value == intx::uint256{4499999744});
+    CHECK(c1.data == silkworm::from_hex("0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000"));
+    CHECK(c1.nonce == intx::uint256{1});
+    CHECK(c1.access_list.size() == 2);
+
+    auto j2 = R"({
+        "from":"0x52c24586c31cff0485a6208bb63859290fba5bce",
+        "to":"0x0715a7794a1dc8e42615f059dd6e406a6594651a",
+        "gas":1000000,
+        "gasPrice":"0x10C388C00",
+        "input":"0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000",
+        "value":"0x124F80",
+        "nonce": 1
+    })"_json;
+    auto c2 = j2.get<Call>();
+    CHECK(c2.from == 0x52c24586c31cff0485a6208bb63859290fba5bce_address);
+    CHECK(c2.to == 0x0715a7794a1dc8e42615f059dd6e406a6594651a_address);
+    CHECK(c2.gas == intx::uint256{1000000});
+    CHECK(c2.gas_price == intx::uint256{4499999744});
+    CHECK(c2.data == silkworm::from_hex("0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000"));
+    CHECK(c2.value == intx::uint256{1200000});
+    CHECK(c2.nonce == intx::uint256{1});
+}
+
+TEST_CASE("deserialize full call with both input data field", "[silkworm::json][from_json]") {
+    auto j1 = R"({
+        "from": "0x52c24586c31cff0485a6208bb63859290fba5bce",
+        "to": "0x0715a7794a1dc8e42615f059dd6e406a6594651a",
+        "gas": "0xF4240",
+        "gasPrice": "0x10C388C00",
+        "value": "0x10C388C00",
+        "nonce": "0x1",
+        "input": "0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000",
+        "data": "0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000",
+        "accessList":[
+            {
+               "address":"0x52c24586c31cff0485a6208bb63859290fba5bce",
+               "storageKeys":["0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c"]
+            },
+            {
+               "address": "0x62c24586c31cff0485a6208bb63859290fba5bce",
+               "storageKeys":[]
+            }
+         ]
+    })"_json;
+    auto c1 = j1.get<Call>();
+    CHECK(c1.from == 0x52c24586c31cff0485a6208bb63859290fba5bce_address);
+    CHECK(c1.to == 0x0715a7794a1dc8e42615f059dd6e406a6594651a_address);
+    CHECK(c1.gas == intx::uint256{1000000});
+    CHECK(c1.gas_price == intx::uint256{4499999744});
+    CHECK(c1.value == intx::uint256{4499999744});
+    CHECK(c1.data == silkworm::from_hex("0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000"));
+    CHECK(c1.nonce == intx::uint256{1});
+    CHECK(c1.access_list.size() == 2);
+
+    auto j2 = R"({
+        "from":"0x52c24586c31cff0485a6208bb63859290fba5bce",
+        "to":"0x0715a7794a1dc8e42615f059dd6e406a6594651a",
+        "gas":1000000,
+        "gasPrice":"0x10C388C00",
+        "input":"0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000",
+        "data":"0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000",
+        "value":"0x124F80",
+        "nonce": 1
+    })"_json;
+    auto c2 = j2.get<Call>();
+    CHECK(c2.from == 0x52c24586c31cff0485a6208bb63859290fba5bce_address);
+    CHECK(c2.to == 0x0715a7794a1dc8e42615f059dd6e406a6594651a_address);
+    CHECK(c2.gas == intx::uint256{1000000});
+    CHECK(c2.gas_price == intx::uint256{4499999744});
+    CHECK(c2.data == silkworm::from_hex("0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000"));
+    CHECK(c2.value == intx::uint256{1200000});
+    CHECK(c2.nonce == intx::uint256{1});
+}
+
+TEST_CASE("deserialize full call with conflicting input data field", "[silkworm::json][from_json]") {
+    auto j1 = R"({
+        "from": "0x52c24586c31cff0485a6208bb63859290fba5bce",
+        "to": "0x0715a7794a1dc8e42615f059dd6e406a6594651a",
+        "gas": "0xF4240",
+        "gasPrice": "0x10C388C00",
+        "value": "0x10C388C00",
+        "nonce": "0x1",
+        "input": "0xdaa6d5560000000000000000000000000000000000000000000000000000000000000001",
+        "data": "0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000",
+        "accessList":[
+            {
+               "address":"0x52c24586c31cff0485a6208bb63859290fba5bce",
+               "storageKeys":["0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c"]
+            },
+            {
+               "address": "0x62c24586c31cff0485a6208bb63859290fba5bce",
+               "storageKeys":[]
+            }
+         ]
+    })"_json;
+    try {
+        auto c1 = j1.get<Call>();
+    }
+    catch (const std::system_error& e) {
+        CHECK(0 == strcmp(e.what(), "Call: conflicting data and input field: Invalid argument"));
+    }
+    
+
+    auto j2 = R"({
+        "from":"0x52c24586c31cff0485a6208bb63859290fba5bce",
+        "to":"0x0715a7794a1dc8e42615f059dd6e406a6594651a",
+        "gas":1000000,
+        "gasPrice":"0x10C388C00",
+        "input":"0xdaa6d5560000000000000000000000000000000000000000000000000000000000000001",
+        "data":"0xdaa6d5560000000000000000000000000000000000000000000000000000000000000000",
+        "value":"0x124F80",
+        "nonce": 1
+    })"_json;
+    try {
+        auto c2 = j2.get<Call>();
+    }
+    catch (const std::system_error& e) {
+        CHECK(0 == strcmp(e.what(), "Call: conflicting data and input field: Invalid argument"));
+    }
+}
+
 TEST_CASE("make glaze content (data)", "[make_glaze_json_error]") {
     std::string json;
     const char* data_hex{"c68341b58302d066"};
