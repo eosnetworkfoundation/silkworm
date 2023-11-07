@@ -88,15 +88,14 @@ boost::asio::awaitable<void> TraceRpcApi::handle_trace_call_many(const nlohmann:
         reply = make_json_error(request["id"], 100, error_msg);
         co_return;
     }
+    const auto trace_calls = params[0].get<std::vector<trace::TraceCall>>();
+    const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
+
+    SILK_INFO << "#trace_calls: " << trace_calls.size() << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
     try {
-        const auto trace_calls = params[0].get<std::vector<trace::TraceCall>>();
-        const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
-
-        SILK_INFO << "#trace_calls: " << trace_calls.size() << " block_number_or_hash: " << block_number_or_hash;
-
         ethdb::TransactionDatabase tx_database{*tx};
         ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
         const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);

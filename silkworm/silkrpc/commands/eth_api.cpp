@@ -1161,37 +1161,35 @@ awaitable<void> EthereumRpcApi::handle_eth_call_many(const nlohmann::json& reque
         co_return;
     }
 
-    
+    const auto bundles = params[0].get<Bundles>();
+
+    if (bundles.empty()) {
+        const auto error_msg = "invalid eth_callMany bundle list: " + params.dump();
+        SILK_ERROR << error_msg;
+        reply = make_json_error(request["id"], 100, error_msg);
+
+        co_return;
+    }
+
+    const auto simulation_context = params[1].get<SimulationContext>();
+
+    AccountsOverrides accounts_overrides;
+    if (params.size() > 2) {
+        from_json(params[2], accounts_overrides);
+    }
+    std::optional<std::uint64_t> timeout;
+    if (params.size() > 3) {
+        timeout = params[3].get<std::uint64_t>();
+    }
+
+    SILK_INFO << "bundles: " << bundles
+              << " simulation_context: " << simulation_context
+              << " accounts_overrides #" << accounts_overrides.size()
+              << " timeout: " << timeout.value_or(0);
 
     auto tx = co_await database_->begin();
 
     try {
-        const auto bundles = params[0].get<Bundles>();
-
-        if (bundles.empty()) {
-            const auto error_msg = "invalid eth_callMany bundle list: " + params.dump();
-            SILK_ERROR << error_msg;
-            reply = make_json_error(request["id"], 100, error_msg);
-
-            co_return;
-        }
-
-        const auto simulation_context = params[1].get<SimulationContext>();
-
-        AccountsOverrides accounts_overrides;
-        if (params.size() > 2) {
-            from_json(params[2], accounts_overrides);
-        }
-        std::optional<std::uint64_t> timeout;
-        if (params.size() > 3) {
-            timeout = params[3].get<std::uint64_t>();
-        }
-
-        SILK_INFO << "bundles: " << bundles
-                << " simulation_context: " << simulation_context
-                << " accounts_overrides #" << accounts_overrides.size()
-                << " timeout: " << timeout.value_or(0);
-
         call::CallExecutor executor{*tx, *block_cache_, workers_};
         const auto result = co_await executor.execute(bundles, simulation_context, accounts_overrides, timeout);
 
