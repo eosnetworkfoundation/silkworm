@@ -861,7 +861,7 @@ awaitable<void> EthereumRpcApi::handle_eth_get_transaction_receipt(const nlohman
 // https://eth.wiki/json-rpc/API#eth_estimategas
 awaitable<void> EthereumRpcApi::handle_eth_estimate_gas(const nlohmann::json& request, nlohmann::json& reply) {
     auto params = request["params"];
-    if (params.size() != 1) {
+    if (params.size() < 1 || params.size() > 2) {
         auto error_msg = "invalid eth_estimateGas params: " + params.dump();
         SILK_ERROR << error_msg;
         reply = make_json_error(request["id"], 100, error_msg);
@@ -869,6 +869,17 @@ awaitable<void> EthereumRpcApi::handle_eth_estimate_gas(const nlohmann::json& re
     }
     const auto call = params[0].get<Call>();
     SILK_DEBUG << "call: " << call;
+
+    if (params.size() > 1) {
+        const auto block_param = params[1];
+        auto is_valid_tag = [](const std::string& tag) { return tag == "pending" || tag == "latest"; };
+        if(!block_param.is_string() || !is_valid_tag(block_param.get<std::string>())) {
+            auto error_msg = "Unknown block";
+            SILK_ERROR << error_msg;
+            reply = make_json_error(request["id"], -39001, error_msg);
+            co_return;
+        }
+    }
 
     auto tx = co_await database_->begin();
 
