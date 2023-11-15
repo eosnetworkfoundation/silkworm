@@ -899,7 +899,8 @@ void TraceTracer::on_reward_granted(const silkworm::CallResult& result, const si
         case evmc_status_code::EVMC_REVERT:
             trace.error = "Reverted";
             trace.trace_result->gas_used = initial_gas_ - int64_t(result.gas_left);
-            if (!result.data.empty()) {
+            // Quirk for blockscout explorer: No result for top trace when reverted.
+            if (!no_top_result_when_reverted_ && !result.data.empty()) {
                 if (trace.trace_result->code) {
                     trace.trace_result->code = result.data;
                 } else if (trace.trace_result->output) {
@@ -1265,7 +1266,7 @@ awaitable<std::vector<TraceCallResult>> TraceCallExecutor::trace_block_transacti
                         tracers.push_back(tracer);
                     }
                     if (config.trace) {
-                        std::shared_ptr<silkworm::EvmTracer> tracer = std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs);
+                        std::shared_ptr<silkworm::EvmTracer> tracer = std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs, no_top_result_when_reverted_);
                         tracers.push_back(tracer);
                     }
                     if (config.state_diff) {
@@ -1337,7 +1338,7 @@ awaitable<TraceManyCallResult> TraceCallExecutor::trace_calls(const silkworm::Bl
                         tracers.push_back(tracer);
                     }
                     if (config.trace) {
-                        std::shared_ptr<silkworm::EvmTracer> tracer = std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs);
+                        std::shared_ptr<silkworm::EvmTracer> tracer = std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs, no_top_result_when_reverted_);
                         tracers.push_back(tracer);
                     }
                     if (config.state_diff) {
@@ -1629,7 +1630,7 @@ awaitable<TraceCallResult> TraceCallExecutor::execute(std::uint64_t block_number
                     tracers.push_back(std::make_shared<trace::VmTraceTracer>(traces.vm_trace.value(), index));
                 }
                 if (config.trace) {
-                    tracers.push_back(std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs));
+                    tracers.push_back(std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs, no_top_result_when_reverted_));
                 }
                 if (config.state_diff) {
                     traces.state_diff.emplace();

@@ -95,6 +95,9 @@ class Daemon {
 
     //! The secret key for communication from CL & EL
     std::optional<std::string> jwt_secret_;
+
+    //! Quirk flag for RPC
+    uint64_t rpc_quirk_flag_;
 };
 
 }  // namespace silkworm::rpc
