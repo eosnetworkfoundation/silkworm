@@ -53,7 +53,7 @@ class RpcApi : protected EthereumRpcApi,
                TxPoolRpcApi,
                OtsRpcApi {
   public:
-    explicit RpcApi(boost::asio::io_context& io_context, boost::asio::thread_pool& workers)
+    explicit RpcApi(boost::asio::io_context& io_context, boost::asio::thread_pool& workers, uint64_t quirk_flag)
         : EthereumRpcApi{io_context, workers},
           NetRpcApi{io_context},
           AdminRpcApi{io_context},
@@ -61,7 +61,7 @@ class RpcApi : protected EthereumRpcApi,
           DebugRpcApi{io_context, workers},
           ParityRpcApi{io_context},
           ErigonRpcApi{io_context},
-          TraceRpcApi{io_context, workers},
+          TraceRpcApi{io_context, workers, quirk_flag},
           EngineRpcApi(io_context),
           TxPoolRpcApi(io_context),
           OtsRpcApi{io_context, workers} {}
