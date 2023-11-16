@@ -50,7 +50,8 @@ class Server {
                     const std::string& api_spec,
                     boost::asio::io_context& io_context,
                     boost::asio::thread_pool& workers,
-                    std::optional<std::string> jwt_secret);
+                    std::optional<std::string> jwt_secret,
+                    uint64_t quirk_flag);
 
     void start();
 

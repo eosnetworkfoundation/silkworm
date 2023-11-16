@@ -1,5 +1,5 @@
 /*
-   Copyright 2023 The Silkworm Authors
+   Copyright 2023 The EOS EVM Authors
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -14,28 +14,12 @@
    limitations under the License.
 */
 
-#include "trace_api.hpp"
-
-#include <catch2/catch.hpp>
-
-#include <silkworm/infra/common/log.hpp>
-#include <silkworm/infra/test/log.hpp>
+#pragma once
+#include <intx/intx.hpp>
 
 namespace silkworm::rpc::commands {
-
-using Catch::Matchers::Message;
-
-#ifndef SILKWORM_SANITIZE
-TEST_CASE("TraceRpcApi") {
-    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
-
-    boost::asio::io_context ioc;
-    boost::asio::thread_pool workers{1};
-
-    SECTION("CTOR") {
-        CHECK_THROWS_AS(TraceRpcApi(ioc, workers, 0), std::logic_error);
-    }
+  enum RpcApiQuirk : uint64_t {
+    kEmpty = 0x0,
+    kNoTopTraceResultWhenReverted = 0x1,
+  };
 }
-#endif  // SILKWORM_SANITIZE
-
-}  // namespace silkworm::rpc::commands

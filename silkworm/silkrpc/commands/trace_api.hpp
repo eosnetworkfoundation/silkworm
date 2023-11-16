@@ -41,12 +41,13 @@ namespace silkworm::rpc::commands {
 
 class TraceRpcApi {
   public:
-    TraceRpcApi(boost::asio::io_context& io_context, boost::asio::thread_pool& workers)
+    TraceRpcApi(boost::asio::io_context& io_context, boost::asio::thread_pool& workers, uint64_t quirk_flag)
         : io_context_(io_context),
           block_cache_{must_use_shared_service<BlockCache>(io_context_)},
           state_cache_{must_use_shared_service<ethdb::kv::StateCache>(io_context_)},
           database_{must_use_private_service<ethdb::Database>(io_context_)},
-          workers_{workers} {}
+          workers_{workers},
+          quirk_flag_{quirk_flag} {}
     virtual ~TraceRpcApi() = default;
 
     TraceRpcApi(const TraceRpcApi&) = delete;
@@ -70,6 +71,7 @@ class TraceRpcApi {
     ethdb::kv::StateCache* state_cache_;
     ethdb::Database* database_;
     boost::asio::thread_pool& workers_;
+    uint64_t quirk_flag_;
 
     friend class silkworm::http::RequestHandler;
 };

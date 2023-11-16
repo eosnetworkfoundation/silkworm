@@ -98,6 +98,11 @@ void add_rpcdaemon_options(CLI::App& cli, silkworm::rpc::DaemonSettings& setting
     cli.add_flag("--skip_protocol_check", settings.skip_protocol_check)
         ->description("Flag indicating if gRPC protocol version check should be skipped")
         ->capture_default_str();
+
+    cli.add_flag("--rpc_quirk_flag", settings.rpc_quirk_flag)
+        ->description("Flag controling quirk modes for rpc APIs")
+        ->check(CLI::Range(0, UINT64_MAX))
+        ->capture_default_str();
 }
 
 }  // namespace silkworm::cmd::common

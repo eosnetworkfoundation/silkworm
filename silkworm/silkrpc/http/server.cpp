@@ -52,8 +52,9 @@ Server::Server(const std::string& end_point,
                const std::string& api_spec,
                boost::asio::io_context& io_context,
                boost::asio::thread_pool& workers,
-               std::optional<std::string> jwt_secret)
-    : rpc_api_{io_context, workers},
+               std::optional<std::string> jwt_secret,
+               uint64_t quirk_flag)
+    : rpc_api_{io_context, workers, quirk_flag},
       handler_table_{api_spec},
       io_context_(io_context),
       acceptor_{io_context},
