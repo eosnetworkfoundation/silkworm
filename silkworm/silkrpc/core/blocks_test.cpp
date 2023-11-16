@@ -164,6 +164,17 @@ TEST_CASE("get_block_number latest_required", "[silkrpc][core][blocks]") {
         CHECK(number == 0x0000000000001234);
         CHECK(is_latest_block == false);
     }
+
+    SECTION("hash string") {
+        EXPECT_CALL(db_reader, get_one(db::table::kHeaderNumbersName, _)).WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<silkworm::Bytes> {
+            co_return kNumber;
+        }));
+
+        const std::string BLOCK_ID_HEX = "0x439816753229fc0736bf86a5048de4bc9fcdede8c91dadf88c828c76b2281dff";
+        auto result = boost::asio::co_spawn(pool, get_block_number(BLOCK_ID_HEX, db_reader, /*latest_required=*/false), boost::asio::use_future);
+        auto [number, ignore] = result.get();
+        CHECK(number == 0x3d0900);
+    }
 }
 
 TEST_CASE("get_block_number ", "[silkrpc][core][blocks]") {
@@ -385,6 +396,16 @@ TEST_CASE("is_latest_block_number", "[silkrpc][core][blocks]") {
         auto result = boost::asio::co_spawn(pool, is_latest_block_number(bnoh, db_reader), boost::asio::use_future);
         CHECK(!result.get());
     }
+}
+
+TEST_CASE("get_block_number_by_hash", "[silkrpc][core][blocks]") {
+    test::MockDatabaseReader db_reader;
+    boost::asio::thread_pool pool{1};
+    EXPECT_CALL(db_reader, get_one(db::table::kHeaderNumbersName, _)).WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<silkworm::Bytes> {
+        co_return kNumber;
+    }));
+    auto result = boost::asio::co_spawn(pool, get_block_number_by_hash(std::string("0x439816753229fc0736bf86a5048de4bc9fcdede8c91dadf88c828c76b2281dff"), db_reader), boost::asio::use_future);
+    CHECK(result.get() == 0x3d0900);
 }
 
 }  // namespace silkworm::rpc::core

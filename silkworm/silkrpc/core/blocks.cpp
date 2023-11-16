@@ -78,6 +78,13 @@ boost::asio::awaitable<std::pair<uint64_t, bool>> get_block_number(const std::st
     } else if (block_id == kLatestExecutedBlockId) {
         block_number = co_await get_latest_executed_block_number(reader);
         is_latest_block = true;
+    } else if (block_id.find("0x") == 0 || block_id.find("0X") == 0) {
+        if (block_id.length() == 66) {
+            block_number = co_await get_block_number_by_hash(block_id, reader);
+        } else {
+            block_number = std::stoul(block_id, nullptr, 16);
+        }
+        check_if_latest = latest_required;
     } else {
         block_number = static_cast<uint64_t>(std::stol(block_id, nullptr, 0));
         check_if_latest = latest_required;
@@ -137,6 +144,12 @@ boost::asio::awaitable<bool> is_latest_block_number(const BlockNumberOrHash& bno
             co_return block_number == latest_block_number;
         }
     }
+}
+
+boost::asio::awaitable<uint64_t> get_block_number_by_hash(const std::string& hash, const rawdb::DatabaseReader& reader) {
+    const auto b32_bytes = silkworm::from_hex(hash);
+    const auto b32 = silkworm::to_bytes32(b32_bytes.value_or(silkworm::Bytes{}));
+    co_return co_await rawdb::read_header_number(reader, b32);
 }
 
 }  // namespace silkworm::rpc::core

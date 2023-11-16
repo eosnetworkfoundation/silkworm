@@ -59,4 +59,6 @@ boost::asio::awaitable<uint64_t> get_forkchoice_safe_block_number(const rawdb::D
 
 boost::asio::awaitable<bool> is_latest_block_number(const BlockNumberOrHash& bnoh, const rawdb::DatabaseReader& reader);
 
+boost::asio::awaitable<uint64_t> get_block_number_by_hash(const std::string& hash, const rawdb::DatabaseReader& reader);
+
 }  // namespace silkworm::rpc::core
