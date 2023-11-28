@@ -898,15 +898,20 @@ void TraceTracer::on_reward_granted(const silkworm::CallResult& result, const si
             break;
         case evmc_status_code::EVMC_REVERT:
             trace.error = "Reverted";
-            trace.trace_result->gas_used = initial_gas_ - int64_t(result.gas_left);
-            // Quirk for blockscout explorer: No result for top trace when reverted.
-            if (!no_top_result_when_reverted_ && !result.data.empty()) {
-                if (trace.trace_result->code) {
-                    trace.trace_result->code = result.data;
-                } else if (trace.trace_result->output) {
-                    trace.trace_result->output = result.data;
-                }
+            if (no_top_result_when_reverted_) {
+                // Quirk for blockscout explorer: No result for top trace when reverted.
+                trace.trace_result.reset();
             }
+            else {
+                trace.trace_result->gas_used = initial_gas_ - int64_t(result.gas_left);
+                if (!result.data.empty()) {
+                    if (trace.trace_result->code) {
+                        trace.trace_result->code = result.data;
+                    } else if (trace.trace_result->output) {
+                        trace.trace_result->output = result.data;
+                    }
+                }
+            }  
             break;
         case evmc_status_code::EVMC_OUT_OF_GAS:
         case evmc_status_code::EVMC_STACK_OVERFLOW:
