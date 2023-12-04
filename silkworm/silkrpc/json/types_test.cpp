@@ -629,6 +629,36 @@ TEST_CASE("deserialize block_number_or_hash", "[silkworm::json][from_json]") {
         CHECK(bnoh.is_tag() == false);
         CHECK(bnoh.number() == 123456);
     }
+
+    SECTION("as objct with blockHash") {
+        auto json = R"({"blockHash":"0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c"})"_json;
+        auto bnoh = json.get<BlockNumberOrHash>();
+
+        CHECK(bnoh.is_hash() == true);
+        CHECK(bnoh.is_number() == false);
+        CHECK(bnoh.is_tag() == false);
+        CHECK(bnoh.hash() == 0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c_bytes32);
+    }
+
+    SECTION("as objct with decimal blockNumber") {
+        auto json = R"({"blockNumber":"1966"})"_json;
+        auto bnoh = json.get<BlockNumberOrHash>();
+
+        CHECK(bnoh.is_hash() == false);
+        CHECK(bnoh.is_number() == true);
+        CHECK(bnoh.is_tag() == false);
+        CHECK(bnoh.number() == 1966);
+    }
+
+    SECTION("as objct with hex blockNumber") {
+        auto json = R"({"blockNumber":"0x374f3"})"_json;
+        auto bnoh = json.get<BlockNumberOrHash>();
+
+        CHECK(bnoh.is_hash() == false);
+        CHECK(bnoh.is_number() == true);
+        CHECK(bnoh.is_tag() == false);
+        CHECK(bnoh.number() == 0x374f3);
+    }
 }
 
 TEST_CASE("serialize zero forks", "[silkworm::json][to_json]") {
