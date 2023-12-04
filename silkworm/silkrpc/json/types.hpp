@@ -161,6 +161,7 @@ struct adl_serializer<silkworm::rpc::BlockNumberOrHash> {
                         return silkworm::rpc::BlockNumberOrHash{s};
                     }
                 }
+                throw std::system_error{std::make_error_code(std::errc::invalid_argument), "BlockNumberOrHash: blockHash"};
             } else if (json.contains("blockNumber")) {
                 const auto& num = json["blockNumber"];
                 if (num.is_number()) {
@@ -172,9 +173,10 @@ struct adl_serializer<silkworm::rpc::BlockNumberOrHash> {
                         return silkworm::rpc::BlockNumberOrHash{s};
                     }
                 }
+                throw std::system_error{std::make_error_code(std::errc::invalid_argument), "BlockNumberOrHash: blockNumber"};
             }
         }
-        throw std::system_error{std::make_error_code(std::errc::invalid_argument), "BlockNumberOrHash: invalid argument"};
+        throw std::system_error{std::make_error_code(std::errc::invalid_argument), "BlockNumberOrHash: unsupported input type"};
     }
 };
 
