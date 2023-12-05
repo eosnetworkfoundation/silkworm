@@ -107,7 +107,7 @@ jobs:
 
   integration-test:
     name: EOS EVM Integration Tests
-    needs: [d, build, versions]
+    needs: [d, build]
     if: always() && needs.d.result == 'success' && needs.build.result == 'success' && needs.versions.result == 'success'
     strategy:
       fail-fast: false
