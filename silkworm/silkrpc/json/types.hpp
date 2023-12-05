@@ -152,8 +152,31 @@ struct adl_serializer<silkworm::rpc::BlockNumberOrHash> {
             return silkworm::rpc::BlockNumberOrHash{json.get<std::string>()};
         } else if (json.is_number()) {
             return silkworm::rpc::BlockNumberOrHash{json.get<std::uint64_t>()};
+        } else if (json.is_object()) {
+            if (json.contains("blockHash")) {
+                const auto& hashString = json["blockHash"];
+                if (hashString.is_string()) {
+                    const auto& s = hashString.get<std::string>();
+                    if (s.length() == 66) {
+                        return silkworm::rpc::BlockNumberOrHash{s};
+                    }
+                }
+                throw std::system_error{std::make_error_code(std::errc::invalid_argument), "BlockNumberOrHash: blockHash"};
+            } else if (json.contains("blockNumber")) {
+                const auto& num = json["blockNumber"];
+                if (num.is_number()) {
+                    return silkworm::rpc::BlockNumberOrHash{num.get<std::uint64_t>()};
+                }
+                else if (num.is_string()) {
+                    const auto& s = num.get<std::string>();
+                    if (s.length() <= 18) {
+                        return silkworm::rpc::BlockNumberOrHash{s};
+                    }
+                }
+                throw std::system_error{std::make_error_code(std::errc::invalid_argument), "BlockNumberOrHash: blockNumber"};
+            }
         }
-        return silkworm::rpc::BlockNumberOrHash{0};
+        throw std::system_error{std::make_error_code(std::errc::invalid_argument), "BlockNumberOrHash: unsupported input type"};
     }
 };
 
