@@ -239,4 +239,45 @@ TEST_CASE("Recover sender 2") {
     CHECK(txn.hash() == 0xe17d4d0c4596ea7d5166ad5da600a6fdc49e26e0680135a2f7300eedfd0d8314_bytes32);
 }
 
+TEST_CASE("Recover special signature (type1)") {
+    Transaction txn{
+        {
+         .type = TransactionType::kLegacy,
+         .nonce = 0,
+         .max_priority_fee_per_gas = 50'000 * kGiga,
+         .max_fee_per_gas = 50'000 * kGiga,
+         .gas_limit = 21'000,
+         .to = 0x5df9b87991262f6ba471f09758cde1c0fc1de734_address,
+         .value = 31337
+        },
+        false,
+        intx::from_string<intx::uint256>("0x00"), //r
+        intx::from_string<intx::uint256>("0xcab1900000000000"), //s  "test"
+    };
+
+    txn.recover_sender();
+    CHECK(txn.from == make_reserved_address(0xcab1900000000000));
+}
+
+TEST_CASE("Recover special signature (type2)") {
+    Transaction txn{
+        {
+         .type = TransactionType::kLegacy,
+         .nonce = 0,
+         .max_priority_fee_per_gas = 50'000 * kGiga,
+         .max_fee_per_gas = 50'000 * kGiga,
+         .gas_limit = 21'000,
+         .to = 0x5df9b87991262f6ba471f09758cde1c0fc1de734_address,
+         .value = 31337
+        },
+        true,
+        intx::from_string<intx::uint256>("0x00"), //r
+        intx::from_string<intx::uint256>("0xffffffffffffffffffffffff5df9b87991262f6ba471f09758cde1c0fc1de734"), //s
+    };
+
+    txn.recover_sender();
+    CHECK(txn.from == 0x5df9b87991262f6ba471f09758cde1c0fc1de734_address);
+}
+
+
 }  // namespace silkworm
