@@ -101,7 +101,7 @@ void add_rpcdaemon_options(CLI::App& cli, silkworm::rpc::DaemonSettings& setting
 
     cli.add_flag("--rpc_quirk_flag", settings.rpc_quirk_flag)
         ->description("Flag controling quirk modes for rpc APIs")
-        ->check(CLI::Range(0, UINT64_MAX))
+        ->check(CLI::Range(uint64_t(0), UINT64_MAX))
         ->capture_default_str();
 }
 
