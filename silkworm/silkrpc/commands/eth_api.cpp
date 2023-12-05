@@ -238,10 +238,15 @@ awaitable<void> EthereumRpcApi::handle_eth_get_block_by_hash(const nlohmann::jso
 
         const auto block_with_hash = co_await core::read_block_by_hash(*block_cache_, tx_database, block_hash);
         const auto block_number = block_with_hash->block.header.number;
-        const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_hash, block_number);
-        const Block extended_block{*block_with_hash, total_difficulty, full_tx};
 
-        reply = make_json_content(request["id"], extended_block);
+        const auto current_block_height = co_await core::get_current_block_number(tx_database); // block number in finished state
+        if (block_number > current_block_height) {
+            reply = make_json_content(request["id"], {});
+        } else {
+            const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_hash, block_number);
+            const Block extended_block{*block_with_hash, total_difficulty, full_tx};
+            reply = make_json_content(request["id"], extended_block);
+        }
     } catch (const std::invalid_argument& iv) {
         SILK_WARN << "invalid_argument: " << iv.what() << " processing request: " << request.dump();
         reply = make_json_content(request["id"], {});
@@ -276,12 +281,17 @@ awaitable<void> EthereumRpcApi::handle_eth_get_block_by_number(const nlohmann::j
         ethdb::TransactionDatabase tx_database{*tx};
 
         const auto block_number = co_await core::get_block_number(block_id, tx_database);
-        const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
-        const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_with_hash->hash, block_number);
-        const Block extended_block{*block_with_hash, total_difficulty, full_tx};
 
-        reply = make_json_content(request["id"], extended_block);
-    } catch (const std::invalid_argument& iv) {
+        const auto current_block_height = co_await core::get_current_block_number(tx_database); // block number in finished state
+        if (block_number > current_block_height) {
+            reply = make_json_content(request["id"], nlohmann::detail::value_t::null);
+        } else {
+            const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
+            const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_with_hash->hash, block_number);
+            const Block extended_block{*block_with_hash, total_difficulty, full_tx};
+            reply = make_json_content(request["id"], extended_block);
+        }
+    } catch (const std::invalid_argument& iv) { // goes here if block not exist
         SILK_WARN << "invalid_argument: " << iv.what() << " processing request: " << request.dump();
         reply = make_json_content(request["id"], nlohmann::detail::value_t::null);
     } catch (const std::exception& e) {
