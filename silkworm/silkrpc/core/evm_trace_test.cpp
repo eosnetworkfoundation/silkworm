@@ -2585,7 +2585,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_block") {
             "action": {
             "author": "0x0000000000000000000000000000000000000000",
             "rewardType": "block",
-            "value": "0x1bc16d674ec80000"
+            "value": "0x0"
             },
             "blockHash": "0x527198f474c1f1f1d01129d3a17ecc17895d85884a31b05ef0ecd480faee1592",
             "blockNumber": 1024165,
@@ -3843,18 +3843,26 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
         }));
 
     // TransactionDatabase::walk: TABLE BlockTransaction
-    static Bytes kBlockTransactionKey1{*silkworm::from_hex("0000000005c62e67")};
+    static Bytes kBlockTransactionKey1{*silkworm::from_hex("0000000005c62e66")};
     static uint32_t kBlockTransactionFixedBits1{0};
     EXPECT_CALL(db_reader, walk(db::table::kBlockTransactionsName, silkworm::ByteView{kBlockTransactionKey1}, kBlockTransactionFixedBits1, _))
-        .WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<void> {
+        .WillRepeatedly(InvokeWithoutArgs([]() -> boost::asio::awaitable<void> {
             co_return;
         }));
 
     // TransactionDatabase::walk: TABLE BlockTransaction
-    static Bytes kBlockTransactionKey2{*silkworm::from_hex("0000000005c62e6a")};
+    static Bytes kBlockTransactionKey2{*silkworm::from_hex("0000000005c62e69")};
     static uint32_t kBlockTransactionFixedBits2{0};
     EXPECT_CALL(db_reader, walk(db::table::kBlockTransactionsName, silkworm::ByteView{kBlockTransactionKey2}, kBlockTransactionFixedBits2, _))
-        .WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<void> {
+        .WillRepeatedly(InvokeWithoutArgs([]() -> boost::asio::awaitable<void> {
+            co_return;
+        }));
+
+    // TransactionDatabase::walk: TABLE BlockTransaction
+    static Bytes kBlockTransactionKey3{*silkworm::from_hex("0000000005c62e6f")};
+    static uint32_t kBlockTransactionFixedBits3{0};
+    EXPECT_CALL(db_reader, walk(db::table::kBlockTransactionsName, silkworm::ByteView{kBlockTransactionKey3}, kBlockTransactionFixedBits3, _))
+        .WillRepeatedly(InvokeWithoutArgs([]() -> boost::asio::awaitable<void> {
             co_return;
         }));
 
@@ -5343,7 +5351,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
                 "action": {
                     "author": "0x0000000000000000000000000000000000000000",
                     "rewardType": "block",
-                    "value": "0x1bc16d674ec80000"
+                    "value": "0x0"
                 },
                 "blockHash": "0xa87009e08f9af73efe86d702561afcf98f277a8acec60b97869969e367c12d66",
                 "blockNumber": 7200002,
@@ -5356,7 +5364,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
                 "action": {
                     "author": "0x0000000000000000000000000000000000000000",
                     "rewardType": "block",
-                    "value": "0x1bc16d674ec80000"
+                    "value": "0x0"
                 },
                 "blockHash": "0xa316f156582fb5fba2166910becdb6342965a801fa473e18cd6a0c06143cac1a",
                 "blockNumber": 7200003,
@@ -5529,7 +5537,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
                 "action": {
                     "author": "0x0000000000000000000000000000000000000000",
                     "rewardType": "block",
-                    "value": "0x1bc16d674ec80000"
+                    "value": "0x0"
                 },
                 "blockHash": "0xa87009e08f9af73efe86d702561afcf98f277a8acec60b97869969e367c12d66",
                 "blockNumber": 7200002,
@@ -5600,7 +5608,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
                 "action": {
                     "author": "0x0000000000000000000000000000000000000000",
                     "rewardType": "block",
-                    "value": "0x1bc16d674ec80000"
+                    "value": "0x0"
                 },
                 "blockHash": "0xa87009e08f9af73efe86d702561afcf98f277a8acec60b97869969e367c12d66",
                 "blockNumber": 7200002,
@@ -5613,7 +5621,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
                 "action": {
                     "author": "0x0000000000000000000000000000000000000000",
                     "rewardType": "block",
-                    "value": "0x1bc16d674ec80000"
+                    "value": "0x0"
                 },
                 "blockHash": "0xa316f156582fb5fba2166910becdb6342965a801fa473e18cd6a0c06143cac1a",
                 "blockNumber": 7200003,
@@ -5684,7 +5692,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
                 "action": {
                     "author": "0x0000000000000000000000000000000000000000",
                     "rewardType": "block",
-                    "value": "0x1bc16d674ec80000"
+                    "value": "0x0"
                 },
                 "blockHash": "0xa316f156582fb5fba2166910becdb6342965a801fa473e18cd6a0c06143cac1a",
                 "blockNumber": 7200003,
