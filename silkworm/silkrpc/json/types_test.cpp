@@ -659,6 +659,90 @@ TEST_CASE("deserialize block_number_or_hash", "[silkworm::json][from_json]") {
         CHECK(bnoh.is_tag() == false);
         CHECK(bnoh.number() == 0x374f3);
     }
+
+    SECTION("as invaild hash") {
+        nlohmann::json inputs[] = {
+            R"("0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c1")"_json,
+            R"("0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126")"_json,
+            R"("zzzz")"_json,
+        };
+
+        for (const auto& json : inputs) {
+            bool exception = false;
+            try{
+            auto bnoh = json.get<BlockNumberOrHash>();
+            }
+            catch (std::exception& e) {
+                CHECK(std::string(e.what()) == "stoul");
+                exception = true;
+            }
+            CHECK(exception);
+        }
+    }
+
+    SECTION("as invaild type") {
+        auto json = R"([1,1])"_json;
+        bool exception = false;
+        try{
+        auto bnoh = json.get<BlockNumberOrHash>();
+        }
+        catch (std::exception& e) {
+            CHECK(std::string(e.what()) == "BlockNumberOrHash: unsupported input type: Invalid argument");
+            exception = true;
+        }
+        CHECK(exception);
+    }
+
+    SECTION("as invaild object with no blockHash or blockNum") {
+        auto json = R"({"aaa":"bbb"})"_json;
+        bool exception = false;
+        try{
+        auto bnoh = json.get<BlockNumberOrHash>();
+        }
+        catch (std::exception& e) {
+            CHECK(std::string(e.what()) == "BlockNumberOrHash: unsupported input type: Invalid argument");
+            exception = true;
+        }
+        CHECK(exception);
+    }
+
+    SECTION("as object with invliad blockHash") {
+        nlohmann::json inputs[] = {
+            R"({"blockHash":"0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c1"})"_json,
+            R"({"blockHash":"0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126"})"_json,
+        };
+
+        for (const auto& json : inputs) {
+            bool exception = false;
+            try{
+            auto bnoh = json.get<BlockNumberOrHash>();
+            }
+            catch (std::exception& e) {
+                CHECK(std::string(e.what()) == "BlockNumberOrHash: blockHash: Invalid argument");
+                exception = true;
+            }
+            CHECK(exception);
+        }
+    }
+
+    SECTION("as object with invliad blockNumber") {
+        nlohmann::json inputs[] = {
+            R"({"blockNumber":{"aaa":"bbb"}})"_json,
+            R"({"blockNumber":"0xaaaaaaaaaaaaaaaaaaaaa"})"_json,
+        };
+
+        for (const auto& json : inputs) {
+            bool exception = false;
+            try{
+            auto bnoh = json.get<BlockNumberOrHash>();
+            }
+            catch (std::exception& e) {
+                CHECK(std::string(e.what()) == "BlockNumberOrHash: blockNumber: Invalid argument");
+                exception = true;
+            }
+            CHECK(exception);
+        }
+    }
 }
 
 TEST_CASE("serialize zero forks", "[silkworm::json][to_json]") {
