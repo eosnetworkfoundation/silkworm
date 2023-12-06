@@ -153,31 +153,26 @@ jobs:
 
       - name: Test rpcdaemon_test
         run: |
-          mkdir -p test_run_root
-          cd test_run_root
-          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/rpcdaemon_test
+          cd ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/
+          ./rpcdaemon_test
 
       - name: Test core_test
         run: |
-          mkdir -p test_run_root
-          cd test_run_root
-          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/core_test
+          cd ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/
+          ./core_test
 
       - name: Test infra_test
         run: |
-          mkdir -p test_run_root
-          cd test_run_root
-          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/infra_test
+          cd ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/
+          ./infra_test
 
       - name: Test node_test
         run: |
-          mkdir -p test_run_root
-          cd test_run_root
-          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/node_test
+          cd ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/
+          ./node_test
 
       - name: Test sync_test
         run: |
-          mkdir -p test_run_root
-          cd test_run_root
-          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/sync_test
+          cd ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/
+          ./sync_test
 
