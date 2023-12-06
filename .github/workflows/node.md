@@ -27,15 +27,15 @@ This workflow performs the following steps:
 1. Attach Documentation
     1. Checkout the repo with no submodules.
     1. Attach an annotation to the GitHub Actions build summary page containing CI documentation.
-1. EOS EVM Node Build
+1. EOS EVM Siklworm Build
     1. Authenticate to the `trustevm-ci-submodule-checkout` GitHub app using the [AntelopeIO/github-app-token-action](https://github.com/AntelopeIO/github-app-token-action) action to obtain an ephemeral token.
     1. Checkout the repo and submodules using the ephemeral token.
     1. Build using `cmake` and `make`.
-    1. Upload the build folder to GitHub Actions if the `upload-artifacts` input is set to `true`.
+    1. Upload the test binaries to GitHub Actions if the `upload-artifacts` input is set to `true`.
 
 ## Outputs
 This workflow produces the following outputs:
-1. Build Artifacts - `build.tar.gz` containing the built artifacts of eos-evm-node and eos-evm-rpc, if the `upload-artifacts` input is set to `true`.
+1. Build Artifacts - `build.tar.gz` containing the built artifacts of unit tests of the silkworm project, if the `upload-artifacts` input is set to `true`. Note that only tests are included as we do not really care about other binaries for this repo.
 
 > 💾️ Build artifacts are only attached on-demand for this pipeline because they are >117 MB each, but we only get 2 GB of cumulative artifact storage in GitHub Actions while eos-evm is a private repo. Obtain artifacts by performing a manual build with `upload-artifacts` set to `true`.
 

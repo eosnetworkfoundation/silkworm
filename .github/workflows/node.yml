@@ -1,4 +1,4 @@
-name: EOS EVM Node CI
+name: EOS EVM Silkworm CI
 
 on:
   push:
@@ -68,7 +68,7 @@ jobs:
           file: ${{fromJSON(needs.d.outputs.p)[matrix.platform].dockerfile}}
 
   build:
-    name: EOS EVM Node Build
+    name: EOS EVM Silkworm Build
     needs: [d, build-platforms]
     if: always() && needs.d.result == 'success' && (needs.build-platforms.result == 'success' ||  needs.build-platforms.result == 'skipped')
     strategy:
@@ -93,7 +93,7 @@ jobs:
           submodules: 'recursive'
           token: ${{secrets.GITHUB_TOKEN}}
 
-      - name: Build EOS EVM Node
+      - name: Build EOS EVM Silkworm
         run: .github/workflows/build-node.sh
         env:
           CC: gcc-11
@@ -105,8 +105,8 @@ jobs:
           name: build.tar.gz
           path: build.tar.gz
 
-  integration-test:
-    name: EOS EVM Integration Tests
+  unit-test:
+    name: EOS EVM Silkworm Unit Tests
     needs: [d, build]
     if: always() && needs.d.result == 'success' && needs.build.result == 'success'
     strategy:
@@ -135,60 +135,49 @@ jobs:
 #          app_id: ${{ secrets.TRUSTEVM_CI_APP_ID }}
 #          private_key: ${{ secrets.TRUSTEVM_CI_APP_KEY }}
 
-      - name: Download EOS EVM Node builddir
+      - name: Download EOS EVM Silkworm builddir
         uses: actions/download-artifact@v3
         with:
           name: build.tar.gz
 
-      - name: Extract EOS EVM Node builddir
-        id: evm-node-build
+      - name: Extract EOS EVM Silkworm builddir
+        id: evm-silkworm-build
         run: |
           mkdir silkworm
           mv build.tar.gz silkworm/
           pushd silkworm
           tar xvf build.tar.gz
           pushd build
-          echo "EVM_NODE_BUILD=$(pwd)" >> "$GITHUB_OUTPUT"
+          echo "EVM_SILKWORM_BUILD=$(pwd)" >> "$GITHUB_OUTPUT"
           popd
 
       - name: Test rpcdaemon_test
         run: |
-          mkdir test_run_root
+          mkdir -p test_run_root
           cd test_run_root
-          ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/rpcdaemon_test
+          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/rpcdaemon_test
 
       - name: Test core_test
         run: |
-          mkdir test_run_root
+          mkdir -p test_run_root
           cd test_run_root
-          ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/core_test
+          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/core_test
 
       - name: Test infra_test
         run: |
-          mkdir test_run_root
+          mkdir -p test_run_root
           cd test_run_root
-          ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/infra_test
+          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/infra_test
 
       - name: Test node_test
         run: |
-          mkdir test_run_root
+          mkdir -p test_run_root
           cd test_run_root
-          ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/node_test
+          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/node_test
 
       - name: Test sync_test
         run: |
-          mkdir test_run_root
+          mkdir -p test_run_root
           cd test_run_root
-          ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/sync_test
+          ${{ steps.evm-silkworm-build.outputs.EVM_SILKWORM_BUILD }}/cmd/test/sync_test
 
-      - name: Prepare Logs
-        if: failure()
-        run: |
-          tar -czf leap-int-test-logs.tar.gz test_run_root/* ws_test_run_root/*
-
-      - name: Upload logs from failed tests
-        uses: actions/upload-artifact@v3
-        if: failure()
-        with:
-          name: leap-int-test-logs.tar.gz
-          path: leap-int-test-logs.tar.gz
