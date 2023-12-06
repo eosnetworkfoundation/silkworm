@@ -79,12 +79,12 @@ jobs:
     container: ${{fromJSON(needs.d.outputs.p)[matrix.platform].image}}
 
     steps:
-      - name: Authenticate
-        id: auth
-        uses: AntelopeIO/github-app-token-action@v1
-        with:
-          app_id: ${{ secrets.TRUSTEVM_CI_APP_ID }}
-          private_key: ${{ secrets.TRUSTEVM_CI_APP_KEY }}
+#      - name: Authenticate
+#        id: auth
+#        uses: AntelopeIO/github-app-token-action@v1
+#        with:
+#          app_id: ${{ secrets.TRUSTEVM_CI_APP_ID }}
+#          private_key: ${{ secrets.TRUSTEVM_CI_APP_KEY }}
 
       - name: Checkout Repo
         uses: actions/checkout@v3
@@ -128,12 +128,12 @@ jobs:
           apt update
           apt upgrade -y
 
-      - name: Authenticate
-        id: auth
-        uses: AntelopeIO/github-app-token-action@v1
-        with:
-          app_id: ${{ secrets.TRUSTEVM_CI_APP_ID }}
-          private_key: ${{ secrets.TRUSTEVM_CI_APP_KEY }}
+#      - name: Authenticate
+#        id: auth
+#        uses: AntelopeIO/github-app-token-action@v1
+#        with:
+#          app_id: ${{ secrets.TRUSTEVM_CI_APP_ID }}
+#          private_key: ${{ secrets.TRUSTEVM_CI_APP_KEY }}
 
       - name: Download EOS EVM Node builddir
         uses: actions/download-artifact@v3
