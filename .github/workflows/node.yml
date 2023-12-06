@@ -91,7 +91,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: 'recursive'
-          token: ${{ steps.auth.outputs.token }}
+          token: ${{secrets.GITHUB_TOKEN}}
 
       - name: Build EOS EVM Node
         run: .github/workflows/build-node.sh
