@@ -103,7 +103,7 @@ boost::asio::awaitable<uint64_t> get_highest_block_number(const rawdb::DatabaseR
 }
 
 boost::asio::awaitable<uint64_t> get_latest_executed_block_number(const rawdb::DatabaseReader& reader) {
-    co_return co_await stages::get_sync_stage_progress(reader, stages::kFinish); // kFinish instead of kExecution
+    co_return co_await stages::get_sync_stage_progress(reader, stages::kExecution);
 }
 
 boost::asio::awaitable<uint64_t> get_latest_block_number(const rawdb::DatabaseReader& reader) {
