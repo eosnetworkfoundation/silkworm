@@ -108,7 +108,7 @@ jobs:
   integration-test:
     name: EOS EVM Integration Tests
     needs: [d, build]
-    if: always() && needs.d.result == 'success' && needs.build.result == 'success' && needs.versions.result == 'success'
+    if: always() && needs.d.result == 'success' && needs.build.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -156,6 +156,30 @@ jobs:
           mkdir test_run_root
           cd test_run_root
           ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/rpcdaemon_test
+
+      - name: Test core_test
+        run: |
+          mkdir test_run_root
+          cd test_run_root
+          ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/core_test
+
+      - name: Test infra_test
+        run: |
+          mkdir test_run_root
+          cd test_run_root
+          ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/infra_test
+
+      - name: Test node_test
+        run: |
+          mkdir test_run_root
+          cd test_run_root
+          ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/node_test
+
+      - name: Test sync_test
+        run: |
+          mkdir test_run_root
+          cd test_run_root
+          ${{ steps.evm-node-build.outputs.EVM_NODE_BUILD }}/cmd/test/sync_test
 
       - name: Prepare Logs
         if: failure()
