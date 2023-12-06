@@ -107,6 +107,7 @@ class EVMExecutor {
 
     ExecutionResult call(const silkworm::Block& block, const silkworm::Transaction& txn, Tracers tracers = {}, bool refund = true, bool gas_bailout = false);
     void reset();
+    void reset_all();
 
   private:
     static std::optional<std::string> pre_check(const EVM& evm, const silkworm::Transaction& txn,
