@@ -101,7 +101,9 @@ awaitable<void> EthereumRpcApi::handle_eth_block_number(const nlohmann::json& re
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-        const auto block_height = co_await core::get_latest_block_number(tx_database);
+        // use current block number (block in finished state) instead of latest block number (in executed state)
+        // to ensure logs are available for the same block
+        const auto block_height = co_await core::get_current_block_number(tx_database);
         reply = make_json_content(request["id"], to_quantity(block_height));
     } catch (const std::exception& e) {
         SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
@@ -240,7 +242,6 @@ awaitable<void> EthereumRpcApi::handle_eth_get_block_by_hash(const nlohmann::jso
         const auto block_number = block_with_hash->block.header.number;
         const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_hash, block_number);
         const Block extended_block{*block_with_hash, total_difficulty, full_tx};
-
         reply = make_json_content(request["id"], extended_block);
     } catch (const std::invalid_argument& iv) {
         SILK_WARN << "invalid_argument: " << iv.what() << " processing request: " << request.dump();
@@ -275,13 +276,21 @@ awaitable<void> EthereumRpcApi::handle_eth_get_block_by_number(const nlohmann::j
     try {
         ethdb::TransactionDatabase tx_database{*tx};
 
-        const auto block_number = co_await core::get_block_number(block_id, tx_database);
-        const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
-        const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_with_hash->hash, block_number);
-        const Block extended_block{*block_with_hash, total_difficulty, full_tx};
+        auto block_number = co_await core::get_block_number(block_id, tx_database);
 
-        reply = make_json_content(request["id"], extended_block);
-    } catch (const std::invalid_argument& iv) {
+        const auto current_block_height = co_await core::get_current_block_number(tx_database); // block number in finished state
+        if (block_id == core::kLatestBlockId) { // return the "latest" blocknum to "finished" blocknum
+            block_number = current_block_height;
+        }
+        if (block_number > current_block_height) {
+            reply = make_json_content(request["id"], nlohmann::detail::value_t::null);
+        } else {
+            const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
+            const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_with_hash->hash, block_number);
+            const Block extended_block{*block_with_hash, total_difficulty, full_tx};
+            reply = make_json_content(request["id"], extended_block);
+        }
+    } catch (const std::invalid_argument& iv) { // goes here if block not exist
         SILK_WARN << "invalid_argument: " << iv.what() << " processing request: " << request.dump();
         reply = make_json_content(request["id"], nlohmann::detail::value_t::null);
     } catch (const std::exception& e) {
@@ -1691,13 +1700,22 @@ awaitable<void> EthereumRpcApi::handle_eth_get_logs(const nlohmann::json& reques
     try {
         ethdb::TransactionDatabase tx_database{*tx};
 
-        const auto [start, end] = co_await get_block_numbers(filter, tx_database);
+        auto [start, end] = co_await get_block_numbers(filter, tx_database);
         if (start == end && start == std::numeric_limits<std::uint64_t>::max()) {
             auto error_msg = "invalid eth_getLogs filter block_hash: " + filter.block_hash.value();
             SILK_ERROR << error_msg;
             reply = make_json_error(request["id"], 100, error_msg);
             co_await tx->close();  // RAII not (yet) available with coroutines
             co_return;
+        }
+
+        // override the "latest" blocknum to "finished" blocknum instead of "executed" blocknum
+        const auto current_block_height = co_await core::get_current_block_number(tx_database); // block number in finished state
+        if (filter.from_block.has_value() && filter.from_block.value() == core::kLatestBlockId) {
+            start = current_block_height;
+        }
+        if (filter.to_block.has_value() && filter.to_block.value() == core::kLatestBlockId) {
+            end = current_block_height;
         }
 
         std::vector<Log> logs;
