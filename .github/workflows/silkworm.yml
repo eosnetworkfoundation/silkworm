@@ -24,7 +24,7 @@ jobs:
           submodules: 'false'
 
       - name: Attach Documentation
-        run: cat .github/workflows/siklworm.md >> $GITHUB_STEP_SUMMARY
+        run: cat .github/workflows/silkworm.md >> $GITHUB_STEP_SUMMARY
 
   d:
     name: Discover Platforms
