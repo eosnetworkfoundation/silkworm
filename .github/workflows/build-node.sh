@@ -17,7 +17,7 @@ ee cmake --version
 ee mkdir build
 ee pushd build
 ee cmake ..
-ee make all_unit_tests -j "$(nproc)"
+ee make -j "$(nproc)"
 
 # pack
 ee popd
