@@ -24,7 +24,7 @@ jobs:
           submodules: 'false'
 
       - name: Attach Documentation
-        run: cat .github/workflows/node.md >> $GITHUB_STEP_SUMMARY
+        run: cat .github/workflows/siklworm.md >> $GITHUB_STEP_SUMMARY
 
   d:
     name: Discover Platforms
@@ -94,7 +94,7 @@ jobs:
           token: ${{secrets.GITHUB_TOKEN}}
 
       - name: Build EOS EVM Silkworm
-        run: .github/workflows/build-node.sh
+        run: .github/workflows/build-tests.sh
         env:
           CC: gcc-11
           CXX: g++-11
