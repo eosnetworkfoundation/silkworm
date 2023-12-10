@@ -69,7 +69,7 @@ void ExecutionEngine::insert_blocks(const std::vector<std::shared_ptr<Block>>& b
 bool ExecutionEngine::insert_block(const std::shared_ptr<Block> block) {
     Hash header_hash{block->header.hash()};
 
-    if (block_cache_.get(header_hash)) return true;  // ignore repeated blocks
+    //if (block_cache_.get(header_hash)) return true;  // ignore repeated blocks
     block_cache_.put(header_hash, block);
 
     if (block_progress_ < block->header.number) block_progress_ = block->header.number;
