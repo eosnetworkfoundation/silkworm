@@ -365,4 +365,62 @@ TEST_CASE("ExecutionEngine") {
     }
 }
 
+TEST_CASE("ExecutionEngine test fork A->B->A") {
+    test::SetLogVerbosityGuard log_guard(log::Level::kNone);
+
+    asio::io_context io;
+    asio::executor_work_guard<decltype(io.get_executor())> work{io.get_executor()};
+
+    test::Context context;
+    context.add_genesis_data();
+    context.commit_txn();
+
+    PreverifiedHashes::current.clear();                           // disable preverified hashes
+    Environment::set_stop_before_stage(db::stages::kSendersKey);  // only headers, block hashes and bodies
+
+    db::RWAccess db_access{context.env()};
+    ExecutionEngine_ForTest exec_engine{io, context.node_settings(), db_access};
+    exec_engine.open();
+
+    auto& tx = exec_engine.main_chain_.tx();  // mdbx refuses to open a ROTxn when there is a RWTxn in the same thread
+
+    auto header0_hash = db::read_canonical_hash(tx, 0);
+    REQUIRE(header0_hash.has_value());
+
+    auto header0 = db::read_canonical_header(tx, 0);
+    REQUIRE(header0.has_value());
+
+    SECTION("fork A->B->A") {
+        auto block1 = generateSampleChildrenBlock(*header0);
+        auto block2 = generateSampleChildrenBlock(block1->header);
+        auto block3 = generateSampleChildrenBlock(block2->header);
+
+        // inserting & verifying the block
+        exec_engine.insert_block(block1);
+        exec_engine.insert_block(block2);
+        exec_engine.insert_block(block3);
+
+        auto verification = exec_engine.verify_chain(block3->header.hash()).get();
+        REQUIRE(holds_alternative<ValidChain>(verification));
+
+        // creating a fork and changing the head (trigger unwind)
+        auto block2b = generateSampleChildrenBlock(block1->header);
+        block2b->header.extra_data = string_view_to_byte_view("I'm different");  // to make it different from block2
+        exec_engine.insert_block(block2b);
+
+        verification = exec_engine.verify_chain(block2b->header.hash()).get();
+        REQUIRE(holds_alternative<ValidChain>(verification));
+
+        // insert block3 again and verify
+        exec_engine.insert_block(block3);
+        verification = exec_engine.verify_chain(block3->header.hash()).get();
+        REQUIRE(holds_alternative<ValidChain>(verification));
+
+        CHECK(exec_engine.get_header(block1->header.hash()).has_value());   // we do not remove old blocks
+        CHECK(exec_engine.get_header(block2->header.hash()).has_value());   // we do not remove old blocks
+        CHECK(exec_engine.get_header(block2b->header.hash()).has_value());  // we do not remove old blocks
+        CHECK(exec_engine.get_header(block3->header.hash()).has_value());   // we do not remove old blocks
+    }
+}
+
 }  // namespace silkworm
