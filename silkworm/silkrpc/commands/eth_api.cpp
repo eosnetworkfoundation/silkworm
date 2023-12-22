@@ -948,19 +948,20 @@ awaitable<void> EthereumRpcApi::handle_eth_get_balance(const nlohmann::json& req
         co_return;
     }
     const auto address = params[0].get<evmc::address>();
-    const auto block_id = params[1].get<std::string>();
-    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_id: " << block_id;
+    const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
+    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-        ethdb::kv::CachedDatabase cached_database{BlockNumberOrHash{block_id}, *tx, *state_cache_};
-        const auto [block_number, is_latest_block] = co_await core::get_block_number(block_id, tx_database, /*latest_required=*/true);
+        ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
+        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
+        const bool is_latest_block = co_await core::get_latest_executed_block_number(tx_database) == block_with_hash->block.header.number;
 
         StateReader state_reader{
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database)};
-        std::optional<silkworm::Account> account{co_await state_reader.read_account(address, block_number + 1)};
+        std::optional<silkworm::Account> account{co_await state_reader.read_account(address, block_with_hash->block.header.number + 1)};
 
         reply = make_json_content(request["id"], "0x" + (account ? intx::hex(account->balance) : "0"));
     } catch (const std::exception& e) {
@@ -985,19 +986,20 @@ awaitable<void> EthereumRpcApi::handle_eth_get_code(const nlohmann::json& reques
         co_return;
     }
     const auto address = params[0].get<evmc::address>();
-    const auto block_id = params[1].get<std::string>();
-    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_id: " << block_id;
+    const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
+    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-        ethdb::kv::CachedDatabase cached_database{BlockNumberOrHash{block_id}, *tx, *state_cache_};
-        const auto [block_number, is_latest_block] = co_await core::get_block_number(block_id, tx_database, /*latest_required=*/true);
+        ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
+        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
+        const bool is_latest_block = co_await core::get_latest_executed_block_number(tx_database) == block_with_hash->block.header.number;
         StateReader state_reader{
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database)};
 
-        std::optional<silkworm::Account> account{co_await state_reader.read_account(address, block_number + 1)};
+        std::optional<silkworm::Account> account{co_await state_reader.read_account(address, block_with_hash->block.header.number + 1)};
 
         if (account) {
             auto code{co_await state_reader.read_code(account->code_hash)};
@@ -1027,19 +1029,20 @@ awaitable<void> EthereumRpcApi::handle_eth_get_transaction_count(const nlohmann:
         co_return;
     }
     const auto address = params[0].get<evmc::address>();
-    const auto block_id = params[1].get<std::string>();
-    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_id: " << block_id;
+    const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
+    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-        ethdb::kv::CachedDatabase cached_database{BlockNumberOrHash{block_id}, *tx, *state_cache_};
-        const auto [block_number, is_latest_block] = co_await core::get_block_number(block_id, tx_database, /*latest_required=*/true);
+        ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
+        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
+        const bool is_latest_block = co_await core::get_latest_executed_block_number(tx_database) == block_with_hash->block.header.number;
         StateReader state_reader{
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database)};
 
-        std::optional<silkworm::Account> account{co_await state_reader.read_account(address, block_number + 1)};
+        std::optional<silkworm::Account> account{co_await state_reader.read_account(address, block_with_hash->block.header.number + 1)};
 
         if (account) {
             reply = make_json_content(request["id"], to_quantity(account->nonce));
@@ -1069,21 +1072,22 @@ awaitable<void> EthereumRpcApi::handle_eth_get_storage_at(const nlohmann::json& 
     }
     const auto address = params[0].get<evmc::address>();
     const auto location = params[1].get<evmc::bytes32>();
-    const auto block_id = params[2].get<std::string>();
-    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_id: " << block_id;
+    const auto block_number_or_hash = params[2].get<BlockNumberOrHash>();
+    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-        ethdb::kv::CachedDatabase cached_database{BlockNumberOrHash{block_id}, *tx, *state_cache_};
-        const auto [block_number, is_latest_block] = co_await core::get_block_number(block_id, tx_database, /*latest_required=*/true);
+        ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
+        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
+        const bool is_latest_block = co_await core::get_latest_executed_block_number(tx_database) == block_with_hash->block.header.number;
         StateReader state_reader{
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database)};
-        std::optional<silkworm::Account> account{co_await state_reader.read_account(address, block_number + 1)};
+        std::optional<silkworm::Account> account{co_await state_reader.read_account(address, block_with_hash->block.header.number + 1)};
 
         if (account) {
-            auto storage{co_await state_reader.read_storage(address, account->incarnation, location, block_number + 1)};
+            auto storage{co_await state_reader.read_storage(address, account->incarnation, location, block_with_hash->block.header.number + 1)};
             reply = make_json_content(request["id"], "0x" + silkworm::to_hex(storage));
         } else {
             reply = make_json_content(request["id"], "0x0000000000000000000000000000000000000000000000000000000000000000");
