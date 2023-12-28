@@ -52,6 +52,13 @@ static inline void read_json_config_member(const nlohmann::json& json, const std
     }
 }
 
+static inline void read_json_config_member(const nlohmann::json& json, const std::string& key,
+                                           std::optional<evmc_revision>& target) {
+    if (json.contains(key)) {
+        target = json[key].get<evmc_revision>();
+    }
+}
+
 nlohmann::json ChainConfig::to_json() const noexcept {
     nlohmann::json ret;
 
@@ -196,7 +203,7 @@ evmc_revision ChainConfig::revision(const BlockHeader& header) const noexcept {
 
     //TODO: read nonce from header / if header.number==0 return istambul;
     if(header.number == 0) {
-        return *_revision ? _revision : EVMC_ISTANBUL;
+        return *_revision ? *_revision : EVMC_ISTANBUL;
     }
 
     return EVMC_ISTANBUL;
