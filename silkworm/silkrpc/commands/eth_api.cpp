@@ -101,7 +101,9 @@ awaitable<void> EthereumRpcApi::handle_eth_block_number(const nlohmann::json& re
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-        const auto block_height = co_await core::get_latest_block_number(tx_database);
+        // use current block number (block in finished state) instead of latest block number (in executed state)
+        // to ensure logs are available for the same block
+        const auto block_height = co_await core::get_current_block_number(tx_database);
         reply = make_json_content(request["id"], to_quantity(block_height));
     } catch (const std::exception& e) {
         SILK_ERROR << "exception: " << e.what() << " processing request: " << request.dump();
@@ -240,7 +242,6 @@ awaitable<void> EthereumRpcApi::handle_eth_get_block_by_hash(const nlohmann::jso
         const auto block_number = block_with_hash->block.header.number;
         const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_hash, block_number);
         const Block extended_block{*block_with_hash, total_difficulty, full_tx};
-
         reply = make_json_content(request["id"], extended_block);
     } catch (const std::invalid_argument& iv) {
         SILK_WARN << "invalid_argument: " << iv.what() << " processing request: " << request.dump();
@@ -275,13 +276,21 @@ awaitable<void> EthereumRpcApi::handle_eth_get_block_by_number(const nlohmann::j
     try {
         ethdb::TransactionDatabase tx_database{*tx};
 
-        const auto block_number = co_await core::get_block_number(block_id, tx_database);
-        const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
-        const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_with_hash->hash, block_number);
-        const Block extended_block{*block_with_hash, total_difficulty, full_tx};
+        auto block_number = co_await core::get_block_number(block_id, tx_database);
 
-        reply = make_json_content(request["id"], extended_block);
-    } catch (const std::invalid_argument& iv) {
+        const auto current_block_height = co_await core::get_current_block_number(tx_database); // block number in finished state
+        if (block_id == core::kLatestBlockId) { // return the "latest" blocknum to "finished" blocknum
+            block_number = current_block_height;
+        }
+        if (block_number > current_block_height) {
+            reply = make_json_content(request["id"], nlohmann::detail::value_t::null);
+        } else {
+            const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
+            const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_with_hash->hash, block_number);
+            const Block extended_block{*block_with_hash, total_difficulty, full_tx};
+            reply = make_json_content(request["id"], extended_block);
+        }
+    } catch (const std::invalid_argument& iv) { // goes here if block not exist
         SILK_WARN << "invalid_argument: " << iv.what() << " processing request: " << request.dump();
         reply = make_json_content(request["id"], nlohmann::detail::value_t::null);
     } catch (const std::exception& e) {
@@ -861,7 +870,7 @@ awaitable<void> EthereumRpcApi::handle_eth_get_transaction_receipt(const nlohman
 // https://eth.wiki/json-rpc/API#eth_estimategas
 awaitable<void> EthereumRpcApi::handle_eth_estimate_gas(const nlohmann::json& request, nlohmann::json& reply) {
     auto params = request["params"];
-    if (params.size() != 1) {
+    if (params.size() < 1 || params.size() > 2) {
         auto error_msg = "invalid eth_estimateGas params: " + params.dump();
         SILK_ERROR << error_msg;
         reply = make_json_error(request["id"], 100, error_msg);
@@ -869,6 +878,17 @@ awaitable<void> EthereumRpcApi::handle_eth_estimate_gas(const nlohmann::json& re
     }
     const auto call = params[0].get<Call>();
     SILK_DEBUG << "call: " << call;
+
+    if (params.size() > 1) {
+        const auto block_param = params[1];
+        auto is_valid_tag = [](const std::string& tag) { return tag == "pending" || tag == "latest"; };
+        if(!block_param.is_string() || !is_valid_tag(block_param.get<std::string>())) {
+            auto error_msg = "Unknown block";
+            SILK_ERROR << error_msg;
+            reply = make_json_error(request["id"], -39001, error_msg);
+            co_return;
+        }
+    }
 
     auto tx = co_await database_->begin();
 
@@ -1096,19 +1116,20 @@ awaitable<void> EthereumRpcApi::handle_eth_call(const nlohmann::json& request, s
         co_return;
     }
     const auto call = params[0].get<Call>();
-    const auto block_id = params[1].get<std::string>();
-    SILK_DEBUG << "call: " << call << " block_id: " << block_id;
+    const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
+    SILK_DEBUG << "call: " << call << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
     try {
         ethdb::TransactionDatabase tx_database{*tx};
-        ethdb::kv::CachedDatabase cached_database{BlockNumberOrHash{block_id}, *tx, *state_cache_};
+        ethdb::kv::CachedDatabase cached_database{block_number_or_hash, *tx, *state_cache_};
 
+        const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
         const auto chain_id = co_await core::rawdb::read_chain_id(tx_database);
         const auto chain_config_ptr = lookup_chain_config(chain_id);
-        const auto [block_number, is_latest_block] = co_await core::get_block_number(block_id, tx_database, /*latest_required=*/true);
-        const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
+
+        const bool is_latest_block = co_await core::get_latest_executed_block_number(tx_database) == block_with_hash->block.header.number;
         silkworm::Transaction txn{call.to_transaction()};
         if(!txn.from.has_value()) txn.from = evmc::address{0};
 
@@ -1679,13 +1700,22 @@ awaitable<void> EthereumRpcApi::handle_eth_get_logs(const nlohmann::json& reques
     try {
         ethdb::TransactionDatabase tx_database{*tx};
 
-        const auto [start, end] = co_await get_block_numbers(filter, tx_database);
+        auto [start, end] = co_await get_block_numbers(filter, tx_database);
         if (start == end && start == std::numeric_limits<std::uint64_t>::max()) {
             auto error_msg = "invalid eth_getLogs filter block_hash: " + filter.block_hash.value();
             SILK_ERROR << error_msg;
             reply = make_json_error(request["id"], 100, error_msg);
             co_await tx->close();  // RAII not (yet) available with coroutines
             co_return;
+        }
+
+        // override the "latest" blocknum to "finished" blocknum instead of "executed" blocknum
+        const auto current_block_height = co_await core::get_current_block_number(tx_database); // block number in finished state
+        if (filter.from_block.has_value() && filter.from_block.value() == core::kLatestBlockId) {
+            start = current_block_height;
+        }
+        if (filter.to_block.has_value() && filter.to_block.value() == core::kLatestBlockId) {
+            end = current_block_height;
         }
 
         std::vector<Log> logs;

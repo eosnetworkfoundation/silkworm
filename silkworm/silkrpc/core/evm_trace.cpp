@@ -898,14 +898,20 @@ void TraceTracer::on_reward_granted(const silkworm::CallResult& result, const si
             break;
         case evmc_status_code::EVMC_REVERT:
             trace.error = "Reverted";
-            trace.trace_result->gas_used = initial_gas_ - int64_t(result.gas_left);
-            if (!result.data.empty()) {
-                if (trace.trace_result->code) {
-                    trace.trace_result->code = result.data;
-                } else if (trace.trace_result->output) {
-                    trace.trace_result->output = result.data;
-                }
+            if (no_top_result_when_reverted_) {
+                // Quirk for blockscout explorer: No result for top trace when reverted.
+                trace.trace_result.reset();
             }
+            else {
+                trace.trace_result->gas_used = initial_gas_ - int64_t(result.gas_left);
+                if (!result.data.empty()) {
+                    if (trace.trace_result->code) {
+                        trace.trace_result->code = result.data;
+                    } else if (trace.trace_result->output) {
+                        trace.trace_result->output = result.data;
+                    }
+                }
+            }  
             break;
         case evmc_status_code::EVMC_OUT_OF_GAS:
         case evmc_status_code::EVMC_STACK_OVERFLOW:
@@ -1193,12 +1199,16 @@ awaitable<std::vector<Trace>> TraceCallExecutor::trace_block(const BlockWithHash
         if (!cc) {
             throw std::runtime_error("Invalid chain config");
         }
-        const auto block_rewards = protocol::EthashRuleSet::compute_reward(*cc, block_with_hash.block);
-
+        
         RewardAction action;
         action.author = block_with_hash.block.header.beneficiary;
         action.reward_type = "block";
-        action.value = block_rewards.miner;
+        action.value = 0;
+
+        if (cc->protocol_rule_set == protocol::RuleSetType::kEthash) {
+            const auto block_rewards = protocol::EthashRuleSet::compute_reward(*cc, block_with_hash.block);
+            action.value = block_rewards.miner;
+        }
 
         Trace trace;
         trace.block_number = block_with_hash.block.header.number;
@@ -1261,7 +1271,7 @@ awaitable<std::vector<TraceCallResult>> TraceCallExecutor::trace_block_transacti
                         tracers.push_back(tracer);
                     }
                     if (config.trace) {
-                        std::shared_ptr<silkworm::EvmTracer> tracer = std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs);
+                        std::shared_ptr<silkworm::EvmTracer> tracer = std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs, no_top_result_when_reverted_);
                         tracers.push_back(tracer);
                     }
                     if (config.state_diff) {
@@ -1333,7 +1343,7 @@ awaitable<TraceManyCallResult> TraceCallExecutor::trace_calls(const silkworm::Bl
                         tracers.push_back(tracer);
                     }
                     if (config.trace) {
-                        std::shared_ptr<silkworm::EvmTracer> tracer = std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs);
+                        std::shared_ptr<silkworm::EvmTracer> tracer = std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs, no_top_result_when_reverted_);
                         tracers.push_back(tracer);
                     }
                     if (config.state_diff) {
@@ -1625,7 +1635,7 @@ awaitable<TraceCallResult> TraceCallExecutor::execute(std::uint64_t block_number
                     tracers.push_back(std::make_shared<trace::VmTraceTracer>(traces.vm_trace.value(), index));
                 }
                 if (config.trace) {
-                    tracers.push_back(std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs));
+                    tracers.push_back(std::make_shared<trace::TraceTracer>(traces.trace, initial_ibs, no_top_result_when_reverted_));
                 }
                 if (config.state_diff) {
                     traces.state_diff.emplace();

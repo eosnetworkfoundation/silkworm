@@ -132,7 +132,7 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
 }
 
 ExecutionResult EstimateGasOracle::try_execution(EVMExecutor& executor, const silkworm::Block& block, const silkworm::Transaction& transaction) {
-    executor.reset();
+    executor.reset_all();
     return executor.call(block, transaction);
 }
 

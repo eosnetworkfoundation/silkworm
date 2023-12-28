@@ -390,9 +390,8 @@ TEST_CASE("estimate gas") {
 
         try {
             EXPECT_CALL(estimate_gas_oracle, try_execution(_, _, _))
-                .Times(3)
-                .WillOnce(Return(expect_result_fail_pre_check))
-                .WillRepeatedly(Return(expect_result_fail));
+                .Times(1)
+                .WillOnce(Return(expect_result_fail_pre_check));
             auto result = boost::asio::co_spawn(pool, estimate_gas_oracle.estimate_gas(call, block), boost::asio::use_future);
             result.get();
             CHECK(false);
@@ -415,9 +414,8 @@ TEST_CASE("estimate gas") {
 
         try {
             EXPECT_CALL(estimate_gas_oracle, try_execution(_, _, _))
-                .Times(3)
-                .WillOnce(Return(expect_result_fail_pre_check))
-                .WillRepeatedly(Return(expect_result_fail));
+                .Times(1)
+                .WillOnce(Return(expect_result_fail_pre_check));
             auto result = boost::asio::co_spawn(pool, estimate_gas_oracle.estimate_gas(call, block), boost::asio::use_future);
             result.get();
             CHECK(false);

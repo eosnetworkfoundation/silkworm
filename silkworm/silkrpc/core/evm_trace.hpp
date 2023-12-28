@@ -212,8 +212,8 @@ class iterable_stack : public std::stack<T, Container> {
 
 class TraceTracer : public silkworm::EvmTracer {
   public:
-    explicit TraceTracer(std::vector<Trace>& traces, silkworm::IntraBlockState& initial_ibs)
-        : traces_(traces), initial_ibs_(initial_ibs) {}
+    explicit TraceTracer(std::vector<Trace>& traces, silkworm::IntraBlockState& initial_ibs, bool no_top_result_when_reverted)
+        : traces_(traces), initial_ibs_(initial_ibs), no_top_result_when_reverted_(no_top_result_when_reverted) {}
 
     TraceTracer(const TraceTracer&) = delete;
     TraceTracer& operator=(const TraceTracer&) = delete;
@@ -236,6 +236,7 @@ class TraceTracer : public silkworm::EvmTracer {
     std::set<evmc::address> created_address_;
     iterable_stack<size_t> index_stack_;
     std::stack<int64_t> start_gas_;
+    bool no_top_result_when_reverted_;
 };
 
 struct DiffValue {
@@ -462,8 +463,9 @@ class TraceCallExecutor {
     explicit TraceCallExecutor(silkworm::BlockCache& block_cache,
                                const core::rawdb::DatabaseReader& database_reader,
                                boost::asio::thread_pool& workers,
-                               ethdb::Transaction& tx)
-        : block_cache_(block_cache), database_reader_(database_reader), workers_{workers}, tx_{tx} {}
+                               ethdb::Transaction& tx,
+                               bool no_top_result_when_reverted = false)
+        : block_cache_(block_cache), database_reader_(database_reader), workers_{workers}, tx_{tx}, no_top_result_when_reverted_(no_top_result_when_reverted) {}
     virtual ~TraceCallExecutor() = default;
 
     TraceCallExecutor(const TraceCallExecutor&) = delete;
@@ -491,6 +493,7 @@ class TraceCallExecutor {
     const core::rawdb::DatabaseReader& database_reader_;
     boost::asio::thread_pool& workers_;
     ethdb::Transaction& tx_;
+    bool no_top_result_when_reverted_;
 };
 
 }  // namespace silkworm::rpc::trace

@@ -178,7 +178,8 @@ Daemon::Daemon(DaemonSettings settings, std::shared_ptr<mdbx::env_managed> chain
       create_channel_{make_channel_factory(settings_)},
       context_pool_{settings_.context_pool_settings.num_contexts},
       worker_pool_{settings_.num_workers},
-      kv_stub_{::remote::KV::NewStub(create_channel_())} {
+      kv_stub_{::remote::KV::NewStub(create_channel_())},
+      rpc_quirk_flag_{settings_.rpc_quirk_flag} {
     // Check pre-conditions
     ensure(!settings_.datadir || !chaindata_env, "Daemon::Daemon datadir and chaindata_env are alternative");
 
@@ -281,12 +282,12 @@ void Daemon::start() {
         if (not settings_.eth_end_point.empty()) {
             rpc_services_.emplace_back(
                 std::make_unique<http::Server>(
-                    settings_.eth_end_point, settings_.eth_api_spec, ioc, worker_pool_, /*jwt_secret=*/std::nullopt));
+                    settings_.eth_end_point, settings_.eth_api_spec, ioc, worker_pool_, /*jwt_secret=*/std::nullopt, rpc_quirk_flag_));
         }
         if (not settings_.engine_end_point.empty()) {
             rpc_services_.emplace_back(
                 std::make_unique<http::Server>(
-                    settings_.engine_end_point, kDefaultEth2ApiSpec, ioc, worker_pool_, jwt_secret_));
+                    settings_.engine_end_point, kDefaultEth2ApiSpec, ioc, worker_pool_, jwt_secret_, rpc_quirk_flag_));
         }
     }
 
