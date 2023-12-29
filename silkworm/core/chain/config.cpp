@@ -37,6 +37,19 @@ static const std::vector<std::pair<std::string, const ChainConfig*>> kKnownChain
 
 constexpr const char* kTerminalTotalDifficulty{"terminalTotalDifficulty"};
 
+static inline uint64_t nonce_to_eos_evm_version(BlockHeader::NonceType nonce) {
+    // The nonce will be treated as big-endian number for now.
+    return endian::load_big_u64(nonce.data());
+}
+
+static inline evmc_revision eos_evm_version_to_evmc_revision(uint64_t version) {
+    switch (version) {
+        case 0: return EVMC_ISTANBUL;
+        case 1: return EVMC_ISTANBUL;
+        default: return EVMC_ISTANBUL;
+    }
+}
+
 #if not defined(ANTELOPE)
 
 static inline void member_to_json(nlohmann::json& json, const std::string& key, const std::optional<uint64_t>& source) {
@@ -201,12 +214,14 @@ evmc_revision ChainConfig::revision(const BlockHeader& header) const noexcept {
         return determine_revision_by_block(header.number, header.timestamp);
     }
 
-    //TODO: read nonce from header / if header.number==0 return istambul;
+    // Genesis nonce does not contain version info. Default to istambul.
     if(header.number == 0) {
         return *_revision ? *_revision : EVMC_ISTANBUL;
     }
 
-    return EVMC_ISTANBUL;
+    uint64_t evm_version = nonce_to_eos_evm_version(header.nonce);
+
+    return eos_evm_version_to_evmc_revision(evm_version);
 }
 
 std::vector<BlockNum> ChainConfig::distinct_fork_numbers() const {
