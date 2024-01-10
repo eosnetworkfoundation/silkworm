@@ -169,7 +169,8 @@ struct ChainConfig {
     std::optional<BlockTime> _shanghai_time{std::nullopt};
     std::optional<BlockTime> _cancun_time{std::nullopt};
 
-    std::optional<evmc_revision> _revision{std::nullopt};
+    // EOSEVM version
+    std::optional<uint64_t> _version{std::nullopt};
 
     //! \brief Returns the revision level at given block number
     //! \details In other words, on behalf of Json chain config data

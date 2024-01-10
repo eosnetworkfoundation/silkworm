@@ -65,13 +65,6 @@ static inline void read_json_config_member(const nlohmann::json& json, const std
     }
 }
 
-static inline void read_json_config_member(const nlohmann::json& json, const std::string& key,
-                                           std::optional<evmc_revision>& target) {
-    if (json.contains(key)) {
-        target = json[key].get<evmc_revision>();
-    }
-}
-
 nlohmann::json ChainConfig::to_json() const noexcept {
     nlohmann::json ret;
 
@@ -121,6 +114,8 @@ nlohmann::json ChainConfig::to_json() const noexcept {
     if (genesis_hash.has_value()) {
         ret["genesisBlockHash"] = to_hex(*genesis_hash, /*with_prefix=*/true);
     }
+
+    member_to_json(ret, "version", _version);
 
     return ret;
 }
@@ -181,7 +176,7 @@ std::optional<ChainConfig> ChainConfig::from_json(const nlohmann::json& json) no
     /* Note ! genesis_hash is purposely omitted. It must be loaded from db after the
      * effective genesis block has been persisted */
 
-    read_json_config_member(json, "revision", config._revision);
+    read_json_config_member(json, "version", config._version);
 
     return config;
 }
