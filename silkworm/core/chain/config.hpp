@@ -31,10 +31,8 @@
 
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/core/common/assert.hpp>
-
+#include <silkworm/core/types/block.hpp>
 namespace silkworm {
-
-struct BlockHeader;
 
 namespace protocol {
 

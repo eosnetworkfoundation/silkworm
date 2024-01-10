@@ -22,6 +22,7 @@
 
 #include <silkworm/core/common/as_range.hpp>
 #include <silkworm/core/types/block.hpp>
+#include <eosevm/version.hpp>
 
 namespace silkworm {
 
@@ -36,19 +37,6 @@ static const std::vector<std::pair<std::string, const ChainConfig*>> kKnownChain
 };
 
 constexpr const char* kTerminalTotalDifficulty{"terminalTotalDifficulty"};
-
-static inline uint64_t nonce_to_eos_evm_version(BlockHeader::NonceType nonce) {
-    // The nonce will be treated as big-endian number for now.
-    return endian::load_big_u64(nonce.data());
-}
-
-static inline evmc_revision eos_evm_version_to_evmc_revision(uint64_t version) {
-    switch (version) {
-        case 0: return EVMC_ISTANBUL;
-        case 1: return EVMC_ISTANBUL;
-        default: return EVMC_ISTANBUL;
-    }
-}
 
 #if not defined(ANTELOPE)
 
@@ -212,9 +200,9 @@ evmc_revision ChainConfig::revision(const BlockHeader& header) const noexcept {
     if(header.number == 0) {
         evm_version = _version.has_value() ? *_version : 0;
     } else {
-        evm_version = nonce_to_eos_evm_version(header.nonce)
+        evm_version = eosevm::nonce_to_version(header.nonce);
     }
-    return eos_evm_version_to_evmc_revision(evm_version);
+    return eosevm::version_to_evmc_revision(evm_version);
 }
 
 std::vector<BlockNum> ChainConfig::distinct_fork_numbers() const {
