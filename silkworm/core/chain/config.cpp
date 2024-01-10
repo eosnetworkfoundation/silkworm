@@ -208,14 +208,12 @@ evmc_revision ChainConfig::revision(const BlockHeader& header) const noexcept {
     if(protocol_rule_set != protocol::RuleSetType::kTrust) {
         return determine_revision_by_block(header.number, header.timestamp);
     }
-
-    // Genesis nonce does not contain version info. Default to istambul.
+    uint64_t evm_version = 0;
     if(header.number == 0) {
-        return *_revision ? *_revision : EVMC_ISTANBUL;
+        evm_version = _version.has_value() ? *_version : 0;
+    } else {
+        evm_version = nonce_to_eos_evm_version(header.nonce)
     }
-
-    uint64_t evm_version = nonce_to_eos_evm_version(header.nonce);
-
     return eos_evm_version_to_evmc_revision(evm_version);
 }
 
