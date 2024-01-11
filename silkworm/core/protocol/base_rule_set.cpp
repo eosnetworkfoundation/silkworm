@@ -167,7 +167,8 @@ ValidationResult BaseRuleSet::validate_block_header(const BlockHeader& header, c
     }
 
     // https://eips.ethereum.org/EIPS/eip-779
-    if (chain_config_.dao_block().has_value() && chain_config_.dao_block().value() <= header.number &&
+    // Avoid calling dao_block() when the ruleset is kTrust to prevent triggering an assertion in the dao_block function
+    if (chain_config_.protocol_rule_set != RuleSetType::kTrust && chain_config_.dao_block().has_value() && chain_config_.dao_block().value() <= header.number &&
         header.number <= chain_config_.dao_block().value() + 9) {
         static const Bytes kDaoExtraData{*from_hex("0x64616f2d686172642d666f726b")};
         if (header.extra_data != kDaoExtraData) {

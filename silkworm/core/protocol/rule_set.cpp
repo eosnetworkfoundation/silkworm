@@ -42,7 +42,6 @@ static RuleSetPtr pre_merge_rule_set(const ChainConfig& chain_config) {
 RuleSetPtr rule_set_factory(const ChainConfig& chain_config) {
     RuleSetPtr rule_set{pre_merge_rule_set(chain_config)};
     if (!rule_set) {
-        std::cerr << "ERRORORORORR" << std::endl;
         return nullptr;
     }
 

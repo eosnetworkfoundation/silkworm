@@ -120,7 +120,8 @@ uint64_t ExecutionProcessor::refund_gas(const Transaction& txn, uint64_t gas_lef
 ValidationResult ExecutionProcessor::execute_block_no_post_validation(std::vector<Receipt>& receipts) noexcept {
     const Block& block{evm_.block()};
 
-    if (block.header.number == evm_.config().dao_block()) {
+    // Avoid calling dao_block() when the ruleset is kTrust to prevent triggering an assertion in the dao_block function
+    if (evm_.config().protocol_rule_set != protocol::RuleSetType::kTrust && block.header.number == evm_.config().dao_block()) {
         dao::transfer_balances(state_);
     }
 
