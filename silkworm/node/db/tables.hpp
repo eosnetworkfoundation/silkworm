@@ -374,6 +374,9 @@ inline constexpr db::MapConfig kIssuance{kIssuanceName};
 inline constexpr const char* kCumulativeGasIndexName{"CumulativeGasIndex"};
 inline constexpr db::MapConfig kCumulativeGasIndex{kCumulativeGasIndexName};
 
+inline constexpr const char* kRuntimeStatesName{"RuntimeStates"};
+inline constexpr db::MapConfig kRuntimeStates{kRuntimeStatesName};
+
 inline constexpr db::MapConfig kChainDataTables[]{
     kAccountChangeSet,
     kAccountHistory,
@@ -418,6 +421,7 @@ inline constexpr db::MapConfig kChainDataTables[]{
     kTrieOfAccounts,
     kTrieOfStorage,
     kTxLookup,
+    kRuntimeStates,
 };
 
 //! \brief Ensures all defined tables are present in db with consistent flags. Should a table not exist it gets created

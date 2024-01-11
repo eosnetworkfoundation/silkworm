@@ -35,6 +35,12 @@ Bytes storage_prefix(ByteView address, uint64_t incarnation) {
     return res;
 }
 
+Bytes block_key(RuntimeState runtime_state) {
+    Bytes key(sizeof(runtime_state), '\0');
+    endian::store_big_u64(&key[0], runtime_state);
+    return key;
+}
+
 Bytes block_key(BlockNum block_number) {
     Bytes key(sizeof(BlockNum), '\0');
     endian::store_big_u64(&key[0], block_number);

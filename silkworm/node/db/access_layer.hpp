@@ -237,6 +237,18 @@ void write_last_safe_block(RWTxn& txn, const evmc::bytes32& hash);
 //! \brief Write the last finalized block as stated by the last FCU
 void write_last_finalized_block(RWTxn& txn, const evmc::bytes32& hash);
 
+//! \brief read runtime states by index
+std::optional<ByteView> read_runtime_states_bytes(ROTxn& txn, RuntimeState runtime_state);
+
+//! \brief Write runtime states by index
+void write_runtime_states_bytes(RWTxn& txn, const Bytes value, RuntimeState runtime_state);
+
+//! \brief Read runtime states by index as uint64_t
+std::optional<uint64_t> read_runtime_states_u64(ROTxn& txn, RuntimeState runtime_state);
+
+//! \brief  Write uint64_t as runtime states by index
+void write_runtime_states_u64(RWTxn& txn, uint64_t num, RuntimeState runtime_state);
+
 class DataModel {
   public:
     static void set_snapshot_repository(snapshot::SnapshotRepository* repository);
