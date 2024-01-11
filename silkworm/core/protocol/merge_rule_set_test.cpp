@@ -47,7 +47,7 @@ TEST_CASE("Proof-of-Stake RuleSet") {
     parent.header.difficulty = 1000;
 
     ChainConfig config{kMainnetConfig};
-    config.terminal_total_difficulty = parent.header.difficulty;
+    config._terminal_total_difficulty = parent.header.difficulty;
 
     MergeRuleSet rule_set{std::make_unique<EthashRuleSet>(config), config};
 

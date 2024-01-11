@@ -106,12 +106,12 @@ Block StateTransition::get_block(InMemoryState& state, ChainConfig& chain_config
         block.header.prev_randao = to_bytes32(from_hex(get_env("currentRandom")).value_or(Bytes{}));
     }
 
-    const evmc_revision rev{chain_config.revision(block.header.number, block.header.timestamp)};
+    const evmc_revision rev{chain_config.revision(block.header)};
 
     // set difficulty only for revisions before The Merge
     // current block difficulty cannot fall below miniumum: https://eips.ethereum.org/EIPS/eip-2
     static constexpr uint64_t kMinDifficulty{0x20000};
-    if (!chain_config.terminal_total_difficulty.has_value()) {
+    if (!chain_config.terminal_total_difficulty().has_value()) {
         block.header.difficulty = intx::from_string<intx::uint256>(get_env("currentDifficulty"));
         if (block.header.difficulty < kMinDifficulty && rev <= EVMC_LONDON) {
             block.header.difficulty = kMinDifficulty;
@@ -330,7 +330,7 @@ void StateTransition::run() {
             ExecutionProcessor processor{block, *ruleSet, *state, config};
             Receipt receipt;
 
-            const evmc_revision rev{config.revision(block.header.number, block.header.timestamp)};
+            const evmc_revision rev{config.revision(block.header)};
 
             auto pre_block_validation = ruleSet->pre_validate_block_body(block, *state);
             auto block_validation = ruleSet->validate_block_header(block.header, *state, true);

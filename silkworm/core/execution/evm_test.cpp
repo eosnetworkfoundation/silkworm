@@ -339,7 +339,7 @@ TEST_CASE("EIP-3541: Reject new contracts starting with the 0xEF byte") {
 
     Block block;
     block.header.number = 13'500'000;
-    REQUIRE(config.revision(block.header.number, block.header.timestamp) == EVMC_LONDON);
+    REQUIRE(config.revision(block.header) == EVMC_LONDON);
 
     InMemoryState db;
     IntraBlockState state{db};

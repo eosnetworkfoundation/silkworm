@@ -359,7 +359,7 @@ RunResults transaction_test(const nlohmann::json& j) {
         }
 
         const ChainConfig& config{silkworm::test::kNetworkConfig.at(entry.key())};
-        const evmc_revision rev{config.revision(/*block_number=*/0, /*block_time=*/0)};
+        const evmc_revision rev{config.revision(BlockHeader{.number=0,.timestamp=0})};
 
         /* pre_validate_transaction checks for invalid signature only if from is empty, which means sender recovery
          * phase (which btw also verifies signature) was not triggered yet. In the context of tests, instead, from is
@@ -438,7 +438,7 @@ Status individual_difficulty_test(const nlohmann::json& j, const ChainConfig& co
         }
     }
 
-    intx::uint256 calculated_difficulty{EthashRuleSet::difficulty(block_number, current_timestamp, parent_difficulty,
+    intx::uint256 calculated_difficulty{EthashRuleSet::difficulty(BlockHeader{.number=block_number, .timestamp=current_timestamp}, parent_difficulty,
                                                                   parent_timestamp, parent_has_uncles, config)};
     if (calculated_difficulty == current_difficulty) {
         return Status::kPassed;

@@ -42,7 +42,7 @@ ValidationResult EthashRuleSet::validate_seal(const BlockHeader& header) {
 
 intx::uint256 EthashRuleSet::difficulty(const BlockHeader& header, const BlockHeader& parent) {
     const bool parent_has_uncles{parent.ommers_hash != kEmptyListHash};
-    return difficulty(header.number, header.timestamp, parent.difficulty,
+    return difficulty(header, parent.difficulty,
                       parent.timestamp, parent_has_uncles, chain_config_);
 }
 
@@ -65,7 +65,7 @@ static intx::uint256 block_reward_base(const evmc_revision rev) {
 
 BlockReward EthashRuleSet::compute_reward(const ChainConfig& config, const Block& block) {
     const BlockNum block_number{block.header.number};
-    const evmc_revision rev{config.revision(block_number, block.header.timestamp)};
+    const evmc_revision rev{config.revision(block.header)};
     const intx::uint256 base{block_reward_base(rev)};
 
     intx::uint256 miner_reward{base};
@@ -81,11 +81,12 @@ BlockReward EthashRuleSet::compute_reward(const ChainConfig& config, const Block
     return {miner_reward, ommer_rewards};
 }
 
-intx::uint256 EthashRuleSet::difficulty(uint64_t block_number, const uint64_t block_timestamp,
+intx::uint256 EthashRuleSet::difficulty(const BlockHeader& header,
                                         const intx::uint256& parent_difficulty, const uint64_t parent_timestamp,
                                         const bool parent_has_uncles, const ChainConfig& config) {
-    const evmc_revision rev{config.revision(block_number, block_timestamp)};
-
+    auto block_timestamp = header.timestamp;
+    auto block_number = header.number;
+    const evmc_revision rev{config.revision(header)};
     intx::uint256 difficulty{parent_difficulty};
 
     const intx::uint256 x{parent_difficulty >> 11};  // parent_difficulty / 2048;
@@ -115,16 +116,16 @@ intx::uint256 EthashRuleSet::difficulty(uint64_t block_number, const uint64_t bl
     }
 
     uint64_t bomb_delay{0};
-    if (config.gray_glacier_block.has_value() && block_number >= config.gray_glacier_block) {
+    if (config.gray_glacier_block().has_value() && block_number >= config.gray_glacier_block()) {
         // https://eips.ethereum.org/EIPS/eip-5133
         bomb_delay = 11'400'000;
-    } else if (config.arrow_glacier_block.has_value() && block_number >= config.arrow_glacier_block) {
+    } else if (config.arrow_glacier_block().has_value() && block_number >= config.arrow_glacier_block()) {
         // https://eips.ethereum.org/EIPS/eip-4345
         bomb_delay = 10'700'000;
     } else if (rev >= EVMC_LONDON) {
         // https://eips.ethereum.org/EIPS/eip-3554
         bomb_delay = 9'700'000;
-    } else if (config.muir_glacier_block.has_value() && block_number >= config.muir_glacier_block) {
+    } else if (config.muir_glacier_block().has_value() && block_number >= config.muir_glacier_block()) {
         // https://eips.ethereum.org/EIPS/eip-2384
         bomb_delay = 9'000'000;
     } else if (rev >= EVMC_CONSTANTINOPLE) {

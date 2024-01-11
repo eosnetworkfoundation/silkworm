@@ -27,7 +27,7 @@ TEST_CASE("DifficultyTest34") {
     uint64_t parent_timestamp{0x04bdbdaf};
     bool parent_has_uncles{false};
 
-    intx::uint256 difficulty{EthashRuleSet::difficulty(block_number, block_timestamp, parent_difficulty, parent_timestamp,
+    intx::uint256 difficulty{EthashRuleSet::difficulty(BlockHeader{.number=block_number,.timestamp=block_timestamp}, parent_difficulty, parent_timestamp,
                                                        parent_has_uncles, kMainnetConfig)};
     CHECK(difficulty == 0x72772897b619876a);
 }

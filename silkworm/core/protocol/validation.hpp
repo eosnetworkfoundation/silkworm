@@ -20,8 +20,8 @@
 
 #include <evmc/evmc.h>
 
+#include <silkworm/core/chain/config.hpp>
 #include <silkworm/core/state/intra_block_state.hpp>
-#include <silkworm/core/types/block.hpp>
 #include <silkworm/core/types/transaction.hpp>
 
 namespace silkworm {

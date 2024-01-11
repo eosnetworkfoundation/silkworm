@@ -33,7 +33,7 @@ void ChainForkView::reset_head(ChainHead new_head) {
     td_cache_.put(current_head_.hash, current_head_.total_difficulty);
 }
 
-ChainHead ChainForkView::head_at_genesis(const ChainConfig& chain_config) {
+ChainHead ChainForkView::head_at_genesis(const silkworm::ChainConfig& chain_config) {
     bool allow_exceptions = false;
     auto source_data = read_genesis_data(chain_config.chain_id);
     auto genesis_json = nlohmann::json::parse(source_data, nullptr, allow_exceptions);

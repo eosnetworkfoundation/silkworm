@@ -139,10 +139,16 @@ TEST_CASE("Sync Stages") {
     }
 
     SECTION("Senders") {
-        std::vector<evmc::bytes32> block_hashes{
-            0x3ac225168df54212a25c1c01fd35bebfea408fdac2e31ddd6f80a4bbf9a5f1cb_bytes32,
-            0xb5553de315e0edf504d9150af82dafa5c4667fa618ed0a6f19c69b41166c5510_bytes32,
-            0x0b42b6393c1f53060fe3ddbfcd7aadcca894465a5a438f69c87d790b2299b9b2_bytes32};
+        std::vector<evmc::bytes32> block_hashes{};
+
+        auto block_hash = db::write_header_ex(txn, BlockHeader{.number=1}, true);
+        block_hashes.push_back(block_hash);
+
+        block_hash = db::write_header_ex(txn, BlockHeader{.number=2}, true);
+        block_hashes.push_back(block_hash);
+
+        block_hash = db::write_header_ex(txn, BlockHeader{.number=3}, true);
+        block_hashes.push_back(block_hash);
 
         auto sample_transactions{test::sample_transactions()};
 

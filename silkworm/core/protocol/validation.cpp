@@ -145,7 +145,7 @@ ValidationResult validate_transaction(const Transaction& txn, const IntraBlockSt
 
 ValidationResult pre_validate_transactions(const Block& block, const ChainConfig& config) {
     const BlockHeader& header{block.header};
-    const evmc_revision rev{config.revision(header.number, header.timestamp)};
+    const evmc_revision rev{config.revision(header)};
     const std::optional<intx::uint256> data_gas_price{header.data_gas_price()};
 
     for (const Transaction& txn : block.transactions) {

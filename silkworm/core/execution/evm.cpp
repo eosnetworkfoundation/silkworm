@@ -331,7 +331,7 @@ evmc_result EVM::execute_with_baseline_interpreter(evmc_revision rev, const evmc
 }
 
 evmc_revision EVM::revision() const noexcept {
-    return config().revision(block_.header.number, block_.header.timestamp);
+    return config().revision(block_.header);
 }
 
 void EVM::add_tracer(EvmTracer& tracer) noexcept {

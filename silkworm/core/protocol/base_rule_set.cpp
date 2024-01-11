@@ -25,7 +25,7 @@ namespace silkworm::protocol {
 
 ValidationResult BaseRuleSet::pre_validate_block_body(const Block& block, const BlockState& state) {
     const BlockHeader& header{block.header};
-    const evmc_revision rev{chain_config_.revision(header.number, header.timestamp)};
+    const evmc_revision rev{chain_config_.revision(header)};
 
     const evmc::bytes32 txn_root{compute_transaction_root(block)};
     if (txn_root != header.transactions_root) {
@@ -152,7 +152,7 @@ ValidationResult BaseRuleSet::validate_block_header(const BlockHeader& header, c
     }
 
     uint64_t parent_gas_limit{parent->gas_limit};
-    if (header.number == chain_config_.london_block) {
+    if (header.number == chain_config_.london_block()) {
         parent_gas_limit = parent->gas_limit * kElasticityMultiplier;  // EIP-1559
     }
 
@@ -167,15 +167,16 @@ ValidationResult BaseRuleSet::validate_block_header(const BlockHeader& header, c
     }
 
     // https://eips.ethereum.org/EIPS/eip-779
-    if (chain_config_.dao_block.has_value() && chain_config_.dao_block.value() <= header.number &&
-        header.number <= chain_config_.dao_block.value() + 9) {
+    // Avoid calling dao_block() when the ruleset is kTrust to prevent triggering an assertion in the dao_block function
+    if (chain_config_.protocol_rule_set != RuleSetType::kTrust && chain_config_.dao_block().has_value() && chain_config_.dao_block().value() <= header.number &&
+        header.number <= chain_config_.dao_block().value() + 9) {
         static const Bytes kDaoExtraData{*from_hex("0x64616f2d686172642d666f726b")};
         if (header.extra_data != kDaoExtraData) {
             return ValidationResult::kWrongDaoExtraData;
         }
     }
 
-    const evmc_revision rev{chain_config_.revision(header.number, header.timestamp)};
+    const evmc_revision rev{chain_config_.revision(header)};
 
     if (header.base_fee_per_gas != expected_base_fee_per_gas(*parent, rev)) {
         return ValidationResult::kWrongBaseFee;
