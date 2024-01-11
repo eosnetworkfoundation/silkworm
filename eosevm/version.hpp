@@ -1,3 +1,5 @@
+#pragma once
+
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/core/common/endian.hpp>
 
