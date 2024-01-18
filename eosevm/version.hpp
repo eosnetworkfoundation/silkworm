@@ -2,8 +2,12 @@
 
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/core/common/endian.hpp>
-
+#ifdef ANTELOPE
+#include <eosio/eosio.hpp>
+#endif
 namespace eosevm {
+
+static constexpr uint64_t max_eos_evm_version = 1;
 
 using NonceType=silkworm::BlockHeader::NonceType;
 
