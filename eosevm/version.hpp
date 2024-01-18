@@ -26,7 +26,7 @@ inline evmc_revision version_to_evmc_revision(uint64_t version) {
         case 1: return EVMC_ISTANBUL;
     }
     auto msg = "Unknown EOSEVM version: " + std::to_string(version);
-    eosevm::abort(msg.c_str());
+    EOSEVM_ABORT(msg.c_str());
     return static_cast<evmc_revision>(0);
 }
 
