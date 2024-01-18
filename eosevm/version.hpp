@@ -22,8 +22,14 @@ inline evmc_revision version_to_evmc_revision(uint64_t version) {
     switch (version) {
         case 0: return EVMC_ISTANBUL;
         case 1: return EVMC_ISTANBUL;
-        default: return EVMC_ISTANBUL;
     }
+    auto msg = "Unknown EOSEVM version: " + std::to_string(version);
+    #ifdef ANTELOPE
+    eosio::check(false, msg.c_str());
+    #else
+    silkworm::abort_due_to_assertion_failure(msg.c_str(), __FILE__, __LINE__);
+    #endif
+    return static_cast<evmc_revision>(0);
 }
 
 } // namespace eosevm
