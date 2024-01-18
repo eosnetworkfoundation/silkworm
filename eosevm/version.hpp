@@ -2,9 +2,7 @@
 
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/core/common/endian.hpp>
-#ifdef ANTELOPE
-#include <eosio/eosio.hpp>
-#endif
+#include <eosevm/assert.hpp>
 namespace eosevm {
 
 static constexpr uint64_t max_eos_evm_version = 1;
@@ -28,11 +26,7 @@ inline evmc_revision version_to_evmc_revision(uint64_t version) {
         case 1: return EVMC_ISTANBUL;
     }
     auto msg = "Unknown EOSEVM version: " + std::to_string(version);
-    #ifdef ANTELOPE
-    eosio::check(false, msg.c_str());
-    #else
-    silkworm::abort_due_to_assertion_failure(msg.c_str(), __FILE__, __LINE__);
-    #endif
+    eosevm::abort(msg.c_str());
     return static_cast<evmc_revision>(0);
 }
 
