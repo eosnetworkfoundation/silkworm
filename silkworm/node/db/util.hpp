@@ -63,6 +63,10 @@ static_assert(kLocationLength == sizeof(evmc::bytes32));
 inline constexpr size_t kPlainStoragePrefixLength{kAddressLength + kIncarnationLength};
 inline constexpr size_t kHashedStoragePrefixLength{kHashLength + kIncarnationLength};
 
+enum RuntimeState: uint64_t {
+    kLibProcessed, // Last irreversible block processed.
+};
+
 // address -> storage-encoded initial value
 using AccountChanges = absl::btree_map<evmc::address, Bytes>;
 
@@ -72,6 +76,9 @@ using StorageChanges = absl::btree_map<evmc::address, absl::btree_map<uint64_t, 
 // Erigon GenerateStoragePrefix, PlainGenerateStoragePrefix
 // address can be either plain account address (20 bytes) or hash thereof (32 bytes)
 Bytes storage_prefix(ByteView address, uint64_t incarnation);
+
+// Encode RuntimeState
+Bytes block_key(RuntimeState runtime_state);
 
 // Erigon EncodeBlockNumber
 Bytes block_key(BlockNum block_number);

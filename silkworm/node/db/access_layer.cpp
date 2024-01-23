@@ -1184,4 +1184,37 @@ bool DataModel::read_rlp_transactions(BlockNum height, const evmc::bytes32& hash
     return read_rlp_transactions_from_snapshot(height, transactions);
 }
 
+std::optional<ByteView> read_runtime_states_bytes(ROTxn& txn, RuntimeState runtime_state) {
+    auto cursor = txn.ro_cursor(table::kRuntimeStates);
+    auto key{db::block_key(runtime_state)};
+    auto data{cursor->find(to_slice(key), /*throw_notfound=*/false)};
+    if (!data) {
+        return std::nullopt;
+    }
+    return from_slice(data.value);
+}
+
+void write_runtime_states_bytes(RWTxn& txn, const Bytes value, RuntimeState runtime_state) {
+    auto cursor = txn.rw_cursor(table::kRuntimeStates);
+    auto key{db::block_key(runtime_state)};
+    cursor->upsert(to_slice(key), db::to_slice(value));
+}
+
+std::optional<uint64_t> read_runtime_states_u64(ROTxn& txn, RuntimeState runtime_state) {
+    auto cursor = txn.ro_cursor(table::kRuntimeStates);
+    // block_key support uint64_t via support for BlockNum
+    auto key{db::block_key(runtime_state)};
+    auto data{cursor->find(to_slice(key), /*throw_notfound=*/false)};
+    if (!data) {
+        return std::nullopt;
+    }
+    auto num = endian::load_big_u64(static_cast<const unsigned char*>(data.value.data()));
+    return num;
+}
+
+void write_runtime_states_u64(RWTxn& txn, uint64_t num, RuntimeState runtime_state) {
+    Bytes value{db::block_key(num)};
+    write_runtime_states_bytes(txn, value, runtime_state);
+}
+
 }  // namespace silkworm::db

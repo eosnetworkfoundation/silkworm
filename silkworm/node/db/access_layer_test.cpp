@@ -862,4 +862,53 @@ TEST_CASE("read rlp encoded transactions") {
     }
 }
 
+TEST_CASE("RuntimeStates_u64") {
+    test::Context context;
+    auto& txn{context.rw_txn()};
+
+    RuntimeState index = kLibProcessed;
+    uint64_t value1{11111};
+    uint64_t value2{22222};
+
+    CHECK(read_runtime_states_u64(txn, kLibProcessed) == std::nullopt);
+
+    write_runtime_states_u64(txn, value1, index );
+    CHECK(read_runtime_states_u64(txn, index) == value1);
+
+    write_runtime_states_u64(txn, value1, RuntimeState(1) );
+    CHECK(read_runtime_states_u64(txn, RuntimeState(1)) == value1);
+
+
+    write_runtime_states_u64(txn, value2, index );
+    CHECK(read_runtime_states_u64(txn, index) == value2);
+
+    CHECK(read_runtime_states_u64(txn, RuntimeState(1)) == value1);
+
+    Bytes bvalue1{*from_hex("11111")};
+    Bytes bvalue2{*from_hex("22222")};
+}
+
+TEST_CASE("RuntimeStates_bytes") {
+    test::Context context;
+    auto& txn{context.rw_txn()};
+
+    RuntimeState index = kLibProcessed;
+    Bytes value1{*from_hex("11111")};
+    Bytes value2{*from_hex("22222")};
+
+    CHECK(read_runtime_states_bytes(txn, kLibProcessed) == std::nullopt);
+
+    write_runtime_states_bytes(txn, value1, index );
+    CHECK(read_runtime_states_bytes(txn, index) == value1);
+
+    write_runtime_states_bytes(txn, value1, RuntimeState(1) );
+    CHECK(read_runtime_states_bytes(txn, RuntimeState(1)) == value1);
+
+
+    write_runtime_states_bytes(txn, value2, index );
+    CHECK(read_runtime_states_bytes(txn, index) == value2);
+
+    CHECK(read_runtime_states_bytes(txn, RuntimeState(1)) == value1);
+}
+
 }  // namespace silkworm::db
