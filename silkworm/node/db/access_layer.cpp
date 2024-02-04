@@ -1217,4 +1217,25 @@ void write_runtime_states_u64(RWTxn& txn, uint64_t num, RuntimeState runtime_sta
     write_runtime_states_bytes(txn, value, runtime_state);
 }
 
+std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, BlockNum index) {
+    auto cursor = txn.ro_cursor(table::kConsensusParameters);
+    auto key{db::block_key(index)};
+    auto data{cursor->find(to_slice(key), /*throw_notfound=*/false)};
+    if (!data) {
+        return std::nullopt;
+    }
+
+    // https://github.com/nlohmann/json/issues/2204
+    const auto json = nlohmann::json::parse(data.value.as_string(), nullptr, false);
+    return eosevm::ConsensusParameters::from_json(json);
+}
+
+void update_consensus_parameters(RWTxn& txn, BlockNum index, const eosevm::ConsensusParameters& config) {
+    auto cursor = txn.rw_cursor(table::kConsensusParameters);
+    auto key{db::block_key(index)};
+
+    auto config_data{config.to_json().dump()};
+    cursor->upsert(to_slice(key), mdbx::slice(config_data.data()));
+}
+
 }  // namespace silkworm::db
