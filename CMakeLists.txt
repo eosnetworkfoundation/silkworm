@@ -92,6 +92,7 @@ endif()
 
 # Silkworm itself
 add_subdirectory(silkworm)
+add_subdirectory(eosevm)
 
 if(NOT SILKWORM_HAS_PARENT)
   add_subdirectory(cmd)

@@ -1,10 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <map>
 #include <optional>
-#include <string_view>
-#include <tuple>
 #include <string>
 
 #include <intx/intx.hpp>
@@ -13,9 +10,6 @@
 #include <nlohmann/json.hpp>
 #endif
 
-#include <silkworm/core/common/util.hpp>
-#include <silkworm/core/common/assert.hpp>
-#include <silkworm/core/types/block.hpp>
 
 namespace eosevm {
 
@@ -68,7 +62,7 @@ struct GasFeeParameters {
 
     #endif
 
-    friend bool operator==(const GasFeeParameters&, const GasFeeParameters&);
+    friend bool operator==(const GasFeeParameters&, const GasFeeParameters&);  
 };
 
 struct ConsensusParameters {
@@ -110,5 +104,7 @@ struct ConsensusParameters {
     #endif
 
     friend bool operator==(const ConsensusParameters&, const ConsensusParameters&);
+    
 };
+
 } // namespace eosevm

@@ -911,4 +911,48 @@ TEST_CASE("RuntimeStates_bytes") {
     CHECK(read_runtime_states_bytes(txn, RuntimeState(1)) == value1);
 }
 
+TEST_CASE("ConsensusParameters") {
+    test::Context context;
+    auto& txn{context.rw_txn()};
+
+    constexpr eosevm::ConsensusParameters value1{
+    .min_gas_price = 1,
+    .gas_fee_parameters = eosevm::GasFeeParameters{
+        .gas_txnewaccount = 1,
+        .gas_newaccount = 1,
+        .gas_txcreate = 1,
+        .gas_codedeposit = 1,
+        .gas_sset = 1
+    }
+    };
+
+    constexpr eosevm::ConsensusParameters value2{
+    .min_gas_price = 2,
+    .gas_fee_parameters = eosevm::GasFeeParameters{
+        .gas_txnewaccount = 2,
+        .gas_newaccount = 2,
+        .gas_txcreate = 2,
+        .gas_codedeposit = 2,
+        .gas_sset = 2,
+    },
+    };
+
+    CHECK(read_consensus_parameters(txn, 0) == std::nullopt);
+
+    update_consensus_parameters(txn, 0, value1 );
+    CHECK(read_consensus_parameters(txn, 0) == value1);
+
+    update_consensus_parameters(txn, 0, value2 );
+    CHECK(read_consensus_parameters(txn, 0) == value2);
+
+    CHECK(read_consensus_parameters(txn, 1) == std::nullopt);
+
+    update_consensus_parameters(txn, 1, value2 );
+    CHECK(read_consensus_parameters(txn, 1) == value2);
+
+    update_consensus_parameters(txn, 1, value1 );
+    CHECK(read_consensus_parameters(txn, 1) == value1);
+}
+
+
 }  // namespace silkworm::db
