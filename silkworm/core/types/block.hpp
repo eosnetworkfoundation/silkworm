@@ -70,6 +70,9 @@ struct BlockHeader {
     evmc::bytes32 prev_randao{};  // mix hash prior to EIP-4399
     NonceType nonce{};
 
+    // EOS-EVM 
+    std::optional<uint64_t> consensus_parameter_index{std::nullopt};
+
     std::optional<intx::uint256> base_fee_per_gas{std::nullopt};  // EIP-1559
     std::optional<evmc::bytes32> withdrawals_root{std::nullopt};  // EIP-4895
 

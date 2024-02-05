@@ -29,7 +29,7 @@ bool operator==(const BlockHeader& a, const BlockHeader& b) {
            a.receipts_root == b.receipts_root && a.logs_bloom == b.logs_bloom && a.difficulty == b.difficulty &&
            a.number == b.number && a.gas_limit == b.gas_limit && a.gas_used == b.gas_used &&
            a.timestamp == b.timestamp && a.extra_data == b.extra_data && a.prev_randao == b.prev_randao &&
-           a.nonce == b.nonce && a.base_fee_per_gas == b.base_fee_per_gas;
+           a.nonce == b.nonce && a.base_fee_per_gas == b.base_fee_per_gas && a.consensus_parameter_index == b.consensus_parameter_index;
 }
 
 bool operator==(const BlockBody& a, const BlockBody& b) {
@@ -110,6 +110,9 @@ namespace rlp {
             rlp_head.payload_length += kHashLength + 1;  // prev_randao
             rlp_head.payload_length += 8 + 1;            // nonce
         }
+        if (header.consensus_parameter_index) {
+            rlp_head.payload_length += length(*header.consensus_parameter_index);
+        }
         if (header.base_fee_per_gas) {
             rlp_head.payload_length += length(*header.base_fee_per_gas);
         }
@@ -154,6 +157,9 @@ namespace rlp {
         if (!for_sealing) {
             encode(to, header.prev_randao);
             encode(to, header.nonce);
+        }
+        if (header.consensus_parameter_index) {
+            encode(to, *header.consensus_parameter_index);
         }
         if (header.base_fee_per_gas) {
             encode(to, *header.base_fee_per_gas);
@@ -200,6 +206,15 @@ namespace rlp {
                                             to.nonce)};
             !res) {
             return res;
+        }
+
+        if (from.length() > leftover) {
+            to.consensus_parameter_index = 0;
+            if (DecodingResult res{decode(from, *to.consensus_parameter_index, Leftover::kAllow)}; !res) {
+                return res;
+            }
+        } else {
+            to.consensus_parameter_index = std::nullopt;
         }
 
         if (from.length() > leftover) {

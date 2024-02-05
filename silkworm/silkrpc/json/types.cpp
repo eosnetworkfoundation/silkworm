@@ -211,6 +211,11 @@ void to_json(nlohmann::json& json, const BlockHeader& header) {
     json["gasLimit"] = rpc::to_quantity(header.gas_limit);
     json["gasUsed"] = rpc::to_quantity(header.gas_used);
     json["timestamp"] = rpc::to_quantity(header.timestamp);
+    if (header.consensus_parameter_index.has_value()) {
+        json["consensusParameterIndex"] = rpc::to_quantity(header.consensus_parameter_index.value_or(0));
+    } else {
+        json["consensusParameterIndex"] = nullptr;
+    }
     if (header.base_fee_per_gas.has_value()) {
         json["baseFeePerGas"] = rpc::to_quantity(header.base_fee_per_gas.value_or(0));
     } else {
