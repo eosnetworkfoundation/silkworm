@@ -32,6 +32,8 @@
 #include <silkworm/core/types/transaction.hpp>
 #include <silkworm/core/types/withdrawal.hpp>
 
+#include <eosevm/consensus_parameters.hpp>
+
 namespace silkworm {
 
 using TotalDifficulty = intx::uint256;
@@ -70,9 +72,6 @@ struct BlockHeader {
     evmc::bytes32 prev_randao{};  // mix hash prior to EIP-4399
     NonceType nonce{};
 
-    // EOS-EVM 
-    std::optional<uint64_t> consensus_parameter_index{std::nullopt};
-
     std::optional<intx::uint256> base_fee_per_gas{std::nullopt};  // EIP-1559
     std::optional<evmc::bytes32> withdrawals_root{std::nullopt};  // EIP-4895
 
@@ -97,6 +96,9 @@ struct BlockBody {
     std::vector<BlockHeader> ommers;
     std::optional<std::vector<Withdrawal>> withdrawals{std::nullopt};
 
+    // EOS-EVM 
+    std::optional<uint64_t> consensus_parameter_index{std::nullopt};
+
     friend bool operator==(const BlockBody&, const BlockBody&);
 };
 
@@ -104,6 +106,7 @@ struct Block : public BlockBody {
     BlockHeader header;
 
     bool irreversible{false};
+    std::optional<eosevm::ConsensusParameters> consensus_parameters_cache;
     void recover_senders();
 };
 

@@ -36,7 +36,6 @@ TEST_CASE("BlockBodyForStorage encoding") {
         .extra_data = *from_hex("0001FF0100"),
         .prev_randao = 0x0000000000000000000000000000000000000000000000000000000000000001_bytes32,
         .nonce = {0, 0, 0, 0, 0, 0, 0, 255},
-        .consensus_parameter_index = 0x1234,
         .base_fee_per_gas = 0x244428,
     };
 

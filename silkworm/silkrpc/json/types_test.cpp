@@ -164,7 +164,6 @@ TEST_CASE("serialize empty block header", "[silkrpc][to_json]") {
     nlohmann::json j = header;
     CHECK(j == R"({
         "baseFeePerGas":null,
-        "consensusParameterIndex":null,
         "hash": "0xc3bd2d00745c03048a5616146a96f5ff78e54efb9e5b04af208cdaff6f3830ee",
         "parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
         "sha3Uncles":"0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -211,7 +210,6 @@ TEST_CASE("serialize block header", "[silkrpc][to_json]") {
     nlohmann::json j = header;
     CHECK(j == R"({
         "baseFeePerGas":null,
-        "consensusParameterIndex":null,
         "hash": "0x5e053b099d472a3fc02394243961937ffa008bad0daa81a984a0830ba0beee01",
         "parentHash":"0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c",
         "sha3Uncles":"0x474f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126d",
@@ -238,55 +236,6 @@ TEST_CASE("serialize block header", "[silkrpc][to_json]") {
     })"_json);
 }
 
-TEST_CASE("serialize block header with consensus parameter index", "[silkrpc][to_json]") {
-    silkworm::BlockHeader header{
-        0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c_bytes32,
-        0x474f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126d_bytes32,
-        0x0715a7794a1dc8e42615f059dd6e406a6594651a_address,
-        0xb02a3b0ee16c858afaa34bcd6770b3c20ee56aa2f75858733eb0e927b5b7126d_bytes32,
-        0xb02a3b0ee16c858afaa34bcd6770b3c20ee56aa2f75858733eb0e927b5b7126e_bytes32,
-        0xb02a3b0ee16c858afaa34bcd6770b3c20ee56aa2f75858733eb0e927b5b7126f_bytes32,
-        silkworm::Bloom{},
-        intx::uint256{0},
-        uint64_t(5),
-        uint64_t(1000000),
-        uint64_t(1000000),
-        uint64_t(5405021),
-        *silkworm::from_hex("0001FF0100"),                                           // extradata
-        0x0000000000000000000000000000000000000000000000000000000000000001_bytes32,  // mixhash
-        {1, 2, 3, 4, 5, 6, 7, 8},                                                    // nonce
-        std::optional<uint64_t>(1001),                                           // consensus_parameter_index                                        // base_fee_per_gas
-    };
-    nlohmann::json j = header;
-    CHECK(j == R"({
-        "baseFeePerGas":null,
-        "hash": "0x74b164b2a76408c5c0a69c99325438a90ece1353817ef6e239fc0dcb7ac76d09",
-        "parentHash":"0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c",
-        "sha3Uncles":"0x474f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126d",
-        "miner":"0x0715a7794a1dc8e42615f059dd6e406a6594651a",
-        "stateRoot":"0xb02a3b0ee16c858afaa34bcd6770b3c20ee56aa2f75858733eb0e927b5b7126d",
-        "transactionsRoot":"0xb02a3b0ee16c858afaa34bcd6770b3c20ee56aa2f75858733eb0e927b5b7126e",
-        "receiptsRoot":"0xb02a3b0ee16c858afaa34bcd6770b3c20ee56aa2f75858733eb0e927b5b7126f",
-        "logsBloom":"0x000000000000000000000000000000000000000000000000000000000000000000000000)"
-               R"(000000000000000000000000000000000000000000000000000000000000000000000000)"
-               R"(000000000000000000000000000000000000000000000000000000000000000000000000)"
-               R"(000000000000000000000000000000000000000000000000000000000000000000000000)"
-               R"(000000000000000000000000000000000000000000000000000000000000000000000000)"
-               R"(000000000000000000000000000000000000000000000000000000000000000000000000)"
-               R"(00000000000000000000000000000000000000000000000000000000000000000000000000000000",
-        "difficulty":"0x0",
-        "number":"0x5",
-        "gasLimit":"0xf4240",
-        "gasUsed":"0xf4240",
-        "timestamp":"0x52795d",
-        "extraData":"0x0001ff0100",
-        "mixHash":"0x0000000000000000000000000000000000000000000000000000000000000001",
-        "nonce":"0x0102030405060708",
-        "consensusParameterIndex":"0x3e9",
-        "withdrawalsRoot":null
-    })"_json);
-}
-
 TEST_CASE("serialize block header with baseFeePerGas", "[silkrpc][to_json]") {
     silkworm::BlockHeader header{
         0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c_bytes32,
@@ -304,13 +253,12 @@ TEST_CASE("serialize block header with baseFeePerGas", "[silkrpc][to_json]") {
         *silkworm::from_hex("0001FF0100"),                                           // extradata
         0x0000000000000000000000000000000000000000000000000000000000000001_bytes32,  // mixhash
         {1, 2, 3, 4, 5, 6, 7, 8},                                                    // nonce
-        std::optional<uint64_t>(1001),                                           // consensus_parameter_index
         std::optional<intx::uint256>(1000),                                          // base_fee_per_gas
     };
     nlohmann::json j = header;
     CHECK(j == R"({
         "baseFeePerGas":"0x3e8",
-        "hash": "0xa88494b78d8cb3ad596637990fa04fd4e9068a9271f044e4d3cdb313a24973b9",
+        "hash": "0x5e3a9484b3ee70cc9ae7673051efd0369cfa4126430075921c70255cbdefbe6",
         "parentHash":"0x374f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126c",
         "sha3Uncles":"0x474f3a049e006f36f6cf91b02a3b0ee16c858af2f75858733eb0e927b5b7126d",
         "miner":"0x0715a7794a1dc8e42615f059dd6e406a6594651a",
@@ -332,7 +280,6 @@ TEST_CASE("serialize block header with baseFeePerGas", "[silkrpc][to_json]") {
         "extraData":"0x0001ff0100",
         "mixHash":"0x0000000000000000000000000000000000000000000000000000000000000001",
         "nonce":"0x0102030405060708",
-        "consensusParameterIndex":"0x3e9",
         "baseFeePerGas":"0x3e8",
         "withdrawalsRoot":null
     })"_json);

@@ -66,7 +66,7 @@ struct GasFeeParameters {
 };
 
 struct ConsensusParameters {
-    std::optional<intx::uint256>  min_gas_price;
+    std::optional<uint64_t>  min_gas_price;
     std::optional<GasFeeParameters> gas_fee_parameters;
 
     //! \brief Return the JSON representation of this object
@@ -75,7 +75,7 @@ struct ConsensusParameters {
 
         nlohmann::json ret;
         if (min_gas_price) {
-            ret["minGasPrice"] = intx::to_string(min_gas_price.value());
+            ret["minGasPrice"] = min_gas_price.value();
         }
         if (gas_fee_parameters) {
             ret["gasFeeParameters"] = gas_fee_parameters.value().to_json();
@@ -91,7 +91,7 @@ struct ConsensusParameters {
     static std::optional<ConsensusParameters> from_json(const nlohmann::json& json) noexcept {
         ConsensusParameters config{};
         if (json.contains("minGasPrice")) {
-                config.min_gas_price = intx::from_string<intx::uint256>(json["minGasPrice"].get<std::string>());
+            config.min_gas_price = json["minGasPrice"].get<uint64_t>();
         }
         
         if (json.contains("gasFeeParameters")) {
