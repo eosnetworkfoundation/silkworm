@@ -81,6 +81,7 @@ static BlockBody sample_block_body() {
     body.ommers[0].prev_randao = 0xf0a53dfdd6c2f2a661e718ef29092de60d81d45f84044bec7bf4b36630b2bc08_bytes32;
     body.ommers[0].nonce[7] = 35;
 
+    body.consensus_parameter_index = 1234;
     return body;
 }
 
@@ -527,6 +528,8 @@ TEST_CASE("Headers and bodies") {
         auto [b, h] = split_block_key(key);
         REQUIRE(b == header.number);
         REQUIRE(h == header.hash());
+
+        CHECK(block.consensus_parameter_index == 1234);
     }
 
     SECTION("process_blocks_at_height") {

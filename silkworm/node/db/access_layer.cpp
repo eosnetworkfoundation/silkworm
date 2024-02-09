@@ -443,6 +443,7 @@ bool read_body(ROTxn& txn, const Bytes& key, bool read_senders, BlockBody& out) 
     if (!out.transactions.empty() && read_senders) {
         parse_senders(txn, key, out.transactions);
     }
+    out.consensus_parameter_index = body.consensus_parameter_index;
     return true;
 }
 
@@ -498,6 +499,7 @@ void write_body(RWTxn& txn, const BlockBody& body, const uint8_t (&hash)[kHashLe
     body_for_storage.txn_count = body.transactions.size();
     body_for_storage.base_txn_id =
         increment_map_sequence(txn, table::kBlockTransactions.name, body_for_storage.txn_count);
+    body_for_storage.consensus_parameter_index = body.consensus_parameter_index;
     Bytes value{body_for_storage.encode()};
     auto key{db::block_key(number, hash)};
 
