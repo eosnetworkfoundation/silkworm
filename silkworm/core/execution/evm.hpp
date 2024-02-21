@@ -72,7 +72,7 @@ class EVM {
     EVM(const EVM&) = delete;
     EVM& operator=(const EVM&) = delete;
 
-    EVM(const Block& block, IntraBlockState& state, const ChainConfig& config)
+    EVM(const Block& block, IntraBlockState& state, const ChainConfig& config, const evmone::gas_parameters& gas_params)
     noexcept;
 
     ~EVM();
@@ -127,6 +127,9 @@ class EVM {
 
     evmc_vm* evm1_{nullptr};
     std::optional<FilterFunction> message_filter_;
+
+    evmone::gas_parameters gas_params_;
+    uint64_t eos_evm_version_=0;
 };
 
 class EvmHost : public evmc::Host {

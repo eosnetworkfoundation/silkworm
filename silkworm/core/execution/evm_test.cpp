@@ -25,6 +25,7 @@
 #include <silkworm/core/common/test_util.hpp>
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/core/state/in_memory_state.hpp>
+#include <eosevm/version.hpp>
 
 #include "address.hpp"
 
@@ -40,7 +41,7 @@ TEST_CASE("Value transfer") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig};
+    EVM evm{block, state, kMainnetConfig, {}};
 
     CHECK(state.get_balance(from) == 0);
     CHECK(state.get_balance(to) == 0);
@@ -96,7 +97,7 @@ TEST_CASE("Smart contract with storage") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, test::kShanghaiConfig};
+    EVM evm{block, state, test::kShanghaiConfig, {}};
 
     Transaction txn{};
     txn.from = caller;
@@ -168,7 +169,7 @@ TEST_CASE("Maximum call depth") {
     IntraBlockState state{db};
     state.set_code(contract, code);
 
-    EVM evm{block, state, kMainnetConfig};
+    EVM evm{block, state, kMainnetConfig, {}};
 
     AnalysisCache analysis_cache{/*maxSize=*/16};
     evm.analysis_cache = &analysis_cache;
@@ -227,7 +228,7 @@ TEST_CASE("DELEGATECALL") {
     state.set_code(caller_address, caller_code);
     state.set_code(callee_address, callee_code);
 
-    EVM evm{block, state, kMainnetConfig};
+    EVM evm{block, state, kMainnetConfig, {}};
 
     Transaction txn{};
     txn.from = caller_address;
@@ -288,7 +289,7 @@ TEST_CASE("CREATE should only return on failure") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig};
+    EVM evm{block, state, kMainnetConfig, {}};
 
     Transaction txn{};
     txn.from = caller;
@@ -320,7 +321,7 @@ TEST_CASE("Contract overwrite") {
     IntraBlockState state{db};
     state.set_code(contract_address, old_code);
 
-    EVM evm{block, state, kMainnetConfig};
+    EVM evm{block, state, kMainnetConfig, {}};
 
     Transaction txn{};
     txn.from = caller;
@@ -343,7 +344,7 @@ TEST_CASE("EIP-3541: Reject new contracts starting with the 0xEF byte") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, config};
+    EVM evm{block, state, config, {}};
 
     Transaction txn;
     txn.from = 0x1000000000000000000000000000000000000000_address;
@@ -465,7 +466,7 @@ TEST_CASE("Tracing smart contract with storage") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig};
+    EVM evm{block, state, kMainnetConfig, {}};
 
     Transaction txn{};
     txn.from = caller;
@@ -595,7 +596,7 @@ TEST_CASE("Tracing creation smart contract with CREATE2") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig};
+    EVM evm{block, state, kMainnetConfig, {}};
 
     Transaction txn{};
     txn.from = caller;
@@ -621,7 +622,7 @@ TEST_CASE("Tracing smart contract w/o code") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig};
+    EVM evm{block, state, kMainnetConfig, {}};
     CHECK(evm.tracers().empty());
 
     TestTracer tracer1;
@@ -682,7 +683,7 @@ TEST_CASE("Tracing precompiled contract failure") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig};
+    EVM evm{block, state, kMainnetConfig, {}};
     CHECK(evm.tracers().empty());
 
     TestTracer tracer1;
@@ -712,7 +713,7 @@ TEST_CASE("Smart contract creation w/ insufficient balance") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, test::kShanghaiConfig};
+    EVM evm{block, state, test::kShanghaiConfig, {}};
 
     Transaction txn{};
     txn.from = caller;
@@ -723,5 +724,33 @@ TEST_CASE("Smart contract creation w/ insufficient balance") {
     CallResult res = evm.execute(txn, gas);
     CHECK(res.status == EVMC_INSUFFICIENT_BALANCE);
 }
+
+TEST_CASE("EOS EVM codedeposit test") {
+    Block block{};
+    block.header.number = 1;
+    block.header.nonce = eosevm::version_to_nonce(1);
+
+    evmc::address caller{0x0a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
+    Bytes code{*from_hex("608060405234801561001057600080fd5b50610173806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c806313bdfacd14610030575b600080fd5b61003861004e565b604051610045919061011b565b60405180910390f35b60606040518060400160405280600c81526020017f48656c6c6f20576f726c64210000000000000000000000000000000000000000815250905090565b600081519050919050565b600082825260208201905092915050565b60005b838110156100c55780820151818401526020810190506100aa565b60008484015250505050565b6000601f19601f8301169050919050565b60006100ed8261008b565b6100f78185610096565b93506101078185602086016100a7565b610110816100d1565b840191505092915050565b6000602082019050818103600083015261013581846100e2565b90509291505056fea264697066735822122046344ce4c7e7c91dba98aef897cc7773af40fbff6b6da10885c36037b9d37a3764736f6c63430008110033")};
+
+    evmone::gas_parameters gas_params;
+    gas_params.G_codedeposit = 500;
+
+    InMemoryState db;
+    IntraBlockState state{db};
+    state.set_balance(caller, intx::uint256{1e18});
+    EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+
+    Transaction txn{};
+    txn.from = caller;
+    txn.data = code;
+
+    uint64_t gas = 1'500'000;
+    CallResult res = evm.execute(txn, 1'500'000);
+    CHECK(res.status == EVMC_SUCCESS);
+    CHECK(gas-res.gas_left == 123 + 500*371); //G_codedeposit=500, codelen=371
+}
+
+
 
 }  // namespace silkworm

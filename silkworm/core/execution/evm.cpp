@@ -61,12 +61,14 @@ class DelegatingTracer : public evmone::Tracer {
     IntraBlockState& intra_block_state_;
 };
 
-EVM::EVM(const Block& block, IntraBlockState& state, const ChainConfig& config) noexcept
+EVM::EVM(const Block& block, IntraBlockState& state, const ChainConfig& config, const evmone::gas_parameters& gas_params) noexcept
     : beneficiary{block.header.beneficiary},
       block_{block},
       state_{state},
       config_{config},
-      evm1_{evmc_create_evmone()} {}
+      evm1_{evmc_create_evmone()},
+      gas_params_{gas_params},
+      eos_evm_version_{config.eos_evm_version(block.header)} { }
 
 EVM::~EVM() { evm1_->destroy(evm1_); }
 
@@ -80,6 +82,7 @@ CallResult EVM::execute(const Transaction& txn, uint64_t gas) noexcept {
 
     const evmc_message message{
         .kind = contract_creation ? EVMC_CREATE : EVMC_CALL,
+        .depth = 0,
         .gas = static_cast<int64_t>(gas),
         .recipient = destination,
         .sender = *txn.from,
@@ -157,7 +160,7 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
 
     if (evm_res.status_code == EVMC_SUCCESS) {
         const size_t code_len{evm_res.output_size};
-        const uint64_t code_deploy_gas{code_len * protocol::fee::kGCodeDeposit};
+        const uint64_t code_deploy_gas{code_len * (eos_evm_version_ > 0 ? gas_params_.G_codedeposit : protocol::fee::kGCodeDeposit)};
 
         if (rev >= EVMC_SPURIOUS_DRAGON && code_len > protocol::kMaxCodeSize) {
             // EIP-170: Contract code size limit
@@ -320,7 +323,9 @@ evmc_result EVM::execute_with_baseline_interpreter(evmc_revision rev, const evmc
 
     EvmHost host{*this};
     gsl::owner<evmone::ExecutionState*> state{acquire_state()};
-    state->reset(msg, rev, host.get_interface(), host.to_context(), code);
+
+    state->reset(msg, rev, host.get_interface(), host.to_context(), code, gas_params_);
+    state->eos_evm_version = eos_evm_version_;
 
     const auto vm{static_cast<evmone::VM*>(evm1_)};
     evmc_result res{evmone::baseline::execute(*vm, msg.gas, *state, *analysis)};

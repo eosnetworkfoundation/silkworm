@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
 
             db::Buffer buffer{txn, /*prune_history_threshold=*/0, /*historical_block=*/block_num};
 
-            ExecutionProcessor processor{block, *rule_set, buffer, *chain_config};
+            ExecutionProcessor processor{block, *rule_set, buffer, *chain_config, {}};
             processor.evm().analysis_cache = &analysis_cache;
             processor.evm().state_pool = &state_pool;
 

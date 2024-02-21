@@ -46,7 +46,7 @@ TEST_CASE("Zero gas price") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
 
     Receipt receipt;
     processor.execute_transaction(txn, receipt);
@@ -86,7 +86,7 @@ TEST_CASE("No refund on error") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
 
     Transaction txn{
         {.nonce = nonce,
@@ -181,7 +181,7 @@ TEST_CASE("Self-destruct") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
 
     processor.evm().state().add_to_balance(originator, kEther);
     processor.evm().state().set_code(caller_address, caller_code);
@@ -331,7 +331,7 @@ TEST_CASE("Out of Gas during account re-creation") {
     };
 
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
     processor.evm().state().add_to_balance(caller, kEther);
 
     Receipt receipt;
@@ -374,7 +374,7 @@ TEST_CASE("Empty suicide beneficiary") {
     InMemoryState state;
 
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
     processor.evm().state().add_to_balance(caller, kEther);
 
     Receipt receipt;
@@ -431,7 +431,7 @@ TEST_CASE("EVM message filter") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kEOSEVMMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig};
+    ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}};
 
     Transaction txn{
         {.nonce = nonce,
@@ -535,7 +535,7 @@ TEST_CASE("EVM message filter revert") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kEOSEVMMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig};
+    ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}};
 
     Transaction txn{
         {.nonce = nonce,

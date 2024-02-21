@@ -582,19 +582,19 @@ TEST_CASE("Account") {
     block1.header.number = 1;
     block1.header.beneficiary = miner_a;
     // miner_a gets one block reward
-    REQUIRE(execute_block(block1, buffer, test::kFrontierConfig) == ValidationResult::kOk);
+    REQUIRE(execute_block(block1, buffer, test::kFrontierConfig, {}) == ValidationResult::kOk);
 
     Block block2;
     block2.header.number = 2;
     block2.header.beneficiary = miner_b;
     // miner_a gets nothing
-    REQUIRE(execute_block(block2, buffer, test::kFrontierConfig) == ValidationResult::kOk);
+    REQUIRE(execute_block(block2, buffer, test::kFrontierConfig, {}) == ValidationResult::kOk);
 
     Block block3;
     block3.header.number = 3;
     block3.header.beneficiary = miner_a;
     // miner_a gets another block reward
-    REQUIRE(execute_block(block3, buffer, test::kFrontierConfig) == ValidationResult::kOk);
+    REQUIRE(execute_block(block3, buffer, test::kFrontierConfig, {}) == ValidationResult::kOk);
 
     buffer.write_to_db();
     db::stages::write_stage_progress(txn, db::stages::kExecutionKey, 3);

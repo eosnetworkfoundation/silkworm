@@ -196,13 +196,20 @@ evmc_revision ChainConfig::revision(const BlockHeader& header) const noexcept {
     if(protocol_rule_set != protocol::RuleSetType::kTrust) {
         return determine_revision_by_block(header.number, header.timestamp);
     }
-    uint64_t evm_version = 0;
-    if(header.number == 0) {
-        evm_version = _version.has_value() ? *_version : 0;
-    } else {
-        evm_version = eosevm::nonce_to_version(header.nonce);
-    }
+    auto evm_version = eos_evm_version(header);
     return eosevm::version_to_evmc_revision(evm_version);
+}
+
+uint64_t ChainConfig::eos_evm_version(const BlockHeader& header) const noexcept {
+    uint64_t evm_version = 0;
+    if(protocol_rule_set == protocol::RuleSetType::kTrust) {
+        if(header.number == 0) {
+            evm_version = _version.has_value() ? *_version : 0;
+        } else {
+            evm_version = eosevm::nonce_to_version(header.nonce);
+        }
+    }
+    return evm_version;
 }
 
 std::vector<BlockNum> ChainConfig::distinct_fork_numbers() const {
