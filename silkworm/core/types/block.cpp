@@ -241,6 +241,9 @@ namespace rlp {
         Header rlp_head{.list = true};
         rlp_head.payload_length += length(b.transactions);
         rlp_head.payload_length += length(b.ommers);
+        if (b.consensus_parameter_index) {
+            rlp_head.payload_length += length(*b.consensus_parameter_index);
+        }
         if (b.withdrawals) {
             rlp_head.payload_length += length(*b.withdrawals);
         }
