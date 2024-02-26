@@ -26,6 +26,8 @@ target_include_directories(eos_evm PUBLIC ${SILKWORM_MAIN_DIR})
 
 set(EOS_EVM_PUBLIC_LIBS
     intx::intx
+    evmc
+    tl::expected
     nlohmann_json::nlohmann_json
 )
 

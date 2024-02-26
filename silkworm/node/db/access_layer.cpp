@@ -1226,18 +1226,15 @@ std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn,
     if (!data) {
         return std::nullopt;
     }
-
-    // https://github.com/nlohmann/json/issues/2204
-    const auto json = nlohmann::json::parse(data.value.as_string(), nullptr, false);
-    return eosevm::ConsensusParameters::from_json(json);
+    const auto encoded = from_slice(data.value);
+    return eosevm::ConsensusParameters::decode(encoded);
 }
 
 void update_consensus_parameters(RWTxn& txn, BlockNum index, const eosevm::ConsensusParameters& config) {
     auto cursor = txn.rw_cursor(table::kConsensusParameters);
     auto key{db::block_key(index)};
 
-    auto config_data{config.to_json().dump()};
-    cursor->upsert(to_slice(key), mdbx::slice(config_data.data()));
+    cursor->upsert(to_slice(key), mdbx::slice(config.encode()));
 }
 
 }  // namespace silkworm::db
