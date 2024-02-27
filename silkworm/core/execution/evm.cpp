@@ -254,7 +254,7 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
             tracer.get().on_execution_end(res.raw(),state_);
         }
     } else {
-        if(message.depth == 0 && state_.is_dead(message.recipient)) {
+        if(eos_evm_version_ > 0 && message.depth == 0 && state_.is_dead(message.recipient)) {
             if ((res.gas_left -= static_cast<int64_t>(gas_params_.G_txnewaccount)) < 0)
                 res.status_code = EVMC_OUT_OF_GAS;
         } else {
