@@ -103,6 +103,10 @@ class EVM {
       message_filter_ = message_filter;
     }
 
+    void update_gas_params(const evmone::gas_parameters& gas_params) {
+       gas_params_ = gas_params;
+    }
+
   private:
     friend class EvmHost;
 

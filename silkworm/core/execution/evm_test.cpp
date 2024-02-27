@@ -751,6 +751,42 @@ TEST_CASE("EOS EVM codedeposit test") {
     CHECK(gas-res.gas_left == 123 + 500*371); //G_codedeposit=500, codelen=371
 }
 
+TEST_CASE("EOS EVM G_txnewaccount") {
+    Block block{};
+    block.header.number = 1;
+    block.header.nonce = eosevm::version_to_nonce(1);
+
+    evmc::address sender{0x0a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
+    evmc::address receiver{0x1a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
+
+    evmone::gas_parameters gas_params;
+    gas_params.G_txnewaccount = 0;
+
+    InMemoryState db;
+    IntraBlockState state{db};
+    state.set_balance(sender, intx::uint256{1e18});
+    EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+
+    Transaction txn{};
+    txn.from = sender;
+    txn.to = receiver;
+    txn.value = intx::uint256{0};
+
+    CallResult res = evm.execute(txn, 0);
+    CHECK(res.status == EVMC_SUCCESS);
+    CHECK(res.gas_left == 0);
+    CHECK(res.gas_refund == 0);
+
+    gas_params.G_txnewaccount = 1;
+    evm.update_gas_params(gas_params);
+
+    res = evm.execute(txn, 0);
+    CHECK(res.status == EVMC_OUT_OF_GAS);
+    CHECK(res.gas_refund == 0);
+    CHECK(res.gas_left == 0);
+
+}
+
 
 
 }  // namespace silkworm

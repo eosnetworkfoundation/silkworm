@@ -254,13 +254,18 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
             tracer.get().on_execution_end(res.raw(),state_);
         }
     } else {
-        const ByteView code{state_.get_code(message.code_address)};
-        if (code.empty() && tracers_.empty()) {  // Do not skip execution if there are any tracers
-            return res;
-        }
+        if(message.depth == 0 && state_.is_dead(message.recipient)) {
+            if ((res.gas_left -= static_cast<int64_t>(gas_params_.G_txnewaccount)) < 0)
+                res.status_code = EVMC_OUT_OF_GAS;
+        } else {
+            const ByteView code{state_.get_code(message.code_address)};
+            if (code.empty() && tracers_.empty()) {  // Do not skip execution if there are any tracers
+                return res;
+            }
 
-        const evmc::bytes32 code_hash{state_.get_code_hash(message.code_address)};
-        res = evmc::Result{execute(message, code, &code_hash)};
+            const evmc::bytes32 code_hash{state_.get_code_hash(message.code_address)};
+            res = evmc::Result{execute(message, code, &code_hash)};
+        }
     }
 
     if (res.status_code != EVMC_SUCCESS) {
