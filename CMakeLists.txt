@@ -32,13 +32,15 @@ if(NOT SILKWORM_HAS_PARENT)
         CACHE FILEPATH "" FORCE
     )
   endif()
-
-  include(cmake/conan.cmake)
-
 endif()
 
 project(silkworm)
 set(PROJECT_VERSION 0.1.0-dev)
+
+# conan must be initiailzed after project definition to properly detect target architecture.
+if(NOT SILKWORM_HAS_PARENT)
+  include(cmake/conan.cmake)
+endif()
 
 include(CableBuildInfo)
 

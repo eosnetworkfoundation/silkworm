@@ -34,6 +34,13 @@
 #include <silkworm/silkrpc/ethdb/transaction_database.hpp>
 #include <silkworm/silkrpc/json/types.hpp>
 
+// GCC in this setting will report mismatch in new delete when checking dtor of boost::asio::awaitable.
+// Possibly cuased by GCC process ctor as inline but not for dtor. https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100485
+// Any more fine-grained fix will need toching the boost files. So we supress the warning here.
+// As for now, GCC does not report such warning in other architecture. So we can still rely on this check on other platform for protection.
+#ifdef __aarch64__
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
 namespace silkworm::rpc::commands {
 
 constexpr int kCurrentApiLevel{8};
