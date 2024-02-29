@@ -229,23 +229,7 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
 
     const evmc_revision rev{revision()};
 
-    bool should_notify_tracers = true;
-    bool is_precompile = precompile::is_precompile(message.code_address, rev);
-
-    auto notify_tracers = gsl::finally([&] {
-        if(should_notify_tracers) {
-            // Explicitly notify registered tracers (if any)
-            for (auto tracer : tracers_) {
-                tracer.get().on_execution_start(rev, message, {});
-                if(is_precompile) {
-                    tracer.get().on_precompiled_run(res.raw(), message.gas, state_);
-                }
-                tracer.get().on_execution_end(res.raw(), state_);
-            }
-        }
-    });
-
-    if (is_precompile) {
+    if (precompile::is_precompile(message.code_address, rev)) {
         static_assert(std::size(precompile::kContracts) < 256);
         const uint8_t num{message.code_address.bytes[kAddressLength - 1]};
         const precompile::Contract& contract{precompile::kContracts[num]->contract};
@@ -262,19 +246,37 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
                 res.status_code = EVMC_PRECOMPILE_FAILURE;
             }
         }
+        // Explicitly notify registered tracers (if any)
+        for (auto tracer : tracers_) {
+            const ByteView code{}; // precompile code is empty.
+            tracer.get().on_execution_start(rev, message, code);
+            tracer.get().on_precompiled_run(res.raw(), message.gas, state_);
+            tracer.get().on_execution_end(res.raw(),state_);
+        }
     } else {
 
         if(eos_evm_version_ > 0 && message.depth == 0 && state_.is_dead(message.recipient)) {
-            if ((res.gas_left -= static_cast<int64_t>(gas_params_.G_txnewaccount)) < 0)
+            if ((res.gas_left -= static_cast<int64_t>(gas_params_.G_txnewaccount)) < 0) {
+                // If we run out of gas lets do everything here
+                state_.revert_to_snapshot(snapshot);
                 res.status_code = EVMC_OUT_OF_GAS;
+                res.gas_refund = 0;
+                res.gas_left = 0;
+                for (auto tracer : tracers_) {
+                    tracer.get().on_execution_start(rev, message, {});
+                    tracer.get().on_execution_end(res.raw(), state_);
+                }
+                return res;
+            }
         }
 
         const ByteView code{state_.get_code(message.code_address)};
-        if (!code.empty()) {
-            should_notify_tracers = false;
-            const evmc::bytes32 code_hash{state_.get_code_hash(message.code_address)};
-            res = evmc::Result{execute(message, code, &code_hash)};
+        if (code.empty() && tracers_.empty()) {  // Do not skip execution if there are any tracers
+            return res;
         }
+
+        const evmc::bytes32 code_hash{state_.get_code_hash(message.code_address)};
+        res = evmc::Result{execute(message, code, &code_hash)};
     }
 
     if (res.status_code != EVMC_SUCCESS) {
