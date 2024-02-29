@@ -32,6 +32,8 @@
 #include <silkworm/node/db/util.hpp>
 #include <silkworm/node/snapshot/repository.hpp>
 
+#include <eosevm/consensus_parameters.hpp>
+
 namespace silkworm::db {
 
 //! \brief Pulls database schema version
@@ -248,6 +250,12 @@ std::optional<uint64_t> read_runtime_states_u64(ROTxn& txn, RuntimeState runtime
 
 //! \brief  Write uint64_t as runtime states by index
 void write_runtime_states_u64(RWTxn& txn, uint64_t num, RuntimeState runtime_state);
+
+//! \brief  Read ConsensusParameters indexed by blocknum that it is added.
+std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, BlockNum index);
+
+//! \brief  Write ConsensusParameters indexed by blocknum that it is added. Can overwrite during forks.
+void update_consensus_parameters(RWTxn& txn, BlockNum index, const eosevm::ConsensusParameters& config);
 
 class DataModel {
   public:

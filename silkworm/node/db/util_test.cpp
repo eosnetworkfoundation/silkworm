@@ -39,11 +39,18 @@ TEST_CASE("BlockBodyForStorage encoding") {
         .base_fee_per_gas = 0x244428,
     };
 
-    // No withdrawals
+    // No consensus_parameter_index and withdraws
     BlockBodyForStorage body{.base_txn_id = 15, .txn_count = 3, .ommers = {header}};
     Bytes encoded{body.encode()};
     ByteView view{encoded};
     BlockBodyForStorage decoded{decode_stored_block_body(view)};
+    CHECK(decoded == body);
+
+    // No withdrawals
+    body.consensus_parameter_index = 1234;
+    encoded = body.encode();
+    view = encoded;
+    decoded = decode_stored_block_body(view);
     CHECK(decoded == body);
 
     // With withdrawals

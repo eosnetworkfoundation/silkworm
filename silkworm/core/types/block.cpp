@@ -33,7 +33,7 @@ bool operator==(const BlockHeader& a, const BlockHeader& b) {
 }
 
 bool operator==(const BlockBody& a, const BlockBody& b) {
-    return a.transactions == b.transactions && a.ommers == b.ommers;
+    return a.transactions == b.transactions && a.ommers == b.ommers && a.consensus_parameter_index == b.consensus_parameter_index;
 }
 
 BlockNum height(const BlockId& b) { return b.number; }
@@ -241,6 +241,9 @@ namespace rlp {
         Header rlp_head{.list = true};
         rlp_head.payload_length += length(b.transactions);
         rlp_head.payload_length += length(b.ommers);
+        if (b.consensus_parameter_index) {
+            rlp_head.payload_length += length(*b.consensus_parameter_index);
+        }
         if (b.withdrawals) {
             rlp_head.payload_length += length(*b.withdrawals);
         }
@@ -256,6 +259,9 @@ namespace rlp {
         encode_header(to, rlp_header_body(block_body));
         encode(to, block_body.transactions);
         encode(to, block_body.ommers);
+        if (block_body.consensus_parameter_index) {
+            encode(to, *block_body.consensus_parameter_index);
+        }
         if (block_body.withdrawals) {
             encode(to, *block_body.withdrawals);
         }
@@ -276,6 +282,15 @@ namespace rlp {
 
         if (DecodingResult res{decode_items(from, to.transactions, to.ommers)}; !res) {
             return res;
+        }
+
+        to.consensus_parameter_index = std::nullopt;
+        if (from.length() > leftover) {
+            uint64_t consensus_parameter_index;
+            if (DecodingResult res{decode(from, consensus_parameter_index, Leftover::kAllow)}; !res) {
+                return res;
+            }
+            to.consensus_parameter_index = consensus_parameter_index;
         }
 
         to.withdrawals = std::nullopt;
@@ -310,6 +325,15 @@ namespace rlp {
             return res;
         }
 
+        to.consensus_parameter_index = std::nullopt;
+        if (from.length() > leftover) {
+            uint64_t consensus_parameter_index;
+            if (DecodingResult res{decode(from, consensus_parameter_index, Leftover::kAllow)}; !res) {
+                return res;
+            }
+            to.consensus_parameter_index = consensus_parameter_index;
+        }
+
         to.withdrawals = std::nullopt;
         if (from.length() > leftover) {
             std::vector<Withdrawal> withdrawals;
@@ -341,6 +365,9 @@ namespace rlp {
         encode(to, block.header);
         encode(to, block.transactions);
         encode(to, block.ommers);
+        if (block.consensus_parameter_index) {
+            encode(to, *block.consensus_parameter_index);
+        }
         if (block.withdrawals) {
             encode(to, *block.withdrawals);
         }

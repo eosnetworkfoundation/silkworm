@@ -443,6 +443,7 @@ bool read_body(ROTxn& txn, const Bytes& key, bool read_senders, BlockBody& out) 
     if (!out.transactions.empty() && read_senders) {
         parse_senders(txn, key, out.transactions);
     }
+    out.consensus_parameter_index = body.consensus_parameter_index;
     return true;
 }
 
@@ -498,6 +499,7 @@ void write_body(RWTxn& txn, const BlockBody& body, const uint8_t (&hash)[kHashLe
     body_for_storage.txn_count = body.transactions.size();
     body_for_storage.base_txn_id =
         increment_map_sequence(txn, table::kBlockTransactions.name, body_for_storage.txn_count);
+    body_for_storage.consensus_parameter_index = body.consensus_parameter_index;
     Bytes value{body_for_storage.encode()};
     auto key{db::block_key(number, hash)};
 
@@ -1215,6 +1217,24 @@ std::optional<uint64_t> read_runtime_states_u64(ROTxn& txn, RuntimeState runtime
 void write_runtime_states_u64(RWTxn& txn, uint64_t num, RuntimeState runtime_state) {
     Bytes value{db::block_key(num)};
     write_runtime_states_bytes(txn, value, runtime_state);
+}
+
+std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, BlockNum index) {
+    auto cursor = txn.ro_cursor(table::kConsensusParameters);
+    auto key{db::block_key(index)};
+    auto data{cursor->find(to_slice(key), /*throw_notfound=*/false)};
+    if (!data) {
+        return std::nullopt;
+    }
+    const auto encoded = from_slice(data.value);
+    return eosevm::ConsensusParameters::decode(encoded);
+}
+
+void update_consensus_parameters(RWTxn& txn, BlockNum index, const eosevm::ConsensusParameters& config) {
+    auto cursor = txn.rw_cursor(table::kConsensusParameters);
+    auto key{db::block_key(index)};
+
+    cursor->upsert(to_slice(key), mdbx::slice(config.encode()));
 }
 
 }  // namespace silkworm::db
