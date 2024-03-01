@@ -87,6 +87,7 @@ endif()
 target_include_directories(silkworm_node PUBLIC "${SILKWORM_MAIN_DIR}")
 
 set(SILKWORM_NODE_PUBLIC_LIBS
+    eos_evm
     silkworm_core
     silkworm_infra
     silkworm_sentry

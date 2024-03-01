@@ -32,6 +32,8 @@
 #include <silkworm/core/types/transaction.hpp>
 #include <silkworm/core/types/withdrawal.hpp>
 
+#include <eosevm/consensus_parameters.hpp>
+
 namespace silkworm {
 
 using TotalDifficulty = intx::uint256;
@@ -94,6 +96,9 @@ struct BlockBody {
     std::vector<BlockHeader> ommers;
     std::optional<std::vector<Withdrawal>> withdrawals{std::nullopt};
 
+    // EOS-EVM 
+    std::optional<uint64_t> consensus_parameter_index{std::nullopt};
+
     friend bool operator==(const BlockBody&, const BlockBody&);
 };
 
@@ -101,6 +106,7 @@ struct Block : public BlockBody {
     BlockHeader header;
 
     bool irreversible{false};
+    std::optional<eosevm::ConsensusParameters> consensus_parameters_cache;
     void recover_senders();
 };
 
