@@ -238,7 +238,7 @@ Stage::Result Execution::execute_batch(db::RWTxn& txn, BlockNum max_block_num, A
                 log_time = now + 5s;
             }
 
-            ExecutionProcessor processor(block, *rule_set_, buffer, node_settings_->chain_config.value());
+            ExecutionProcessor processor(block, *rule_set_, buffer, node_settings_->chain_config.value(), get_gas_params(block));
             processor.evm().analysis_cache = &analysis_cache;
             processor.evm().state_pool = &state_pool;
 
@@ -627,5 +627,13 @@ void Execution::unwind_state_from_changeset(db::ROCursor& source_changeset, db::
         revert_state(new_key, new_value, plain_state_table, plain_code_table);
         src_data = source_changeset.to_previous(/*throw_notfound*/ false);
     }
+
 }
+
+evmone::gas_parameters Execution::get_gas_params(const Block& block) const{
+    //TODO: get gas params from db
+    (void)block;
+    return {};
+}
+
 }  // namespace silkworm::stagedsync

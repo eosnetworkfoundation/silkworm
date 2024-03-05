@@ -26,8 +26,8 @@
 namespace silkworm {
 
 ExecutionProcessor::ExecutionProcessor(const Block& block, protocol::IRuleSet& rule_set, State& state,
-                                       const ChainConfig& config)
-    : state_{state}, rule_set_{rule_set}, evm_{block, state_, config} {
+                                       const ChainConfig& config, const evmone::gas_parameters& gas_params)
+    : state_{state}, rule_set_{rule_set}, evm_{block, state_, config, gas_params} {
     evm_.beneficiary = rule_set.get_beneficiary(block.header);
 }
 

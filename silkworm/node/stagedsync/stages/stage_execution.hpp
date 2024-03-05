@@ -65,6 +65,8 @@ class Execution final : public Stage {
     static void revert_state(ByteView key, ByteView value, db::RWCursorDupSort& plain_state_table,
                              db::RWCursor& plain_code_table);
 
+    evmone::gas_parameters get_gas_params(const Block& block) const;
+
     // Stats
     std::mutex progress_mtx_;  // Synchronizes access to progress stats
     std::chrono::time_point<std::chrono::steady_clock> lap_time_{std::chrono::steady_clock::now()};

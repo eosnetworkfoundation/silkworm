@@ -41,12 +41,12 @@ namespace silkworm {
  * @param state The Ethereum state at the beginning of the block.
  */
 [[nodiscard]] inline ValidationResult execute_block(const Block& block, State& state,
-                                                    const ChainConfig& chain_config) noexcept {
+                                                    const ChainConfig& chain_config, const evmone::gas_parameters& gas_params) noexcept {
     auto rule_set{protocol::rule_set_factory(chain_config)};
     if (!rule_set) {
         return ValidationResult::kUnknownProtocolRuleSet;
     }
-    ExecutionProcessor processor{block, *rule_set, state, chain_config};
+    ExecutionProcessor processor{block, *rule_set, state, chain_config, gas_params};
     std::vector<Receipt> receipts;
     return processor.execute_and_write_block(receipts);
 }

@@ -40,7 +40,7 @@ class Blockchain {
      * In the beginning the state must have the genesis allocation.
      * Later on the state may only be modified by the created instance of Blockchain.
      */
-    explicit Blockchain(State& state, const ChainConfig& config, const Block& genesis_block);
+    explicit Blockchain(State& state, const ChainConfig& config, const Block& genesis_block, const evmone::gas_parameters& gas_params);
 
     // Not copyable nor movable
     Blockchain(const Blockchain&) = delete;
@@ -71,6 +71,7 @@ class Blockchain {
     RuleSetPtr rule_set_;
     std::unordered_map<evmc::bytes32, ValidationResult> bad_blocks_;
     std::vector<Receipt> receipts_;
+    evmone::gas_parameters gas_params_;
 };
 
 }  // namespace silkworm::protocol

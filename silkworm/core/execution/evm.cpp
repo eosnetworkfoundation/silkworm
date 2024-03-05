@@ -61,12 +61,14 @@ class DelegatingTracer : public evmone::Tracer {
     IntraBlockState& intra_block_state_;
 };
 
-EVM::EVM(const Block& block, IntraBlockState& state, const ChainConfig& config) noexcept
+EVM::EVM(const Block& block, IntraBlockState& state, const ChainConfig& config, const evmone::gas_parameters& gas_params) noexcept
     : beneficiary{block.header.beneficiary},
       block_{block},
       state_{state},
       config_{config},
-      evm1_{evmc_create_evmone()} {}
+      evm1_{evmc_create_evmone()},
+      gas_params_{gas_params},
+      eos_evm_version_{config.eos_evm_version(block.header)} { }
 
 EVM::~EVM() { evm1_->destroy(evm1_); }
 
@@ -80,6 +82,7 @@ CallResult EVM::execute(const Transaction& txn, uint64_t gas) noexcept {
 
     const evmc_message message{
         .kind = contract_creation ? EVMC_CREATE : EVMC_CALL,
+        .depth = 0,
         .gas = static_cast<int64_t>(gas),
         .recipient = destination,
         .sender = *txn.from,
@@ -157,7 +160,7 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
 
     if (evm_res.status_code == EVMC_SUCCESS) {
         const size_t code_len{evm_res.output_size};
-        const uint64_t code_deploy_gas{code_len * protocol::fee::kGCodeDeposit};
+        const uint64_t code_deploy_gas{code_len * (eos_evm_version_ > 0 ? gas_params_.G_codedeposit : protocol::fee::kGCodeDeposit)};
 
         if (rev >= EVMC_SPURIOUS_DRAGON && code_len > protocol::kMaxCodeSize) {
             // EIP-170: Contract code size limit
@@ -213,6 +216,11 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
 
     const auto snapshot{state_.take_snapshot()};
 
+    const evmc_revision rev{revision()};
+    bool recipient_is_dead = !is_reserved_address(message.recipient) &&
+        !precompile::is_precompile(message.recipient, rev) &&
+        state_.is_dead(message.recipient);
+
     if (message.kind == EVMC_CALL) {
         if (message.flags & EVMC_STATIC) {
             // Match geth logic
@@ -223,8 +231,6 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
             state_.add_to_balance(message.recipient, value);
         }
     }
-
-    const evmc_revision rev{revision()};
 
     if (precompile::is_precompile(message.code_address, rev)) {
         static_assert(std::size(precompile::kContracts) < 256);
@@ -251,13 +257,31 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
             tracer.get().on_execution_end(res.raw(),state_);
         }
     } else {
-        const ByteView code{state_.get_code(message.code_address)};
+
+        evmc_message revisted_message{message};
+        if(eos_evm_version_ > 0 && revisted_message.depth == 0 && recipient_is_dead) {
+            if ((res.gas_left -= static_cast<int64_t>(gas_params_.G_txnewaccount)) < 0) {
+                // If we run out of gas lets do everything here
+                state_.revert_to_snapshot(snapshot);
+                res.status_code = EVMC_OUT_OF_GAS;
+                res.gas_refund = 0;
+                res.gas_left = 0;
+                for (auto tracer : tracers_) {
+                    tracer.get().on_execution_start(rev, revisted_message, {});
+                    tracer.get().on_execution_end(res.raw(), state_);
+                }
+                return res;
+            }
+            revisted_message.gas = res.gas_left;
+        }
+
+        const ByteView code{state_.get_code(revisted_message.code_address)};
         if (code.empty() && tracers_.empty()) {  // Do not skip execution if there are any tracers
             return res;
         }
 
-        const evmc::bytes32 code_hash{state_.get_code_hash(message.code_address)};
-        res = evmc::Result{execute(message, code, &code_hash)};
+        const evmc::bytes32 code_hash{state_.get_code_hash(revisted_message.code_address)};
+        res = evmc::Result{execute(revisted_message, code, &code_hash)};
     }
 
     if (res.status_code != EVMC_SUCCESS) {
@@ -320,7 +344,9 @@ evmc_result EVM::execute_with_baseline_interpreter(evmc_revision rev, const evmc
 
     EvmHost host{*this};
     gsl::owner<evmone::ExecutionState*> state{acquire_state()};
-    state->reset(msg, rev, host.get_interface(), host.to_context(), code);
+
+    state->reset(msg, rev, host.get_interface(), host.to_context(), code, gas_params_);
+    state->eos_evm_version = eos_evm_version_;
 
     const auto vm{static_cast<evmone::VM*>(evm1_)};
     evmc_result res{evmone::baseline::execute(*vm, msg.gas, *state, *analysis)};

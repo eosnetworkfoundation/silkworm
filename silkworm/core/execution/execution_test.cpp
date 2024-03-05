@@ -76,7 +76,7 @@ TEST_CASE("Execute two blocks") {
     // Execute first block
     // ---------------------------------------
 
-    REQUIRE(execute_block(block, state, test::kLondonConfig) == ValidationResult::kOk);
+    REQUIRE(execute_block(block, state, test::kLondonConfig, {}) == ValidationResult::kOk);
 
     auto contract_address{create_address(sender, /*nonce=*/0)};
     std::optional<Account> contract_account{state.read_account(contract_address)};
@@ -114,7 +114,7 @@ TEST_CASE("Execute two blocks") {
     block.transactions[0].data = *from_hex(new_val);
     block.transactions[0].max_priority_fee_per_gas = 20 * kGiga;
 
-    REQUIRE(execute_block(block, state, test::kLondonConfig) == ValidationResult::kOk);
+    REQUIRE(execute_block(block, state, test::kLondonConfig, {}) == ValidationResult::kOk);
 
     storage0 = state.read_storage(contract_address, kDefaultIncarnation, storage_key0);
     CHECK(to_hex(storage0) == new_val);

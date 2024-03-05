@@ -83,7 +83,7 @@ TEST_CASE("Stage History Index") {
         // ---------------------------------------
         // Execute first block
         // ---------------------------------------
-        CHECK(execute_block(block, buffer, kMainnetConfig) == ValidationResult::kOk);
+        CHECK(execute_block(block, buffer, kMainnetConfig, {}) == ValidationResult::kOk);
         auto contract_address{create_address(sender, /*nonce=*/0)};
 
         // ---------------------------------------
@@ -102,7 +102,7 @@ TEST_CASE("Stage History Index") {
         block.transactions[0].to = contract_address;
         block.transactions[0].data = *from_hex(new_val);
 
-        CHECK(execute_block(block, buffer, kMainnetConfig) == ValidationResult::kOk);
+        CHECK(execute_block(block, buffer, kMainnetConfig, {}) == ValidationResult::kOk);
 
         // ---------------------------------------
         // Execute third block
@@ -120,7 +120,7 @@ TEST_CASE("Stage History Index") {
         block.transactions[0].to = contract_address;
         block.transactions[0].data = *from_hex(new_val);
 
-        CHECK(execute_block(block, buffer, kMainnetConfig) == ValidationResult::kOk);
+        CHECK(execute_block(block, buffer, kMainnetConfig, {}) == ValidationResult::kOk);
         buffer.write_to_db();
         db::stages::write_stage_progress(txn, db::stages::kExecutionKey, 3);
 

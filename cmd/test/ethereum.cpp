@@ -254,7 +254,7 @@ RunResults blockchain_test(const nlohmann::json& json_test) {
     InMemoryState state;
     init_pre_state(json_test["pre"], state);
 
-    Blockchain blockchain{state, config, genesis_block};
+    Blockchain blockchain{state, config, genesis_block, {}};
     blockchain.state_pool = &execution_state_pool;
     blockchain.exo_evm = exo_evm;
 

@@ -33,7 +33,7 @@ class ExecutionProcessor {
     ExecutionProcessor(const ExecutionProcessor&) = delete;
     ExecutionProcessor& operator=(const ExecutionProcessor&) = delete;
 
-    ExecutionProcessor(const Block& block, protocol::IRuleSet& rule_set, State& state, const ChainConfig& config);
+    ExecutionProcessor(const Block& block, protocol::IRuleSet& rule_set, State& state, const ChainConfig& config, const evmone::gas_parameters& gas_params);
 
     /**
      * Execute a transaction, but do not write to the DB yet.

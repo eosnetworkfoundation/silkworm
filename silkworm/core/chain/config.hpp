@@ -176,6 +176,7 @@ struct ChainConfig {
     [[nodiscard]] evmc_revision determine_revision_by_block(uint64_t block_number, uint64_t block_time) const noexcept;
 
     [[nodiscard]] evmc_revision revision(const BlockHeader& header) const noexcept;
+    [[nodiscard]] uint64_t eos_evm_version(const BlockHeader& header) const noexcept;
 
     [[nodiscard]] std::vector<BlockNum> distinct_fork_numbers() const;
     [[nodiscard]] std::vector<BlockTime> distinct_fork_times() const;

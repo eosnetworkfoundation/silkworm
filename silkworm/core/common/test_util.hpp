@@ -61,6 +61,12 @@ inline constexpr ChainConfig kShanghaiConfig{
     ._shanghai_time = 0,
 };
 
+inline constexpr ChainConfig kIstanbulTrustConfig{
+    .chain_id = 15555,
+    .protocol_rule_set = protocol::RuleSetType::kTrust,
+    ._version = 1
+};
+
 static const std::map<std::string, ChainConfig> kNetworkConfig{
     {"Frontier", test::kFrontierConfig},
     {"Homestead",

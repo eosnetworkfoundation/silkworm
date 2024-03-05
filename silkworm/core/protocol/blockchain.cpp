@@ -21,8 +21,8 @@
 
 namespace silkworm::protocol {
 
-Blockchain::Blockchain(State& state, const ChainConfig& config, const Block& genesis_block)
-    : state_{state}, config_{config}, rule_set_{rule_set_factory(config)} {
+Blockchain::Blockchain(State& state, const ChainConfig& config, const Block& genesis_block, const evmone::gas_parameters& gas_params)
+    : state_{state}, config_{config}, rule_set_{rule_set_factory(config)}, gas_params_{gas_params} {
     prime_state_with_genesis(genesis_block);
 }
 
@@ -91,7 +91,7 @@ ValidationResult Blockchain::insert_block(Block& block, bool check_state_root) {
 }
 
 ValidationResult Blockchain::execute_block(const Block& block, bool check_state_root) {
-    ExecutionProcessor processor{block, *rule_set_, state_, config_};
+    ExecutionProcessor processor{block, *rule_set_, state_, config_, gas_params_};
     processor.evm().state_pool = state_pool;
     processor.evm().exo_evm = exo_evm;
 
