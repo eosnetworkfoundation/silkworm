@@ -216,6 +216,11 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
 
     const auto snapshot{state_.take_snapshot()};
 
+    const evmc_revision rev{revision()};
+    bool recipient_is_dead = !is_reserved_address(message.recipient) &&
+        !precompile::is_precompile(message.recipient, rev) &&
+        state_.is_dead(message.recipient);
+
     if (message.kind == EVMC_CALL) {
         if (message.flags & EVMC_STATIC) {
             // Match geth logic
@@ -226,8 +231,6 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
             state_.add_to_balance(message.recipient, value);
         }
     }
-
-    const evmc_revision rev{revision()};
 
     if (precompile::is_precompile(message.code_address, rev)) {
         static_assert(std::size(precompile::kContracts) < 256);
@@ -255,7 +258,8 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
         }
     } else {
 
-        if(eos_evm_version_ > 0 && message.depth == 0 && state_.is_dead(message.recipient)) {
+        evmc_message revisted_message{message};
+        if(eos_evm_version_ > 0 && revisted_message.depth == 0 && recipient_is_dead) {
             if ((res.gas_left -= static_cast<int64_t>(gas_params_.G_txnewaccount)) < 0) {
                 // If we run out of gas lets do everything here
                 state_.revert_to_snapshot(snapshot);
@@ -263,20 +267,21 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
                 res.gas_refund = 0;
                 res.gas_left = 0;
                 for (auto tracer : tracers_) {
-                    tracer.get().on_execution_start(rev, message, {});
+                    tracer.get().on_execution_start(rev, revisted_message, {});
                     tracer.get().on_execution_end(res.raw(), state_);
                 }
                 return res;
             }
+            revisted_message.gas = res.gas_left;
         }
 
-        const ByteView code{state_.get_code(message.code_address)};
+        const ByteView code{state_.get_code(revisted_message.code_address)};
         if (code.empty() && tracers_.empty()) {  // Do not skip execution if there are any tracers
             return res;
         }
 
-        const evmc::bytes32 code_hash{state_.get_code_hash(message.code_address)};
-        res = evmc::Result{execute(message, code, &code_hash)};
+        const evmc::bytes32 code_hash{state_.get_code_hash(revisted_message.code_address)};
+        res = evmc::Result{execute(revisted_message, code, &code_hash)};
     }
 
     if (res.status_code != EVMC_SUCCESS) {
