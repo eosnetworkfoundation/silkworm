@@ -217,9 +217,7 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
     const auto snapshot{state_.take_snapshot()};
 
     const evmc_revision rev{revision()};
-    bool recipient_is_dead = !is_reserved_address(message.recipient) &&
-        !precompile::is_precompile(message.recipient, rev) &&
-        state_.is_dead(message.recipient);
+    bool recipient_exists = account_exists(message.recipient);
 
     if (message.kind == EVMC_CALL) {
         if (message.flags & EVMC_STATIC) {
@@ -259,7 +257,7 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
     } else {
 
         evmc_message revisted_message{message};
-        if(eos_evm_version_ > 0 && revisted_message.depth == 0 && recipient_is_dead) {
+        if(eos_evm_version_ > 0 && revisted_message.depth == 0 && !is_zero(evmc::bytes32{revisted_message.value}) && !recipient_exists) {
             if ((res.gas_left -= static_cast<int64_t>(gas_params_.G_txnewaccount)) < 0) {
                 // If we run out of gas lets do everything here
                 state_.revert_to_snapshot(snapshot);
