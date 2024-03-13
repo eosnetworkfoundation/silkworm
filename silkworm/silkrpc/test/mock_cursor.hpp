@@ -33,6 +33,8 @@ class MockCursor : public ethdb::Cursor {
     MOCK_METHOD((boost::asio::awaitable<void>), open_cursor, (const std::string& table_name, bool is_dup_sorted));
     MOCK_METHOD((boost::asio::awaitable<KeyValue>), seek, (silkworm::ByteView key));
     MOCK_METHOD((boost::asio::awaitable<KeyValue>), seek_exact, (silkworm::ByteView key));
+    MOCK_METHOD((boost::asio::awaitable<KeyValue>), prev, ());
+    MOCK_METHOD((boost::asio::awaitable<KeyValue>), last, ());
     MOCK_METHOD((boost::asio::awaitable<KeyValue>), next, ());
     MOCK_METHOD((boost::asio::awaitable<void>), close_cursor, ());
 };
@@ -43,6 +45,8 @@ class MockCursorDupSort : public ethdb::CursorDupSort {
     MOCK_METHOD((boost::asio::awaitable<void>), open_cursor, (const std::string& table_name, bool is_dup_sorted));
     MOCK_METHOD((boost::asio::awaitable<KeyValue>), seek, (silkworm::ByteView key));
     MOCK_METHOD((boost::asio::awaitable<KeyValue>), seek_exact, (silkworm::ByteView key));
+    MOCK_METHOD((boost::asio::awaitable<KeyValue>), prev, ());
+    MOCK_METHOD((boost::asio::awaitable<KeyValue>), last, ());
     MOCK_METHOD((boost::asio::awaitable<KeyValue>), next, ());
     MOCK_METHOD((boost::asio::awaitable<KeyValue>), next_dup, ());
     MOCK_METHOD((boost::asio::awaitable<void>), close_cursor, ());

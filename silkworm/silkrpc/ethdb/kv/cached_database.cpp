@@ -30,6 +30,10 @@ boost::asio::awaitable<KeyValue> CachedDatabase::get(const std::string& table, s
     co_return co_await txn_database_.get(table, key);
 }
 
+boost::asio::awaitable<silkworm::Bytes> CachedDatabase::get_exact_or_previous(const std::string& table, ByteView key) const {
+    co_return co_await txn_database_.get_exact_or_previous(table, key);
+}
+
 boost::asio::awaitable<silkworm::Bytes> CachedDatabase::get_one(const std::string& table, silkworm::ByteView key) const {
     // Just PlainState and Code tables are present in state cache
     if (table == db::table::kPlainStateName) {

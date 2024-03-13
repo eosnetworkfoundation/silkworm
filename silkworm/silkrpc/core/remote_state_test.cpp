@@ -49,6 +49,9 @@ TEST_CASE("async remote buffer", "[silkrpc][core][remote_buffer]") {
         [[nodiscard]] boost::asio::awaitable<silkworm::Bytes> get_one(const std::string& /*table*/, silkworm::ByteView /*key*/) const override {
             co_return value_;
         }
+        [[nodiscard]] boost::asio::awaitable<silkworm::Bytes> get_exact_or_previous(const std::string& /*table*/, silkworm::ByteView /*key*/) const override {
+            co_return value_;
+        }
         [[nodiscard]] boost::asio::awaitable<std::optional<silkworm::Bytes>> get_both_range(const std::string& /*table*/, silkworm::ByteView /*key*/, silkworm::ByteView /*subkey*/) const override {
             co_return silkworm::Bytes{};
         }

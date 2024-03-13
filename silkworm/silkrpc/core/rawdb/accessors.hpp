@@ -38,6 +38,8 @@ class DatabaseReader {
 
     [[nodiscard]] virtual awaitable<KeyValue> get(const std::string& table, silkworm::ByteView key) const = 0;
 
+    [[nodiscard]] virtual awaitable<silkworm::Bytes> get_exact_or_previous(const std::string& table, ByteView key) const = 0;
+
     [[nodiscard]] virtual awaitable<silkworm::Bytes> get_one(const std::string& table, silkworm::ByteView key) const = 0;
 
     [[nodiscard]] virtual awaitable<std::optional<silkworm::Bytes>> get_both_range(const std::string& table, silkworm::ByteView key, silkworm::ByteView subkey) const = 0;

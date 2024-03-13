@@ -435,4 +435,13 @@ boost::asio::awaitable<intx::uint256> read_cumulative_gas_used(const core::rawdb
     co_return cumulative_gas_index;
 }
 
+boost::asio::awaitable<std::optional<eosevm::ConsensusParameters>> read_consensus_parameters(const core::rawdb::DatabaseReader& reader, uint64_t block_number) {
+    const auto block_key = silkworm::db::block_key(block_number);
+    const auto value = co_await reader.get_exact_or_previous(db::table::kConsensusParametersName, block_key);
+    if (value.empty()) {
+        co_return std::nullopt;
+    }
+    co_return eosevm::ConsensusParameters::decode(value);
+}
+
 }  // namespace silkworm::rpc::core::rawdb

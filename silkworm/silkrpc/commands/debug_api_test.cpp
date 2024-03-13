@@ -99,6 +99,32 @@ class DummyCursor : public ethdb::CursorDupSort {
         co_return kv;
     }
 
+    awaitable<KeyValue> prev() override {
+        KeyValue out;
+
+        if (itr_ != table_.begin() && table_.begin() != table_.end()) {
+            --itr_;
+            auto key{*silkworm::from_hex(itr_.key())};
+            auto value{*silkworm::from_hex(itr_.value().get<std::string>())};
+            out = KeyValue{key, value};
+        }
+
+        co_return out;
+    }
+
+    awaitable<KeyValue> last() override {
+        KeyValue out;
+
+        if (table_.begin() != table_.end()) {
+            itr_ = --table_.end();
+            auto key{*silkworm::from_hex(itr_.key())};
+            auto value{*silkworm::from_hex(itr_.value().get<std::string>())};
+            out = KeyValue{key, value};
+        }
+
+        co_return out;
+    }
+
     awaitable<KeyValue> next() override {
         KeyValue out;
 
