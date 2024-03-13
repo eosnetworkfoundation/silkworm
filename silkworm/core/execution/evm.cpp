@@ -364,14 +364,18 @@ void EVM::add_tracer(EvmTracer& tracer) noexcept {
     tracers_.push_back(std::ref(tracer));
 }
 
-bool EvmHost::account_exists(const evmc::address& address) const noexcept {
-    const evmc_revision rev{evm_.revision()};
+bool EVM::account_exists(const evmc::address& address) const noexcept {
+    const evmc_revision rev{revision()};
 
     if (rev >= EVMC_SPURIOUS_DRAGON) {
-        return !evm_.state().is_dead(address);
+        return !state_.is_dead(address);
     } else {
-        return evm_.state().exists(address);
+        return state_.exists(address);
     }
+}
+
+bool EvmHost::account_exists(const evmc::address& address) const noexcept {
+    return evm_.account_exists(address);
 }
 
 evmc_access_status EvmHost::access_account(const evmc::address& address) noexcept {

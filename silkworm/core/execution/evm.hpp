@@ -92,6 +92,8 @@ class EVM {
     void add_tracer(EvmTracer& tracer) noexcept;
     [[nodiscard]] const EvmTracers& tracers() const noexcept { return tracers_; };
 
+    bool account_exists(const evmc::address& address) const noexcept;
+
     AnalysisCache* analysis_cache{nullptr};                   // provide one for better performance
     ObjectPool<evmone::ExecutionState>* state_pool{nullptr};  // ditto
 
@@ -105,6 +107,14 @@ class EVM {
 
     void update_gas_params(const evmone::gas_parameters& gas_params) {
        gas_params_ = gas_params;
+    }
+
+    const evmone::gas_parameters& get_gas_params() {
+      return gas_params_;
+    }
+
+    uint64_t get_eos_evm_version() {
+      return eos_evm_version_;
     }
 
   private:
