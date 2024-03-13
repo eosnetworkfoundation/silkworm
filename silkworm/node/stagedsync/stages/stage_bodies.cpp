@@ -47,7 +47,7 @@ void BodiesStage::BodyDataModel::set_preverified_height(BlockNum height) { preve
 // update_tables has the responsibility to update all tables related with the block that is passed as parameter
 // Right now there is no table that need to be updated but the name of the method is retained because it makes a pair
 // with the same method in the HeadersStages::HeaderDataModel class
-void BodiesStage::BodyDataModel::update_tables(const Block& block) {
+void BodiesStage::BodyDataModel::update_tables(const Block& block, const evmone::gas_parameters& gas_params) {
     Hash block_hash = block.header.hash();  // save cpu
     BlockNum block_num = block.header.number;
 
@@ -58,7 +58,9 @@ void BodiesStage::BodyDataModel::update_tables(const Block& block) {
         // Here we skip a full body pre-validation like
         // validation_result = rule_set_->pre_validate_block_body(block, chain_state_);
         // because we assume that the sync (BlockExchange) has already checked transaction & ommers root hash
-        validation_result = protocol::pre_validate_transactions(block, chain_config_);
+
+        auto eos_evm_version = chain_config_.eos_evm_version(block.header);
+        validation_result = protocol::pre_validate_transactions(block, chain_config_, eos_evm_version, gas_params);
         if (validation_result == ValidationResult::kOk) {
             validation_result = rule_set_->validate_ommers(block, chain_state_);
         }
@@ -125,7 +127,7 @@ Stage::Result BodiesStage::forward(db::RWTxn& tx) {
             bool present = body_persistence.get_canonical_block(current_height_, block);
             if (!present) throw std::logic_error("table Bodies has a hole");
 
-            body_persistence.update_tables(block);
+            body_persistence.update_tables(block, get_gas_params(tx, block));
 
             height_progress.set(body_persistence.highest_height());
         }

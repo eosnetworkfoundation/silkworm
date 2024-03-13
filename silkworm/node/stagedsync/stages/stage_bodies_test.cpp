@@ -70,7 +70,7 @@ TEST_CASE("BodiesStage - data model") {
         REQUIRE(bm.unwind_needed() == false);
         REQUIRE(bm.unwind_point() == 0);
 
-        bm.update_tables(block1);
+        bm.update_tables(block1, {});
 
         // check internal status
         REQUIRE(bm.highest_height() == 0);    // block is not valid so no progress
@@ -119,7 +119,7 @@ TEST_CASE("BodiesStage - data model") {
         REQUIRE(bm.unwind_needed() == false);
         REQUIRE(bm.unwind_point() == 0);
 
-        bm.update_tables(block1);  // validation must pass
+        bm.update_tables(block1, {});  // validation must pass
 
         // check internal status
         REQUIRE(bm.highest_height() == 1);
