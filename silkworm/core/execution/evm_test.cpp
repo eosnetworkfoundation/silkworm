@@ -770,7 +770,7 @@ TEST_CASE("EOS EVM G_txnewaccount") {
     Transaction txn{};
     txn.from = sender;
     txn.to = receiver;
-    txn.value = intx::uint256{0};
+    txn.value = intx::uint256{1};
 
     CallResult res = evm.execute(txn, 0);
     CHECK(res.status == EVMC_SUCCESS);
@@ -786,7 +786,5 @@ TEST_CASE("EOS EVM G_txnewaccount") {
     CHECK(res.gas_left == 0);
 
 }
-
-
 
 }  // namespace silkworm
