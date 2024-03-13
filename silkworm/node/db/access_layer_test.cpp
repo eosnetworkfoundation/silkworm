@@ -948,7 +948,7 @@ TEST_CASE("ConsensusParameters") {
     update_consensus_parameters(txn, 0, value2 );
     CHECK(read_consensus_parameters(txn, 0) == value2);
 
-    CHECK(read_consensus_parameters(txn, 1) == std::nullopt);
+    CHECK(read_consensus_parameters(txn, 1) == value2);
 
     update_consensus_parameters(txn, 1, value2 );
     CHECK(read_consensus_parameters(txn, 1) == value2);
@@ -956,6 +956,54 @@ TEST_CASE("ConsensusParameters") {
     update_consensus_parameters(txn, 1, value1 );
     CHECK(read_consensus_parameters(txn, 1) == value1);
 }
+
+TEST_CASE("ConsensusParameters 2") {
+    test::Context context;
+    auto& txn{context.rw_txn()};
+
+    constexpr eosevm::ConsensusParameters value10{
+        .min_gas_price = 10,
+        .gas_fee_parameters = eosevm::GasFeeParameters{
+            .gas_txnewaccount = 10,
+            .gas_newaccount = 10,
+            .gas_txcreate = 10,
+            .gas_codedeposit = 10,
+            .gas_sset = 10
+        }
+    };
+
+    constexpr eosevm::ConsensusParameters value20{
+        .min_gas_price = 20,
+        .gas_fee_parameters = eosevm::GasFeeParameters{
+            .gas_txnewaccount = 20,
+            .gas_newaccount = 20,
+            .gas_txcreate = 20,
+            .gas_codedeposit = 20,
+            .gas_sset = 20,
+        },
+    };
+
+    CHECK(read_consensus_parameters(txn,  5) == std::nullopt);
+    CHECK(read_consensus_parameters(txn, 10) == std::nullopt);
+    CHECK(read_consensus_parameters(txn, 15) == std::nullopt);
+    CHECK(read_consensus_parameters(txn, 20) == std::nullopt);
+    CHECK(read_consensus_parameters(txn, 25) == std::nullopt);
+
+    update_consensus_parameters(txn, 10, value10 );
+    CHECK(read_consensus_parameters(txn,  5) == std::nullopt);
+    CHECK(read_consensus_parameters(txn, 10) == value10);
+    CHECK(read_consensus_parameters(txn, 15) == value10);
+    CHECK(read_consensus_parameters(txn, 20) == value10);
+    CHECK(read_consensus_parameters(txn, 25) == value10);
+
+    update_consensus_parameters(txn, 20, value20 );
+    CHECK(read_consensus_parameters(txn,  5) == std::nullopt);
+    CHECK(read_consensus_parameters(txn, 10) == value10);
+    CHECK(read_consensus_parameters(txn, 15) == value10);
+    CHECK(read_consensus_parameters(txn, 20) == value20);
+    CHECK(read_consensus_parameters(txn, 25) == value20);
+}
+
 
 
 }  // namespace silkworm::db
