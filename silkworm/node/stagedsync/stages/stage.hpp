@@ -20,6 +20,7 @@
 #include <exception>
 #include <mutex>
 
+#include <evmone/execution_state.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/concurrency/stoppable.hpp>
 #include <silkworm/node/common/settings.hpp>
@@ -123,6 +124,10 @@ class Stage : public Stoppable {
     void throw_if_stopping();
 
   protected:
+    evmone::gas_parameters last_gas_params;
+    std::optional<uint64_t> last_consensus_parameter_index{std::nullopt};
+    const evmone::gas_parameters& get_gas_params(db::ROTxn& txn, const Block& block);
+
     SyncContext* sync_context_;                                  // Shared context across stages
     const char* stage_name_;                                     // Human friendly identifier of the stage
     NodeSettings* node_settings_;                                // Pointer to shared node configuration settings
