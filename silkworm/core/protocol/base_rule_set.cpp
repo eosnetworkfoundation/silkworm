@@ -32,7 +32,9 @@ ValidationResult BaseRuleSet::pre_validate_block_body(const Block& block, const 
         return ValidationResult::kWrongTransactionsRoot;
     }
 
-    if (ValidationResult err{pre_validate_transactions(block, chain_config_)}; err != ValidationResult::kOk) {
+    // NOTE: TrustRuleSet inherits directly from IRuleSet and it has `pre_validate_block_body` overrided that always return kOk
+    // So here we are sure that another RuleSet (other than trust) is being used, so we can call `pre_validate_transactions` with version=0 and gas_parameters={}
+    if (ValidationResult err{pre_validate_transactions(block, chain_config_, 0, {})}; err != ValidationResult::kOk) {
         return err;
     }
 

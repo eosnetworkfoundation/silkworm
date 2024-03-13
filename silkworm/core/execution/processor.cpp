@@ -70,7 +70,7 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     const intx::uint256 data_gas_price{evm_.block().header.data_gas_price().value_or(0)};
     state_.subtract_from_balance(*txn.from, txn.total_data_gas() * data_gas_price);
 
-    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev)};
+    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, evm_.get_eos_evm_version(), evm_.get_gas_params())};
     assert(g0 <= UINT64_MAX);  // true due to the precondition (transaction must be valid)
 
     const CallResult vm_res{evm_.execute(txn, txn.gas_limit - static_cast<uint64_t>(g0))};

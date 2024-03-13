@@ -371,7 +371,7 @@ RunResults transaction_test(const nlohmann::json& j) {
 
         if (ValidationResult err{
                 pre_validate_transaction(txn, rev, config.chain_id, /*base_fee_per_gas=*/std::nullopt,
-                                         /*data_gas_price=*/std::nullopt)};
+                                         /*data_gas_price=*/std::nullopt, 0, {})};
             err != ValidationResult::kOk) {
             if (should_be_valid) {
                 std::cout << "Validation error " << magic_enum::enum_name<ValidationResult>(err) << std::endl;
@@ -405,7 +405,7 @@ RunResults transaction_test(const nlohmann::json& j) {
         }
 
         const auto expected_intrinsic_gas{intx::from_string<intx::uint256>(test["intrinsicGas"].get<std::string>())};
-        const auto calculated_intrinsic_gas{intrinsic_gas(txn, rev)};
+        const auto calculated_intrinsic_gas{intrinsic_gas(txn, rev, 0, {})};
         if (calculated_intrinsic_gas != expected_intrinsic_gas) {
             std::cout << "Intrinsic gas mismatch for " << entry.key() << ":\n"
                       << intx::to_string(calculated_intrinsic_gas, /*base=*/16)
