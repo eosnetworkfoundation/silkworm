@@ -78,7 +78,7 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
 
     SILK_DEBUG << "hi: " << hi << ", lo: " << lo << ", cap: " << cap;
 
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database_, &config_, block.header);
+    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database_, &config_, block);
 
     auto this_executor = co_await boost::asio::this_coro::executor;
     auto exec_result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(ExecutionResult)>(

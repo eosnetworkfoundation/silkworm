@@ -13,6 +13,6 @@ using boost::asio::awaitable;
 
 namespace silkworm {
 
-    awaitable<std::tuple<uint64_t, evmone::gas_parameters>> load_gas_parameters(TransactionDatabase& tx_database, const silkworm::ChainConfig* chain_config_ptr, const silkworm::BlockHeader& header);
+    awaitable<std::tuple<uint64_t, evmone::gas_parameters>> load_gas_parameters(TransactionDatabase& tx_database, const silkworm::ChainConfig* chain_config_ptr, const silkworm::Block& header);
 
 }

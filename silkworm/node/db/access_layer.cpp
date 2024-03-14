@@ -1222,13 +1222,10 @@ void write_runtime_states_u64(RWTxn& txn, uint64_t num, RuntimeState runtime_sta
 std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, BlockNum index) {
     auto cursor = txn.ro_cursor(table::kConsensusParameters);
     auto key{db::block_key(index)};
-    auto data{cursor->lower_bound(to_slice(key), /*throw_notfound=*/false)};
+    auto data{cursor->find(to_slice(key), /*throw_notfound=*/false)};
     if (!data) {
-        data = cursor->to_last(/*throw_notfound=*/false);
-    } else if(endian::load_big_u64(static_cast<const unsigned char*>(data.key.data())) > index) {
-        data = cursor->to_previous(/*throw_notfound=*/false);
+        return std::nullopt;
     }
-    if (!data) return std::nullopt;
     const auto encoded = from_slice(data.value);
     return eosevm::ConsensusParameters::decode(encoded);
 }

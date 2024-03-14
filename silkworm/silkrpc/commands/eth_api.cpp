@@ -1139,7 +1139,7 @@ awaitable<void> EthereumRpcApi::handle_eth_call(const nlohmann::json& request, s
         silkworm::Transaction txn{call.to_transaction()};
         if(!txn.from.has_value()) txn.from = evmc::address{0};
 
-        const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block.header);
+        const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
 
         const core::rawdb::DatabaseReader& db_reader =
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database);
@@ -1288,7 +1288,7 @@ awaitable<void> EthereumRpcApi::handle_eth_create_access_list(const nlohmann::js
         const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
         const auto chain_id = co_await core::rawdb::read_chain_id(tx_database);
         const auto chain_config_ptr = lookup_chain_config(chain_id);
-        const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block.header);
+        const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
 
         const bool is_latest_block = co_await core::get_latest_executed_block_number(tx_database) == block_with_hash->block.header.number;
         const core::rawdb::DatabaseReader& db_reader =
@@ -1394,7 +1394,7 @@ awaitable<void> EthereumRpcApi::handle_eth_call_bundle(const nlohmann::json& req
         const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
         const auto chain_id = co_await core::rawdb::read_chain_id(tx_database);
         const auto chain_config_ptr = lookup_chain_config(chain_id);
-        const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block.header);
+        const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
 
         const bool is_latest_block = co_await core::get_latest_executed_block_number(tx_database) == block_with_hash->block.header.number;
         const core::rawdb::DatabaseReader& db_reader =
