@@ -132,7 +132,7 @@ TEST_CASE("check_tx_fee_less_cap returns false", "[silkrpc][common][util]") {
     CHECK(check == true);
 }
 
-TEST_CASE("is_replay_protected(tx legacy) returns true", "[silkrpc][common][util]") {
+TEST_CASE("is_replay_protected(tx non-legacy) returns true", "[silkrpc][common][util]") {
     const Transaction txn{
         {.type = TransactionType::kAccessList,
          .nonce = 0,
@@ -147,7 +147,7 @@ TEST_CASE("is_replay_protected(tx legacy) returns true", "[silkrpc][common][util
     };
 
     auto check = is_replay_protected(txn);
-    CHECK(check == false);
+    CHECK(check == true);
 }
 
 TEST_CASE("is_replay_protected returns true", "[silkrpc][common][util]") {
