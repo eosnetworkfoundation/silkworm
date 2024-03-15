@@ -97,7 +97,7 @@ struct BlockBody {
     std::optional<std::vector<Withdrawal>> withdrawals{std::nullopt};
 
     // EOS-EVM 
-    std::optional<uint64_t> consensus_parameter_index{std::nullopt};
+    std::optional<evmc::bytes32> consensus_parameter_index{std::nullopt};
 
     friend bool operator==(const BlockBody&, const BlockBody&);
 };

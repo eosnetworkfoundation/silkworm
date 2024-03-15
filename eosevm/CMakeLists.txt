@@ -25,6 +25,7 @@ add_library(eos_evm ${EOS_EVM_SRC})
 target_include_directories(eos_evm PUBLIC ${SILKWORM_MAIN_DIR})
 
 set(EOS_EVM_PUBLIC_LIBS
+    ethash::ethash
     intx::intx
     evmc
     tl::expected

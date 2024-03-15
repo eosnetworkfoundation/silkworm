@@ -252,10 +252,10 @@ std::optional<uint64_t> read_runtime_states_u64(ROTxn& txn, RuntimeState runtime
 void write_runtime_states_u64(RWTxn& txn, uint64_t num, RuntimeState runtime_state);
 
 //! \brief  Read ConsensusParameters indexed by blocknum that it is added.
-std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, BlockNum index);
+std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, const evmc::bytes32& index);
 
 //! \brief  Write ConsensusParameters indexed by blocknum that it is added. Can overwrite during forks.
-void update_consensus_parameters(RWTxn& txn, BlockNum index, const eosevm::ConsensusParameters& config);
+void update_consensus_parameters(RWTxn& txn, const evmc::bytes32&, const eosevm::ConsensusParameters& config);
 
 class DataModel {
   public:

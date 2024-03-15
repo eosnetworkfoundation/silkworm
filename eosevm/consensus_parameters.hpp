@@ -49,6 +49,7 @@ struct ConsensusParameters {
 
     // Decode from storage in db.
     static std::optional<ConsensusParameters> decode(silkworm::ByteView encoded) noexcept;
+    evmc::bytes32 hash() const noexcept;
     #endif
 
     friend bool operator==(const ConsensusParameters&, const ConsensusParameters&);
