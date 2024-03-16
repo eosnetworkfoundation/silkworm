@@ -54,6 +54,12 @@ Bytes block_key(BlockNum block_number, std::span<const uint8_t, kHashLength> has
     return key;
 }
 
+Bytes block_key(std::span<const uint8_t, kHashLength> hash) {
+    Bytes key(kHashLength, '\0');
+    std::memcpy(&key[0], hash.data(), kHashLength);
+    return key;
+}
+
 auto split_block_key(ByteView key) -> std::tuple<BlockNum, evmc::bytes32> {
     SILKWORM_ASSERT(key.size() == sizeof(BlockNum) + kHashLength);
 
@@ -195,7 +201,7 @@ namespace detail {
 
         to.consensus_parameter_index = std::nullopt;
         if (from.length() > leftover) {
-            uint64_t consensus_parameter_index;
+            evmc::bytes32 consensus_parameter_index;
             if (DecodingResult res{rlp::decode(from, consensus_parameter_index, rlp::Leftover::kAllow)}; !res) {
                 return res;
             }

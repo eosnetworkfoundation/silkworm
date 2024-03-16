@@ -286,7 +286,7 @@ namespace rlp {
 
         to.consensus_parameter_index = std::nullopt;
         if (from.length() > leftover) {
-            uint64_t consensus_parameter_index;
+            evmc::bytes32 consensus_parameter_index;
             if (DecodingResult res{decode(from, consensus_parameter_index, Leftover::kAllow)}; !res) {
                 return res;
             }
@@ -327,7 +327,7 @@ namespace rlp {
 
         to.consensus_parameter_index = std::nullopt;
         if (from.length() > leftover) {
-            uint64_t consensus_parameter_index;
+            evmc::bytes32 consensus_parameter_index;
             if (DecodingResult res{decode(from, consensus_parameter_index, Leftover::kAllow)}; !res) {
                 return res;
             }

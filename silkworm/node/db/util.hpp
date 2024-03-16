@@ -86,6 +86,8 @@ Bytes block_key(BlockNum block_number);
 // Erigon HeaderKey & BlockBodyKey
 Bytes block_key(BlockNum block_number, std::span<const uint8_t, kHashLength> hash);
 
+Bytes block_key(std::span<const uint8_t, kHashLength> hash);
+
 // Split a block key in BlockNum and Hash
 auto split_block_key(ByteView key) -> std::tuple<BlockNum, evmc::bytes32>;
 
@@ -131,7 +133,7 @@ namespace detail {
         std::vector<BlockHeader> ommers;
         std::optional<std::vector<Withdrawal>> withdrawals{std::nullopt};  // EIP-4895
 
-        std::optional<uint64_t> consensus_parameter_index{std::nullopt};
+        std::optional<evmc::bytes32> consensus_parameter_index{std::nullopt};
 
         [[nodiscard]] Bytes encode() const;
 

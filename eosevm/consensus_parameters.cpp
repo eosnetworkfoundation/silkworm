@@ -3,6 +3,7 @@
 #if not defined(ANTELOPE)
 #include <silkworm/core/common/assert.hpp>
 #include <silkworm/core/common/endian.hpp>
+#include <silkworm/core/common/util.hpp>
 #endif
 
 namespace eosevm {
@@ -72,6 +73,12 @@ std::optional<ConsensusParameters> ConsensusParameters::decode(silkworm::ByteVie
     }
 
     return config;
+}
+
+[[nodiscard]] evmc::bytes32 ConsensusParameters::hash() const noexcept  {
+    auto encoded = this->encode();
+    evmc::bytes32 header_hash = std::bit_cast<evmc_bytes32>(silkworm::keccak256(encoded)); 
+    return header_hash;
 }
 #endif
 
