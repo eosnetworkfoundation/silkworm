@@ -875,14 +875,14 @@ TEST_CASE("RuntimeStates_u64") {
 
     CHECK(read_runtime_states_u64(txn, kLibProcessed) == std::nullopt);
 
-    write_runtime_states_u64(txn, value1, index );
+    write_runtime_states_u64(txn, index, value1);
     CHECK(read_runtime_states_u64(txn, index) == value1);
 
-    write_runtime_states_u64(txn, value1, RuntimeState(1) );
+    write_runtime_states_u64(txn, RuntimeState(1), value1);
     CHECK(read_runtime_states_u64(txn, RuntimeState(1)) == value1);
 
 
-    write_runtime_states_u64(txn, value2, index );
+    write_runtime_states_u64(txn, index, value2);
     CHECK(read_runtime_states_u64(txn, index) == value2);
 
     CHECK(read_runtime_states_u64(txn, RuntimeState(1)) == value1);
@@ -901,14 +901,14 @@ TEST_CASE("RuntimeStates_bytes") {
 
     CHECK(read_runtime_states_bytes(txn, kLibProcessed) == std::nullopt);
 
-    write_runtime_states_bytes(txn, value1, index );
+    write_runtime_states_bytes(txn, index, value1);
     CHECK(read_runtime_states_bytes(txn, index) == value1);
 
-    write_runtime_states_bytes(txn, value1, RuntimeState(1) );
+    write_runtime_states_bytes(txn, RuntimeState(1), value1);
     CHECK(read_runtime_states_bytes(txn, RuntimeState(1)) == value1);
 
 
-    write_runtime_states_bytes(txn, value2, index );
+    write_runtime_states_bytes(txn, index, value2);
     CHECK(read_runtime_states_bytes(txn, index) == value2);
 
     CHECK(read_runtime_states_bytes(txn, RuntimeState(1)) == value1);
