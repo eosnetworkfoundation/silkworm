@@ -81,7 +81,7 @@ static BlockBody sample_block_body() {
     body.ommers[0].prev_randao = 0xf0a53dfdd6c2f2a661e718ef29092de60d81d45f84044bec7bf4b36630b2bc08_bytes32;
     body.ommers[0].nonce[7] = 35;
 
-    body.consensus_parameter_index = 1234;
+    body.consensus_parameter_index = evmc::bytes32(1234);
     return body;
 }
 
@@ -529,7 +529,7 @@ TEST_CASE("Headers and bodies") {
         REQUIRE(b == header.number);
         REQUIRE(h == header.hash());
 
-        CHECK(block.consensus_parameter_index == 1234);
+        CHECK(block.consensus_parameter_index == evmc::bytes32(1234));
     }
 
     SECTION("process_blocks_at_height") {
@@ -875,14 +875,14 @@ TEST_CASE("RuntimeStates_u64") {
 
     CHECK(read_runtime_states_u64(txn, kLibProcessed) == std::nullopt);
 
-    write_runtime_states_u64(txn, value1, index );
+    write_runtime_states_u64(txn, index, value1);
     CHECK(read_runtime_states_u64(txn, index) == value1);
 
-    write_runtime_states_u64(txn, value1, RuntimeState(1) );
+    write_runtime_states_u64(txn, RuntimeState(1), value1);
     CHECK(read_runtime_states_u64(txn, RuntimeState(1)) == value1);
 
 
-    write_runtime_states_u64(txn, value2, index );
+    write_runtime_states_u64(txn, index, value2);
     CHECK(read_runtime_states_u64(txn, index) == value2);
 
     CHECK(read_runtime_states_u64(txn, RuntimeState(1)) == value1);
@@ -901,14 +901,14 @@ TEST_CASE("RuntimeStates_bytes") {
 
     CHECK(read_runtime_states_bytes(txn, kLibProcessed) == std::nullopt);
 
-    write_runtime_states_bytes(txn, value1, index );
+    write_runtime_states_bytes(txn, index, value1);
     CHECK(read_runtime_states_bytes(txn, index) == value1);
 
-    write_runtime_states_bytes(txn, value1, RuntimeState(1) );
+    write_runtime_states_bytes(txn, RuntimeState(1), value1);
     CHECK(read_runtime_states_bytes(txn, RuntimeState(1)) == value1);
 
 
-    write_runtime_states_bytes(txn, value2, index );
+    write_runtime_states_bytes(txn, index, value2);
     CHECK(read_runtime_states_bytes(txn, index) == value2);
 
     CHECK(read_runtime_states_bytes(txn, RuntimeState(1)) == value1);
@@ -940,21 +940,27 @@ TEST_CASE("ConsensusParameters") {
     },
     };
 
-    CHECK(read_consensus_parameters(txn, 0) == std::nullopt);
+    CHECK(read_consensus_parameters(txn, evmc::bytes32(0)) == std::nullopt);
 
-    update_consensus_parameters(txn, 0, value1 );
-    CHECK(read_consensus_parameters(txn, 0) == value1);
+    update_consensus_parameters(txn, evmc::bytes32(0), value1 );
+    CHECK(read_consensus_parameters(txn, evmc::bytes32(0)) == value1);
 
-    update_consensus_parameters(txn, 0, value2 );
-    CHECK(read_consensus_parameters(txn, 0) == value2);
+    update_consensus_parameters(txn, evmc::bytes32(0), value2 );
+    CHECK(read_consensus_parameters(txn, evmc::bytes32(0)) == value2);
 
-    CHECK(read_consensus_parameters(txn, 1) == std::nullopt);
+    CHECK(read_consensus_parameters(txn, evmc::bytes32(1)) == std::nullopt);
 
-    update_consensus_parameters(txn, 1, value2 );
-    CHECK(read_consensus_parameters(txn, 1) == value2);
+    update_consensus_parameters(txn, evmc::bytes32(1), value2 );
+    CHECK(read_consensus_parameters(txn, evmc::bytes32(1)) == value2);
 
-    update_consensus_parameters(txn, 1, value1 );
-    CHECK(read_consensus_parameters(txn, 1) == value1);
+    update_consensus_parameters(txn, evmc::bytes32(1), value1 );
+    CHECK(read_consensus_parameters(txn, evmc::bytes32(1)) == value1);
+
+    update_consensus_parameters(txn, value1.hash(), value1 );
+    CHECK(read_consensus_parameters(txn, value1.hash()) == value1);
+
+    update_consensus_parameters(txn, value2.hash(), value2 );
+    CHECK(read_consensus_parameters(txn, value2.hash()) == value2);
 }
 
 }  // namespace silkworm::db

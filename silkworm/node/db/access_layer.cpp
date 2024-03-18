@@ -1196,7 +1196,7 @@ std::optional<ByteView> read_runtime_states_bytes(ROTxn& txn, RuntimeState runti
     return from_slice(data.value);
 }
 
-void write_runtime_states_bytes(RWTxn& txn, const Bytes value, RuntimeState runtime_state) {
+void write_runtime_states_bytes(RWTxn& txn, RuntimeState runtime_state, const Bytes value) {
     auto cursor = txn.rw_cursor(table::kRuntimeStates);
     auto key{db::block_key(runtime_state)};
     cursor->upsert(to_slice(key), db::to_slice(value));
@@ -1214,14 +1214,14 @@ std::optional<uint64_t> read_runtime_states_u64(ROTxn& txn, RuntimeState runtime
     return num;
 }
 
-void write_runtime_states_u64(RWTxn& txn, uint64_t num, RuntimeState runtime_state) {
+void write_runtime_states_u64(RWTxn& txn, RuntimeState runtime_state, uint64_t num) {
     Bytes value{db::block_key(num)};
-    write_runtime_states_bytes(txn, value, runtime_state);
+    write_runtime_states_bytes(txn, runtime_state, value);
 }
 
-std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, BlockNum index) {
+std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, const evmc::bytes32& index) {
     auto cursor = txn.ro_cursor(table::kConsensusParameters);
-    auto key{db::block_key(index)};
+    auto key{db::block_key(index.bytes)};
     auto data{cursor->find(to_slice(key), /*throw_notfound=*/false)};
     if (!data) {
         return std::nullopt;
@@ -1230,9 +1230,9 @@ std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn,
     return eosevm::ConsensusParameters::decode(encoded);
 }
 
-void update_consensus_parameters(RWTxn& txn, BlockNum index, const eosevm::ConsensusParameters& config) {
+void update_consensus_parameters(RWTxn& txn, const evmc::bytes32& index, const eosevm::ConsensusParameters& config) {
     auto cursor = txn.rw_cursor(table::kConsensusParameters);
-    auto key{db::block_key(index)};
+    auto key{db::block_key(index.bytes)};
 
     cursor->upsert(to_slice(key), mdbx::slice(config.encode()));
 }
