@@ -125,7 +125,7 @@ class Stage : public Stoppable {
 
   protected:
     evmone::gas_parameters last_gas_params;
-    std::optional<uint64_t> last_consensus_parameter_index{std::nullopt};
+    std::optional<evmc::bytes32> last_consensus_parameter_index{std::nullopt};
     const evmone::gas_parameters& get_gas_params(db::ROTxn& txn, const Block& block);
 
     SyncContext* sync_context_;                                  // Shared context across stages
