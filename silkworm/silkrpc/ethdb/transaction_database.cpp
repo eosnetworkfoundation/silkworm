@@ -31,18 +31,6 @@ awaitable<KeyValue> TransactionDatabase::get(const std::string& table, ByteView 
     co_return kv_pair;
 }
 
-awaitable<silkworm::Bytes> TransactionDatabase::get_exact_or_previous(const std::string& table, ByteView key) const {
-    const auto cursor = co_await tx_.cursor(table);
-    SILK_TRACE << "TransactionDatabase::get_exact_or_previous cursor_id: " << cursor->cursor_id();
-    auto kv_pair = co_await cursor->seek(key);
-    if(!kv_pair.key.size()) {
-        kv_pair = co_await cursor->last();
-    } else if( kv_pair.key > key ) {
-        kv_pair = co_await cursor->prev();
-    }
-    co_return kv_pair.value;
-}
-
 awaitable<silkworm::Bytes> TransactionDatabase::get_one(const std::string& table, ByteView key) const {
     const auto cursor = co_await tx_.cursor(table);
     SILK_TRACE << "TransactionDatabase::get_one cursor_id: " << cursor->cursor_id();

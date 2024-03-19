@@ -31,7 +31,6 @@ namespace silkworm::rpc::test {
 class MockDatabaseReader : public core::rawdb::DatabaseReader {
   public:
     MOCK_METHOD((boost::asio::awaitable<KeyValue>), get, (const std::string&, silkworm::ByteView), (const));
-    MOCK_METHOD((boost::asio::awaitable<silkworm::Bytes>), get_exact_or_previous, (const std::string&, silkworm::ByteView), (const));
     MOCK_METHOD((boost::asio::awaitable<silkworm::Bytes>), get_one, (const std::string&, silkworm::ByteView), (const));
     MOCK_METHOD((boost::asio::awaitable<std::optional<silkworm::Bytes>>), get_both_range,
                 (const std::string&, silkworm::ByteView, silkworm::ByteView), (const));

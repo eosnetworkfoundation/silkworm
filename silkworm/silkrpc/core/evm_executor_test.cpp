@@ -50,9 +50,6 @@ TEST_CASE("EVMExecutor") {
         [[nodiscard]] awaitable<silkworm::Bytes> get_one(const std::string& /*table*/, silkworm::ByteView /*key*/) const override {
             co_return silkworm::Bytes{};
         }
-        [[nodiscard]] awaitable<silkworm::Bytes> get_exact_or_previous(const std::string& /*table*/, silkworm::ByteView /*key*/) const override {
-            co_return silkworm::Bytes{};
-        }
         [[nodiscard]] awaitable<std::optional<silkworm::Bytes>> get_both_range(const std::string& /*table*/, silkworm::ByteView /*key*/, silkworm::ByteView /*subkey*/) const override {
             co_return silkworm::Bytes{};
         }

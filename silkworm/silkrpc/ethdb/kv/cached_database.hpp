@@ -37,8 +37,6 @@ class CachedDatabase : public core::rawdb::DatabaseReader {
 
     boost::asio::awaitable<KeyValue> get(const std::string& table, silkworm::ByteView key) const override;
 
-    boost::asio::awaitable<silkworm::Bytes> get_exact_or_previous(const std::string& table, ByteView key) const override;
-
     boost::asio::awaitable<silkworm::Bytes> get_one(const std::string& table, silkworm::ByteView key) const override;
 
     boost::asio::awaitable<std::optional<silkworm::Bytes>> get_both_range(const std::string& table, silkworm::ByteView key,

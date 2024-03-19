@@ -36,8 +36,6 @@ class TransactionDatabase : public core::rawdb::DatabaseReader {
 
     [[nodiscard]] awaitable<KeyValue> get(const std::string& table, ByteView key) const override;
 
-    [[nodiscard]] awaitable<silkworm::Bytes> get_exact_or_previous(const std::string& table, ByteView key) const override;
-
     [[nodiscard]] awaitable<silkworm::Bytes> get_one(const std::string& table, ByteView key) const override;
 
     [[nodiscard]] awaitable<std::optional<Bytes>> get_both_range(const std::string& table, ByteView key, ByteView subkey) const override;
