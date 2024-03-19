@@ -48,6 +48,22 @@ void to_json(nlohmann::json& json, const Block& b) {
     json["size"] = to_quantity(b.get_block_size());
     json["gasLimit"] = to_quantity(b.block.header.gas_limit);
     json["gasUsed"] = to_quantity(b.block.header.gas_used);
+    if(b.consensus_parameter.has_value()) {
+        auto& cp = b.consensus_parameter.value();
+        json["consensusParameter"] = nlohmann::json{};
+        if(cp.min_gas_price.has_value()) {
+            json["consensusParameter"]["minGasPrice"] = cp.min_gas_price.value();
+        }
+        if(cp.gas_fee_parameters.has_value()) {
+            json["consensusParameter"]["gasFeeParameters"] = nlohmann::json{};
+            auto& v = cp.gas_fee_parameters.value();
+            json["consensusParameter"]["gasFeeParameters"]["gasTxnewaccount"] = v.gas_txnewaccount;
+            json["consensusParameter"]["gasFeeParameters"]["gasNewaccount"] = v.gas_newaccount;
+            json["consensusParameter"]["gasFeeParameters"]["gasTxcreate"] = v.gas_txcreate;
+            json["consensusParameter"]["gasFeeParameters"]["gasCodedeposit"] = v.gas_codedeposit;
+            json["consensusParameter"]["gasFeeParameters"]["gasSset"] = v.gas_sset;
+        }
+    }
     if (b.block.header.base_fee_per_gas.has_value()) {
         json["baseFeePerGas"] = to_quantity(b.block.header.base_fee_per_gas.value_or(0));
     }

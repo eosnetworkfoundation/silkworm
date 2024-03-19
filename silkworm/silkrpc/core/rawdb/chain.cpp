@@ -123,8 +123,9 @@ boost::asio::awaitable<std::shared_ptr<BlockWithHash>> read_block(const Database
     auto body = co_await read_body(reader, block_hash, block_number);
     SILK_TRACE << "body: #txn=" << body.transactions.size() << " #ommers=" << body.ommers.size();
     block_with_hash_ptr->block.transactions = std::move(body.transactions);
-    block_with_hash_ptr->block.ommers = std::move(body.ommers),
-    block_with_hash_ptr->block.withdrawals = std::move(body.withdrawals),
+    block_with_hash_ptr->block.ommers = std::move(body.ommers);
+    block_with_hash_ptr->block.withdrawals = std::move(body.withdrawals);
+    block_with_hash_ptr->block.consensus_parameter_index = body.consensus_parameter_index;
     block_with_hash_ptr->hash = block_hash;
     co_return block_with_hash_ptr;
 }
@@ -202,7 +203,7 @@ boost::asio::awaitable<silkworm::BlockBody> read_body(const DatabaseReader& read
         auto stored_body{silkworm::db::detail::decode_stored_block_body(data_view)};
         // If block contains no txn, we're done
         if (stored_body.txn_count == 0) {
-            co_return BlockBody{{}, std::move(stored_body.ommers), std::move(stored_body.withdrawals)};
+            co_return BlockBody{{}, std::move(stored_body.ommers), std::move(stored_body.withdrawals), stored_body.consensus_parameter_index};
         }
         // original comment: 1 system txn at the beginning of block and 1 at the end
         SILK_DEBUG << "base_txn_id: " << stored_body.base_txn_id << " txn_count: " << stored_body.txn_count;
@@ -220,7 +221,7 @@ boost::asio::awaitable<silkworm::BlockBody> read_body(const DatabaseReader& read
                 SILK_WARN << "#senders: " << senders.size() << " and #txns " << transactions.size() << " do not match";
             }
         }
-        co_return BlockBody{std::move(transactions), std::move(stored_body.ommers), std::move(stored_body.withdrawals)};
+        co_return BlockBody{std::move(transactions), std::move(stored_body.ommers), std::move(stored_body.withdrawals), stored_body.consensus_parameter_index};
     } catch (const silkworm::DecodingException& error) {
         SILK_ERROR << "RLP decoding error for block body #" << block_number << " [" << error.what() << "]";
         throw std::runtime_error{"RLP decoding error for block body [" + std::string(error.what()) + "]"};

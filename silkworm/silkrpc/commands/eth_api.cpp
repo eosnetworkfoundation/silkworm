@@ -243,7 +243,11 @@ awaitable<void> EthereumRpcApi::handle_eth_get_block_by_hash(const nlohmann::jso
         const auto block_with_hash = co_await core::read_block_by_hash(*block_cache_, tx_database, block_hash);
         const auto block_number = block_with_hash->block.header.number;
         const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_hash, block_number);
-        const Block extended_block{*block_with_hash, total_difficulty, full_tx};
+        std::optional<eosevm::ConsensusParameters> consensus_parameter;
+        if(block_with_hash && block_with_hash->block.consensus_parameter_index.has_value()) {
+            consensus_parameter = co_await silkworm::rpc::core::rawdb::read_consensus_parameters(tx_database, block_with_hash->block.consensus_parameter_index.value());
+        }
+        const Block extended_block{*block_with_hash, total_difficulty, full_tx, consensus_parameter};
         reply = make_json_content(request["id"], extended_block);
     } catch (const std::invalid_argument& iv) {
         SILK_WARN << "invalid_argument: " << iv.what() << " processing request: " << request.dump();
@@ -289,7 +293,11 @@ awaitable<void> EthereumRpcApi::handle_eth_get_block_by_number(const nlohmann::j
         } else {
             const auto block_with_hash = co_await core::read_block_by_number(*block_cache_, tx_database, block_number);
             const auto total_difficulty = co_await core::rawdb::read_total_difficulty(tx_database, block_with_hash->hash, block_number);
-            const Block extended_block{*block_with_hash, total_difficulty, full_tx};
+            std::optional<eosevm::ConsensusParameters> consensus_parameter;
+            if(block_with_hash && block_with_hash->block.consensus_parameter_index.has_value()) {
+                consensus_parameter = co_await silkworm::rpc::core::rawdb::read_consensus_parameters(tx_database, block_with_hash->block.consensus_parameter_index.value());
+            }
+            const Block extended_block{*block_with_hash, total_difficulty, full_tx, consensus_parameter};
             reply = make_json_content(request["id"], extended_block);
         }
     } catch (const std::invalid_argument& iv) { // goes here if block not exist
