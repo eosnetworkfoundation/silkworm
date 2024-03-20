@@ -86,7 +86,9 @@ class EVMExecutor {
                                            StateFactory state_factory,
                                            Tracers tracers = {},
                                            bool refund = true,
-                                           bool gas_bailout = false);
+                                           bool gas_bailout = false,
+                                           uint64_t eos_evm_version = 0,
+                                           const evmone::gas_parameters& gas_params = {});
     static std::string get_error_message(int64_t error_code, const Bytes& error_data, bool full_error = true);
 
     EVMExecutor(const silkworm::ChainConfig& config, boost::asio::thread_pool& workers, std::shared_ptr<silkworm::State>& state)
@@ -105,7 +107,7 @@ class EVMExecutor {
     EVMExecutor(const EVMExecutor&) = delete;
     EVMExecutor& operator=(const EVMExecutor&) = delete;
 
-    ExecutionResult call(const silkworm::Block& block, const silkworm::Transaction& txn, Tracers tracers = {}, bool refund = true, bool gas_bailout = false);
+    ExecutionResult call(const silkworm::Block& block, const silkworm::Transaction& txn, Tracers tracers = {}, bool refund = true, bool gas_bailout = false, uint64_t eos_evm_version = 0, const evmone::gas_parameters& gas_params={});
     void reset();
     void reset_all();
 

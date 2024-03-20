@@ -757,7 +757,8 @@ TEST_CASE("EOS EVM G_txnewaccount") {
     block.header.nonce = eosevm::version_to_nonce(1);
 
     evmc::address sender{0x0a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
-    evmc::address receiver{0x1a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
+    evmc::address receiver1{0x1a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
+    evmc::address receiver2{0x1000000000000000000000000000000000000001_address};
 
     evmone::gas_parameters gas_params;
     gas_params.G_txnewaccount = 0;
@@ -769,14 +770,15 @@ TEST_CASE("EOS EVM G_txnewaccount") {
 
     Transaction txn{};
     txn.from = sender;
-    txn.to = receiver;
-    txn.value = intx::uint256{0};
+    txn.to = receiver1;
+    txn.value = intx::uint256{1};
 
     CallResult res = evm.execute(txn, 0);
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.gas_left == 0);
     CHECK(res.gas_refund == 0);
 
+    txn.to = receiver2;
     gas_params.G_txnewaccount = 1;
     evm.update_gas_params(gas_params);
 
@@ -786,7 +788,5 @@ TEST_CASE("EOS EVM G_txnewaccount") {
     CHECK(res.gas_left == 0);
 
 }
-
-
 
 }  // namespace silkworm

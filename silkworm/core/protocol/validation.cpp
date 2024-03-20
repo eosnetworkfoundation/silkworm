@@ -39,7 +39,8 @@ bool transaction_type_is_supported(TransactionType type, evmc_revision rev) {
 
 ValidationResult pre_validate_transaction(const Transaction& txn, const evmc_revision rev, const uint64_t chain_id,
                                           const std::optional<intx::uint256>& base_fee_per_gas,
-                                          const std::optional<intx::uint256>& data_gas_price) {
+                                          const std::optional<intx::uint256>& data_gas_price,
+                                          uint64_t eos_evm_version, const evmone::gas_parameters& gas_params) {
     if (txn.chain_id.has_value()) {
         if (rev < EVMC_SPURIOUS_DRAGON) {
             // EIP-155 transaction before EIP-155 was activated
@@ -70,7 +71,7 @@ ValidationResult pre_validate_transaction(const Transaction& txn, const evmc_rev
         }
     }
 
-    const intx::uint128 g0{intrinsic_gas(txn, rev)};
+    const intx::uint128 g0{intrinsic_gas(txn, rev, eos_evm_version, gas_params)};
     if (txn.gas_limit < g0) {
         return ValidationResult::kIntrinsicGas;
     }
@@ -143,14 +144,14 @@ ValidationResult validate_transaction(const Transaction& txn, const IntraBlockSt
     return ValidationResult::kOk;
 }
 
-ValidationResult pre_validate_transactions(const Block& block, const ChainConfig& config) {
+ValidationResult pre_validate_transactions(const Block& block, const ChainConfig& config, uint64_t eos_evm_version, const evmone::gas_parameters& gas_params) {
     const BlockHeader& header{block.header};
     const evmc_revision rev{config.revision(header)};
     const std::optional<intx::uint256> data_gas_price{header.data_gas_price()};
 
     for (const Transaction& txn : block.transactions) {
         ValidationResult err{pre_validate_transaction(txn, rev, config.chain_id,
-                                                      header.base_fee_per_gas, data_gas_price)};
+                                                      header.base_fee_per_gas, data_gas_price, eos_evm_version, gas_params)};
         if (err != ValidationResult::kOk) {
             return err;
         }

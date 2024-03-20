@@ -24,12 +24,12 @@
 
 namespace silkworm::protocol {
 
-intx::uint128 intrinsic_gas(const UnsignedTransaction& txn, const evmc_revision rev) noexcept {
+intx::uint128 intrinsic_gas(const UnsignedTransaction& txn, const evmc_revision rev, uint64_t eos_evm_version, const evmone::gas_parameters& gas_params) noexcept {
     intx::uint128 gas{fee::kGTransaction};
 
     const bool contract_creation{!txn.to};
     if (contract_creation && rev >= EVMC_HOMESTEAD) {
-        gas += fee::kGTxCreate;
+        gas += eos_evm_version > 0 ? gas_params.G_txcreate : fee::kGTxCreate;
     }
 
     // EIP-2930: Optional access lists

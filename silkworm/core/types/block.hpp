@@ -106,7 +106,6 @@ struct Block : public BlockBody {
     BlockHeader header;
 
     bool irreversible{false};
-    std::optional<eosevm::ConsensusParameters> consensus_parameters_cache;
     void recover_senders();
 };
 

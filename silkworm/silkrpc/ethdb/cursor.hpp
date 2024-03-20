@@ -44,6 +44,10 @@ class Cursor {
 
     virtual boost::asio::awaitable<KeyValue> seek_exact(silkworm::ByteView key) = 0;
 
+    virtual boost::asio::awaitable<KeyValue> prev() = 0;
+
+    virtual boost::asio::awaitable<KeyValue> last() = 0;
+
     virtual boost::asio::awaitable<KeyValue> next() = 0;
 
     virtual boost::asio::awaitable<void> close_cursor() = 0;

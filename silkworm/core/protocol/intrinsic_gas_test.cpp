@@ -19,7 +19,7 @@
 #include <catch2/catch.hpp>
 
 #include "param.hpp"
-
+#include <eosevm/version.hpp>
 namespace silkworm::protocol {
 
 TEST_CASE("EIP-2930 intrinsic gas") {
@@ -43,8 +43,24 @@ TEST_CASE("EIP-2930 intrinsic gas") {
         .value = 2 * kEther,
         .access_list = access_list};
 
-    intx::uint128 g0{intrinsic_gas(txn, EVMC_ISTANBUL)};
+    intx::uint128 g0{intrinsic_gas(txn, EVMC_ISTANBUL, 0, {})};
     CHECK(g0 == fee::kGTransaction + 2 * fee::kAccessListAddressCost + 2 * fee::kAccessListStorageKeyCost);
 }
+
+TEST_CASE("G_txcreate intrinsic gas") {
+    uint64_t eos_evm_version = 0;
+    evmone::gas_parameters gas_params;
+
+    UnsignedTransaction txn{};
+    
+    intx::uint128 g0{intrinsic_gas(txn, eosevm::version_to_evmc_revision(eos_evm_version), eos_evm_version, gas_params)};
+    CHECK(g0 == fee::kGTransaction + fee::kGTxCreate);
+
+    eos_evm_version = 1;
+    gas_params.G_txcreate = 33333;
+    g0 = intrinsic_gas(txn, eosevm::version_to_evmc_revision(eos_evm_version), eos_evm_version, gas_params);
+    CHECK(g0 == fee::kGTransaction + 33333);
+}
+
 
 }  // namespace silkworm::protocol

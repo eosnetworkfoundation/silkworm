@@ -21,6 +21,7 @@
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/thread_pool.hpp>
+#include <evmone/execution_state.hpp>
 #include <evmc/evmc.hpp>
 #include <nlohmann/json.hpp>
 

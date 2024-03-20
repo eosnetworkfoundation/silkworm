@@ -48,6 +48,10 @@ class LocalCursor : public CursorDupSort {
 
     boost::asio::awaitable<KeyValue> seek_exact(silkworm::ByteView key) override;
 
+    boost::asio::awaitable<KeyValue> prev() override;
+
+    boost::asio::awaitable<KeyValue> last() override;
+
     boost::asio::awaitable<KeyValue> next() override;
 
     boost::asio::awaitable<KeyValue> next_dup() override;

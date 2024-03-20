@@ -963,5 +963,4 @@ TEST_CASE("ConsensusParameters") {
     CHECK(read_consensus_parameters(txn, value2.hash()) == value2);
 }
 
-
 }  // namespace silkworm::db

@@ -67,6 +67,38 @@ boost::asio::awaitable<KeyValue> LocalCursor::seek_exact(ByteView key) {
     co_return KeyValue{};
 }
 
+boost::asio::awaitable<KeyValue> LocalCursor::prev() {
+    SILK_DEBUG << "LocalCursor::prev: " << cursor_id_;
+
+    const auto result = db_cursor_.to_previous(/*throw_notfound=*/false);
+    SILK_DEBUG << "LocalCursor::prev result: " << db::detail::dump_mdbx_result(result);
+
+    if (result) {
+        SILK_DEBUG << "LocalCursor::prev: "
+                   << " key: " << byte_view_of_string(result.key.as_string()) << " value: " << byte_view_of_string(result.value.as_string());
+        co_return KeyValue{bytes_of_string(result.key.as_string()), bytes_of_string(result.value.as_string())};
+    } else {
+        SILK_ERROR << "LocalCursor::prev !result";
+    }
+    co_return KeyValue{};
+}
+
+boost::asio::awaitable<KeyValue> LocalCursor::last() {
+    SILK_DEBUG << "LocalCursor::last: " << cursor_id_;
+
+    const auto result = db_cursor_.to_last(/*throw_notfound=*/false);
+    SILK_DEBUG << "LocalCursor::last result: " << db::detail::dump_mdbx_result(result);
+
+    if (result) {
+        SILK_DEBUG << "LocalCursor::last: "
+                   << " key: " << byte_view_of_string(result.key.as_string()) << " value: " << byte_view_of_string(result.value.as_string());
+        co_return KeyValue{bytes_of_string(result.key.as_string()), bytes_of_string(result.value.as_string())};
+    } else {
+        SILK_ERROR << "LocalCursor::last !result";
+    }
+    co_return KeyValue{};
+}
+
 boost::asio::awaitable<KeyValue> LocalCursor::next() {
     SILK_DEBUG << "LocalCursor::next: " << cursor_id_;
 

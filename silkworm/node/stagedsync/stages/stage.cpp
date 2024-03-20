@@ -19,6 +19,7 @@
 #include <magic_enum.hpp>
 
 #include <silkworm/node/db/stages.hpp>
+#include <silkworm/node/db/access_layer.hpp>
 
 namespace silkworm::stagedsync {
 
@@ -43,6 +44,25 @@ void Stage::check_block_sequence(BlockNum actual, BlockNum expected) {
 
 void Stage::throw_if_stopping() {
     if (is_stopping()) throw StageError(Stage::Result::kAborted);
+}
+
+const evmone::gas_parameters& Stage::get_gas_params(db::ROTxn& txn, const Block& block) {
+    if(block.consensus_parameter_index != last_consensus_parameter_index) {
+        auto consensus_params = silkworm::db::read_consensus_parameters(txn, block.consensus_parameter_index.value());
+        if(consensus_params.has_value() && consensus_params->gas_fee_parameters.has_value()) {
+            last_gas_params = evmone::gas_parameters(
+                consensus_params->gas_fee_parameters->gas_txnewaccount,
+                consensus_params->gas_fee_parameters->gas_newaccount,
+                consensus_params->gas_fee_parameters->gas_txcreate,
+                consensus_params->gas_fee_parameters->gas_codedeposit,
+                consensus_params->gas_fee_parameters->gas_sset
+            );
+        } else {
+            last_gas_params=evmone::gas_parameters{};
+        }
+        last_consensus_parameter_index = block.consensus_parameter_index;
+    }
+    return last_gas_params;
 }
 
 StageError::StageError(Stage::Result err)

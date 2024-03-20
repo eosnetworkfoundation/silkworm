@@ -34,7 +34,7 @@ namespace silkworm::rpc {
 struct Block : public silkworm::BlockWithHash {
     intx::uint256 total_difficulty{0};
     bool full_tx{false};
-
+    std::optional<eosevm::ConsensusParameters> consensus_parameter;
     [[nodiscard]] uint64_t get_block_size() const;
 };
 
