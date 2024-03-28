@@ -37,6 +37,7 @@ struct DaemonSettings {
     std::optional<std::string> jwt_secret_file;
     bool skip_protocol_check{false};
     uint64_t rpc_quirk_flag{0};
+    std::optional<uint32_t> max_readers;
 };
 
 }  // namespace silkworm::rpc

@@ -194,9 +194,10 @@ Daemon::Daemon(DaemonSettings settings, std::shared_ptr<mdbx::env_managed> chain
         chaindata_env_ = std::make_shared<mdbx::env_managed>();
         silkworm::db::EnvConfig db_config{
             .path = settings_.datadir->string() + kChaindataRelativePath,
+            .readonly = true,
             .in_memory = true,
             .shared = true,
-            .max_readers = kDatabaseMaxReaders};
+            .max_readers = settings.max_readers ? *settings.max_readers : kDatabaseMaxReaders};
         *chaindata_env_ = silkworm::db::open_env(db_config);
     } else if (chaindata_env) {
         // Use the existing chaindata environment
