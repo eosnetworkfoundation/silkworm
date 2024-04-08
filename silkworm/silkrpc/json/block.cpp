@@ -51,9 +51,6 @@ void to_json(nlohmann::json& json, const Block& b) {
     if(b.consensus_parameter.has_value()) {
         auto& cp = b.consensus_parameter.value();
         json["consensusParameter"] = nlohmann::json{};
-        if(cp.min_gas_price.has_value()) {
-            json["consensusParameter"]["minGasPrice"] = cp.min_gas_price.value();
-        }
         if(cp.gas_fee_parameters.has_value()) {
             json["consensusParameter"]["gasFeeParameters"] = nlohmann::json{};
             auto& v = cp.gas_fee_parameters.value();

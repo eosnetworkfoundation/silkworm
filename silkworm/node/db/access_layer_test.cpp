@@ -919,7 +919,6 @@ TEST_CASE("ConsensusParameters") {
     auto& txn{context.rw_txn()};
 
     constexpr eosevm::ConsensusParameters value1{
-    .min_gas_price = 1,
     .gas_fee_parameters = eosevm::GasFeeParameters{
         .gas_txnewaccount = 1,
         .gas_newaccount = 1,
@@ -930,7 +929,6 @@ TEST_CASE("ConsensusParameters") {
     };
 
     constexpr eosevm::ConsensusParameters value2{
-    .min_gas_price = 2,
     .gas_fee_parameters = eosevm::GasFeeParameters{
         .gas_txnewaccount = 2,
         .gas_newaccount = 2,
