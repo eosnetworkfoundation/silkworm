@@ -23,6 +23,7 @@
 #include <silkworm/core/state/in_memory_state.hpp>
 
 #include "address.hpp"
+#include <eosevm/version.hpp>
 
 namespace silkworm {
 
@@ -610,6 +611,99 @@ TEST_CASE("EVM message filter revert") {
     //0100000000000000000000000000000000000000000000000000000000000000 //0x01
     CHECK(filtered_messages2.size()==1);
     CHECK(filtered_messages2[0].data == *from_hex("0xf781185b0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000003796573000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010100000000000000000000000000000000000000000000000000000000000000"));
+}
+
+TEST_CASE("No fee burn when chain uses trust ruleset") {
+
+    intx::uint256 max_priority_fee_per_gas = 5 * kGiga;
+    intx::uint256 max_fee_per_gas = 105 * kGiga;
+    intx::uint256 base_fee_per_gas = 80 * kGiga;
+
+    auto deploy_contract = [&](const ChainConfig& chain_config) -> auto {
+
+        Block block{};
+        block.header.number = 9'069'000;
+        block.header.gas_limit = 0x7fffffff;
+        block.header.beneficiary = 0xbbbbbbbbbbbbbbbbbbbbbbbb0000000000000000_address;
+        block.header.nonce = eosevm::version_to_nonce(1);
+        block.header.base_fee_per_gas = base_fee_per_gas;
+
+        evmc::address caller{0x834e9b529ac9fa63b39a06f8d8c9b0d6791fa5df_address};
+        uint64_t nonce{3};
+
+        /*
+        // SPDX-License-Identifier: GPL-3.0
+        pragma solidity >=0.7.0 <0.9.0;
+        contract Recursive {
+            event Call(uint256 _value);
+            function start(uint256 _depth) public {
+                emit Call(_depth);
+                if( _depth == 0 )
+                    return;
+                Recursive(this).start(_depth-1);
+            }
+        }
+        */
+        Bytes code{*from_hex(
+            "608060405234801561001057600080fd5b50610232806100206000396000f3fe608060405234"
+            "801561001057600080fd5b506004361061002b5760003560e01c806395805dad14610030575b"
+            "600080fd5b61004a60048036038101906100459190610142565b61004c565b005b7ff84df193"
+            "bb49c064bf1e234bd59df0c2a313cac2b206d8dc62dfc812a1b84fa58160405161007b919061"
+            "017e565b60405180910390a16000810315610104573073ffffffffffffffffffffffffffffff"
+            "ffffffffff166395805dad6001836100b591906101c8565b6040518263ffffffff1660e01b81"
+            "526004016100d1919061017e565b600060405180830381600087803b1580156100eb57600080"
+            "fd5b505af11580156100ff573d6000803e3d6000fd5b505050505b50565b600080fd5b600081"
+            "9050919050565b61011f8161010c565b811461012a57600080fd5b50565b6000813590506101"
+            "3c81610116565b92915050565b60006020828403121561015857610157610107565b5b600061"
+            "01668482850161012d565b91505092915050565b6101788161010c565b82525050565b600060"
+            "2082019050610193600083018461016f565b92915050565b7f4e487b71000000000000000000"
+            "00000000000000000000000000000000000000600052601160045260246000fd5b60006101d3"
+            "8261010c565b91506101de8361010c565b92508282039050818111156101f6576101f5610199"
+            "565b5b9291505056fea2646970667358221220dd3582a5d0cc9f3fc7818bf67fe1833fd59321"
+            "b5e0c69cc7af71e8332df84d3e64736f6c63430008110033"
+        )};
+
+        InMemoryState state;
+        auto rule_set{protocol::rule_set_factory(chain_config)};
+        ExecutionProcessor processor{block, *rule_set, state, chain_config, {}};
+
+        Transaction txn{{
+                .type = TransactionType::kDynamicFee,
+                .nonce = nonce,
+                .max_priority_fee_per_gas = max_priority_fee_per_gas,
+                .max_fee_per_gas = max_fee_per_gas,
+                .gas_limit = 1'000'000,
+                .data = code
+            },
+            false,  // odd_y_parity
+            1,      // r
+            1,      // s
+        };
+
+        processor.evm().state().add_to_balance(caller, kEther*100);
+        processor.evm().state().set_nonce(caller, nonce);
+        txn.from = caller;
+
+        Receipt receipt1;
+        processor.execute_transaction(txn, receipt1);
+        CHECK(receipt1.success);
+
+        return std::make_tuple(
+            receipt1.cumulative_gas_used,
+            processor.evm().state().get_balance(block.header.beneficiary)
+        );
+    };
+
+    auto pf = std::min(max_priority_fee_per_gas, max_fee_per_gas - base_fee_per_gas);
+    auto ep = pf + base_fee_per_gas;
+
+    // All fees credited to beneficiary_balance (kTrust RuleSet)
+    auto [gas_used, beneficiary_balance] = deploy_contract(kEOSEVMMainnetConfig);
+    CHECK(beneficiary_balance == ep*gas_used);
+
+    // Priority fee credited to beneficiary_balance (kEthash RuleSet)
+    std::tie(gas_used, beneficiary_balance) = deploy_contract(kMainnetConfig);
+    CHECK(beneficiary_balance == pf*gas_used);
 }
 
 }  // namespace silkworm

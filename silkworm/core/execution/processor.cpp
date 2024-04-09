@@ -78,8 +78,8 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     const uint64_t gas_used{txn.gas_limit - refund_gas(txn, vm_res.gas_left, vm_res.gas_refund)};
 
     // award the fee recipient
-    const intx::uint256 priority_fee_per_gas{txn.priority_fee_per_gas(base_fee_per_gas)};
-    state_.add_to_balance(evm_.beneficiary, priority_fee_per_gas * gas_used);
+    const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
+    state_.add_to_balance(evm_.beneficiary, price * gas_used);
 
     state_.destruct_suicides();
     if (rev >= EVMC_SPURIOUS_DRAGON) {
