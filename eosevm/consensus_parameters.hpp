@@ -40,7 +40,6 @@ struct GasFeeParameters {
 };
 
 struct ConsensusParameters {
-    std::optional<uint64_t>  min_gas_price;
     std::optional<GasFeeParameters> gas_fee_parameters;
 
     #if not defined(ANTELOPE)
