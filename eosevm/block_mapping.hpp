@@ -64,7 +64,8 @@ inline void prepare_block_header(silkworm::BlockHeader& header,
                                  const block_mapping& bm,
                                  uint64_t evm_contract_name,
                                  uint32_t evm_block_num,
-                                 uint64_t version)
+                                 uint64_t version,
+                                 std::optional<uint64_t> base_fee_per_gas)
 {
    header.beneficiary = silkworm::make_reserved_address(evm_contract_name);
    header.difficulty = 1;
@@ -72,6 +73,7 @@ inline void prepare_block_header(silkworm::BlockHeader& header,
    header.gas_limit = 0x7ffffffffff;
    header.timestamp = bm.evm_block_num_to_evm_timestamp(header.number);
    header.nonce = eosevm::version_to_nonce(version);
+   header.base_fee_per_gas = base_fee_per_gas;
 }
 
 
