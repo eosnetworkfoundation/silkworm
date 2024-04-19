@@ -23,7 +23,7 @@ inline uint64_t nonce_to_version(const NonceType& nonce) {
 inline evmc_revision version_to_evmc_revision(uint64_t version) {
     switch (version) {
         case 0: return EVMC_ISTANBUL;
-        case 1: return EVMC_ISTANBUL;
+        case 1: return EVMC_LONDON;
     }
     auto msg = "Unknown EOSEVM version: " + std::to_string(version);
     EOSEVM_ABORT(msg.c_str());
