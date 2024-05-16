@@ -245,4 +245,87 @@ TEST_CASE("seal-Hash of blockHeader") {
     CHECK(0xa6bb746de2cafea987306daa79ebcaa2f2d68a8e7ce1967623b05cfc913c8995_bytes32 == header.hash(false, true));
 }
 
+TEST_CASE("Test consensus_parameter_index serialization") {
+    BlockBody body{};
+
+    Withdrawal w {
+      .index           = 1,
+      .validator_index = 2,
+      .address         = 0xc8ebccc5f5689fa8659d83713341e5ad19349448_address,
+      .amount          = 3
+    };
+
+    body.withdrawals = std::vector<Withdrawal>{};
+    body.withdrawals->push_back(w);
+
+    // BlockBody with withdrawals and no consensus_parameter_index
+    Bytes rlp;
+    rlp::encode(rlp, body);
+
+    ByteView view{rlp};
+    BlockBody decoded;
+    REQUIRE(rlp::decode(view, decoded));
+
+    REQUIRE(decoded.withdrawals.has_value() == true);
+    auto& withdrawals = decoded.withdrawals.value();
+    REQUIRE(withdrawals.size() == 1);
+    REQUIRE(withdrawals[0].index == 1);
+    REQUIRE(withdrawals[0].validator_index == 2);
+    REQUIRE(withdrawals[0].address == 0xc8ebccc5f5689fa8659d83713341e5ad19349448_address);
+    REQUIRE(withdrawals[0].amount == 3);
+
+    REQUIRE(decoded.consensus_parameter_index.has_value() == false);
+
+
+    // BlockBody with consensus_parameter_index and no withdrawals
+    rlp=Bytes{};
+    body=BlockBody{};
+    body.consensus_parameter_index = 0xb397a22bb95bf14753ec174f02f99df3f0bdf70d1851cdff813ebf745f5aeb55_bytes32;
+    rlp::encode(rlp, body);
+
+    view=ByteView{rlp};
+    decoded=BlockBody{};
+    REQUIRE(rlp::decode(view, decoded));
+
+    REQUIRE(decoded.withdrawals.has_value() == false);
+    REQUIRE(decoded.consensus_parameter_index.has_value() == true);
+    REQUIRE(decoded.consensus_parameter_index.value() == 0xb397a22bb95bf14753ec174f02f99df3f0bdf70d1851cdff813ebf745f5aeb55_bytes32);
+
+    // BlockBody with both consensus_parameter_index and withdrawals
+    rlp=Bytes{};
+    body=BlockBody{};
+    body.withdrawals = std::vector<Withdrawal>{};
+    body.withdrawals->push_back(w);
+    body.consensus_parameter_index = 0xb397a22bb95bf14753ec174f02f99df3f0bdf70d1851cdff813ebf745f5aeb55_bytes32;
+    rlp::encode(rlp, body);
+
+    view=ByteView{rlp};
+    decoded=BlockBody{};
+    REQUIRE(rlp::decode(view, decoded));
+
+    REQUIRE(decoded.withdrawals.has_value() == true);
+    withdrawals = decoded.withdrawals.value();
+    REQUIRE(withdrawals.size() == 1);
+    REQUIRE(withdrawals[0].index == 1);
+    REQUIRE(withdrawals[0].validator_index == 2);
+    REQUIRE(withdrawals[0].address == 0xc8ebccc5f5689fa8659d83713341e5ad19349448_address);
+    REQUIRE(withdrawals[0].amount == 3);
+
+    REQUIRE(decoded.consensus_parameter_index.has_value() == true);
+    REQUIRE(decoded.consensus_parameter_index.value() == 0xb397a22bb95bf14753ec174f02f99df3f0bdf70d1851cdff813ebf745f5aeb55_bytes32);
+
+    // BlockBody without consensus_parameter_index and withdrawals
+    rlp=Bytes{};
+    body=BlockBody{};
+    rlp::encode(rlp, body);
+
+    view=ByteView{rlp};
+    decoded=BlockBody{};
+    REQUIRE(rlp::decode(view, decoded));
+
+    REQUIRE(decoded.withdrawals.has_value() == false);
+    REQUIRE(decoded.consensus_parameter_index.has_value() == false);
+}
+
+
 }  // namespace silkworm

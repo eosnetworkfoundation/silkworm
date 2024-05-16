@@ -241,6 +241,7 @@ namespace rlp {
         Header rlp_head{.list = true};
         rlp_head.payload_length += length(b.transactions);
         rlp_head.payload_length += length(b.ommers);
+        rlp_head.payload_length += length(b.consensus_parameter_index.has_value());
         if (b.consensus_parameter_index) {
             rlp_head.payload_length += length(*b.consensus_parameter_index);
         }
@@ -259,6 +260,7 @@ namespace rlp {
         encode_header(to, rlp_header_body(block_body));
         encode(to, block_body.transactions);
         encode(to, block_body.ommers);
+        encode(to, block_body.consensus_parameter_index.has_value());
         if (block_body.consensus_parameter_index) {
             encode(to, *block_body.consensus_parameter_index);
         }
@@ -286,11 +288,17 @@ namespace rlp {
 
         to.consensus_parameter_index = std::nullopt;
         if (from.length() > leftover) {
-            evmc::bytes32 consensus_parameter_index;
-            if (DecodingResult res{decode(from, consensus_parameter_index, Leftover::kAllow)}; !res) {
+            bool has_consensus_parameter_index=false;
+            if (DecodingResult res{decode(from, has_consensus_parameter_index, Leftover::kAllow)}; !res) {
                 return res;
             }
-            to.consensus_parameter_index = consensus_parameter_index;
+            if(has_consensus_parameter_index) {
+                evmc::bytes32 consensus_parameter_index;
+                if (DecodingResult res{decode(from, consensus_parameter_index, Leftover::kAllow)}; !res) {
+                    return res;
+                }
+                to.consensus_parameter_index = consensus_parameter_index;
+            }
         }
 
         to.withdrawals = std::nullopt;
