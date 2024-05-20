@@ -26,6 +26,7 @@
 #include <silkworm/core/common/base.hpp>
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/core/types/receipt.hpp>
+#include <eosevm/consensus_parameters.hpp>
 
 #include "receipt.hpp"
 

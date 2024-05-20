@@ -69,6 +69,15 @@ inline constexpr db::MapConfig kAccountHistory{kAccountHistoryName};
 inline constexpr const char* kBlockBodiesName{"BlockBody"};
 inline constexpr db::MapConfig kBlockBodies{kBlockBodiesName};
 
+//! \details Holds extra block data
+//! \struct
+//! \verbatim
+//!   key   : block number (BE 8 bytes) + block header hash (32 bytes)
+//!   value : extra block data RLP encoded
+//! \endverbatim
+inline constexpr const char* kExtraBlockDataName{"ExtraBlockData"};
+inline constexpr db::MapConfig kExtraBlockData{kExtraBlockDataName};
+
 //! \details Stores the binding of *canonical* block number with header hash
 //! \struct
 //! \verbatim
@@ -426,6 +435,7 @@ inline constexpr db::MapConfig kChainDataTables[]{
     kTxLookup,
     kRuntimeStates,
     kConsensusParameters,
+    kExtraBlockData
 };
 
 //! \brief Ensures all defined tables are present in db with consistent flags. Should a table not exist it gets created

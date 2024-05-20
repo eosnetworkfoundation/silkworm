@@ -160,9 +160,6 @@ namespace detail {
         header.payload_length += rlp::length(base_txn_id);
         header.payload_length += rlp::length(txn_count);
         header.payload_length += rlp::length(ommers);
-        if (consensus_parameter_index) {
-            header.payload_length += rlp::length(*consensus_parameter_index);
-        }
         if (withdrawals) {
             header.payload_length += rlp::length(*withdrawals);
         }
@@ -172,9 +169,6 @@ namespace detail {
         rlp::encode(to, base_txn_id);
         rlp::encode(to, txn_count);
         rlp::encode(to, ommers);
-        if (consensus_parameter_index) {
-            rlp::encode(to, *consensus_parameter_index);
-        }
         if (withdrawals) {
             rlp::encode(to, *withdrawals);
         }
@@ -197,15 +191,6 @@ namespace detail {
 
         if (DecodingResult res{rlp::decode_items(from, to.base_txn_id, to.txn_count, to.ommers)}; !res) {
             return res;
-        }
-
-        to.consensus_parameter_index = std::nullopt;
-        if (from.length() > leftover) {
-            evmc::bytes32 consensus_parameter_index;
-            if (DecodingResult res{rlp::decode(from, consensus_parameter_index, rlp::Leftover::kAllow)}; !res) {
-                return res;
-            }
-            to.consensus_parameter_index = consensus_parameter_index;
         }
 
         to.withdrawals = std::nullopt;

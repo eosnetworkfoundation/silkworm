@@ -35,7 +35,7 @@
 
 namespace silkworm {
 
-static BlockBody sample_block_body() {
+static BlockBody sample_block_body(bool with_block_extra_data=true) {
     BlockBody body;
     body.transactions.resize(2);
 
@@ -81,7 +81,12 @@ static BlockBody sample_block_body() {
     body.ommers[0].prev_randao = 0xf0a53dfdd6c2f2a661e718ef29092de60d81d45f84044bec7bf4b36630b2bc08_bytes32;
     body.ommers[0].nonce[7] = 35;
 
-    body.consensus_parameter_index = evmc::bytes32(1234);
+    if(with_block_extra_data) {
+        body.eosevm_extra_data = {
+            .consensus_parameter_index = 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32
+        };
+    }
+
     return body;
 }
 
@@ -502,6 +507,9 @@ TEST_CASE("Headers and bodies") {
         CHECK(block.header == header);
         CHECK(block.ommers == body.ommers);
         CHECK(block.transactions == body.transactions);
+        CHECK(block.eosevm_extra_data.has_value() == true);
+        CHECK(block.eosevm_extra_data.value().consensus_parameter_index.has_value() == true);
+        CHECK(block.eosevm_extra_data->consensus_parameter_index == 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32);
 
         CHECK(!block.transactions[0].from);
         CHECK(!block.transactions[1].from);
@@ -528,8 +536,15 @@ TEST_CASE("Headers and bodies") {
         auto [b, h] = split_block_key(key);
         REQUIRE(b == header.number);
         REQUIRE(h == header.hash());
+    }
+    
+    SECTION("empty eosevm_extra_data") {
+        BlockBody body{sample_block_body(false)};
+        CHECK_NOTHROW(write_body(txn, body, header.hash(), header.number));
 
-        CHECK(block.consensus_parameter_index == evmc::bytes32(1234));
+        Block block;
+        REQUIRE(read_block_by_number(txn, block_num, false, block));
+        CHECK(block.eosevm_extra_data.has_value() == false);
     }
 
     SECTION("process_blocks_at_height") {
@@ -545,6 +560,9 @@ TEST_CASE("Headers and bodies") {
             [&count, &height](const Block& block) {
                 REQUIRE(block.header.number == height);
                 count++;
+                CHECK(block.eosevm_extra_data.has_value() == true);
+                CHECK(block.eosevm_extra_data.value().consensus_parameter_index.has_value() == true);
+                CHECK(block.eosevm_extra_data->consensus_parameter_index == 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32);
             });
         REQUIRE(processed == 1);
         REQUIRE(processed == count);
@@ -564,6 +582,9 @@ TEST_CASE("Headers and bodies") {
             height,
             [&count, &height](const Block& block) {
                 REQUIRE(block.header.number == height);
+                CHECK(block.eosevm_extra_data.has_value() == true);
+                CHECK(block.eosevm_extra_data.value().consensus_parameter_index.has_value() == true);
+                CHECK(block.eosevm_extra_data->consensus_parameter_index == 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32);
                 count++;
             });
         REQUIRE(processed == 2);

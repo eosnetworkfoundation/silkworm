@@ -47,7 +47,6 @@ TEST_CASE("BlockBodyForStorage encoding") {
     CHECK(decoded == body);
 
     // No withdrawals
-    body.consensus_parameter_index = evmc::bytes32(1234);
     encoded = body.encode();
     view = encoded;
     decoded = decode_stored_block_body(view);
