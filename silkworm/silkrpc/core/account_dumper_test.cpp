@@ -85,6 +85,7 @@ class DummyCursor : public ethdb::CursorDupSort {
 
     boost::asio::awaitable<KeyValue> seek_exact(silkworm::ByteView key) override {
         const nlohmann::json table = json_.value(table_name_, empty);
+        if( table.is_null() ) co_return silkworm::KeyValue{};
         const auto& entry = table.value(silkworm::to_hex(key), "");
         auto value{*silkworm::from_hex(entry)};
 
