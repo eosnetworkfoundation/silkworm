@@ -25,6 +25,7 @@
 #include <silkworm/infra/common/ensure.hpp>
 #include <silkworm/node/db/bitmap.hpp>
 #include <silkworm/node/db/tables.hpp>
+#include <eosevm/block_extra_data.hpp>
 
 namespace silkworm::db {
 
@@ -411,6 +412,9 @@ size_t process_blocks_at_height(ROTxn& txn, BlockNum height, std::function<void(
             auto [block_num, hash] = split_block_key(key);
             bool present = read_header(txn, hash, block_num, block.header);
             if (!present) throw std::logic_error("header not found for body number= " + std::to_string(block_num) + ", hash= " + to_hex(hash));
+            // ...extra data
+            const Bytes ekey{block_key(block_num, hash.bytes)};
+            read_extra_block_data(txn, ekey, block);
             // invoke handler
             process_func(block);
         },
@@ -429,6 +433,19 @@ bool read_body(ROTxn& txn, BlockNum block_number, const uint8_t (&hash)[kHashLen
     return read_body(txn, key, read_senders, out);
 }
 
+void read_extra_block_data(ROTxn& txn, const Bytes& key, BlockBody& out) {
+    auto extra_cursor = txn.ro_cursor(table::kExtraBlockData);
+    auto extra_data{extra_cursor->find(to_slice(key), false)};
+    if (!extra_data) {
+        return;
+    }
+    ByteView extra_data_view{from_slice(extra_data.value)};
+    if(extra_data_view.length()) {
+        out.eosevm_extra_data = eosevm::block_extra_data{};
+        rlp::decode(extra_data_view, *out.eosevm_extra_data);
+    }
+}
+
 bool read_body(ROTxn& txn, const Bytes& key, bool read_senders, BlockBody& out) {
     auto cursor = txn.ro_cursor(table::kBlockBodies);
     auto data{cursor->find(to_slice(key), false)};
@@ -443,7 +460,9 @@ bool read_body(ROTxn& txn, const Bytes& key, bool read_senders, BlockBody& out) 
     if (!out.transactions.empty() && read_senders) {
         parse_senders(txn, key, out.transactions);
     }
-    out.consensus_parameter_index = body.consensus_parameter_index;
+
+    // Read block extra data
+    read_extra_block_data(txn, key, out);
     return true;
 }
 
@@ -499,7 +518,6 @@ void write_body(RWTxn& txn, const BlockBody& body, const uint8_t (&hash)[kHashLe
     body_for_storage.txn_count = body.transactions.size();
     body_for_storage.base_txn_id =
         increment_map_sequence(txn, table::kBlockTransactions.name, body_for_storage.txn_count);
-    body_for_storage.consensus_parameter_index = body.consensus_parameter_index;
     Bytes value{body_for_storage.encode()};
     auto key{db::block_key(number, hash)};
 
@@ -507,6 +525,14 @@ void write_body(RWTxn& txn, const BlockBody& body, const uint8_t (&hash)[kHashLe
     target->upsert(to_slice(key), to_slice(value));
 
     write_transactions(txn, body.transactions, body_for_storage.base_txn_id);
+
+    // Write block extra data
+    if(!body.eosevm_extra_data.has_value()) return;
+    auto extra_value = rlp::encode(*body.eosevm_extra_data);
+
+    key = db::block_key(number, hash);
+    auto extra = txn.rw_cursor(table::kExtraBlockData);
+    extra->upsert(to_slice(key), to_slice(extra_value));
 }
 
 static ByteView read_senders_raw(ROTxn& txn, const Bytes& key) {
@@ -1229,6 +1255,17 @@ std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn,
     const auto encoded = from_slice(data.value);
     return eosevm::ConsensusParameters::decode(encoded);
 }
+
+std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, const Block& block) {
+    std::optional<eosevm::ConsensusParameters> consensus_parameter;
+    auto cpi = block.get_consensus_parameter_index();
+    if(cpi.has_value()) {
+        consensus_parameter = read_consensus_parameters(txn, cpi.value());
+    }
+    return consensus_parameter;
+}
+
+
 
 void update_consensus_parameters(RWTxn& txn, const evmc::bytes32& index, const eosevm::ConsensusParameters& config) {
     auto cursor = txn.rw_cursor(table::kConsensusParameters);

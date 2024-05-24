@@ -133,8 +133,6 @@ namespace detail {
         std::vector<BlockHeader> ommers;
         std::optional<std::vector<Withdrawal>> withdrawals{std::nullopt};  // EIP-4895
 
-        std::optional<evmc::bytes32> consensus_parameter_index{std::nullopt};
-
         [[nodiscard]] Bytes encode() const;
 
         friend bool operator==(const BlockBodyForStorage&, const BlockBodyForStorage&) = default;

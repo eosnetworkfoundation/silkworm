@@ -3841,6 +3841,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
         .WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> {
             co_return kBlockBodyValue3;
         }));
+    EXPECT_CALL(db_reader, get_one(db::table::kExtraBlockDataName, _)).WillRepeatedly(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> { co_return Bytes{}; }));
 
     // TransactionDatabase::walk: TABLE BlockTransaction
     static Bytes kBlockTransactionKey1{*silkworm::from_hex("0000000005c62e66")};
@@ -5334,6 +5335,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
             .WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> {
                 co_return kBlockBodyValue2;
             }));
+        EXPECT_CALL(db_reader, get_one(db::table::kExtraBlockDataName, _)).WillRepeatedly(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> { co_return Bytes{}; }));
 
         BlockCache block_cache;
         std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
@@ -5418,6 +5420,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
             .WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> {
                 co_return kBlockBodyValue2;
             }));
+        EXPECT_CALL(db_reader, get_one(db::table::kExtraBlockDataName, _)).WillRepeatedly(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> { co_return Bytes{}; }));
 
         BlockCache block_cache;
         std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
@@ -5476,6 +5479,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
             .WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> {
                 co_return kBlockBodyValue2;
             }));
+        EXPECT_CALL(db_reader, get_one(db::table::kExtraBlockDataName, _)).WillRepeatedly(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> { co_return Bytes{}; }));
 
         BlockCache block_cache;
         std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
@@ -5591,6 +5595,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
             .WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> {
                 co_return kBlockBodyValue2;
             }));
+        EXPECT_CALL(db_reader, get_one(db::table::kExtraBlockDataName, _)).WillRepeatedly(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> { co_return Bytes{}; }));
 
         BlockCache block_cache;
         std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();
@@ -5675,6 +5680,7 @@ TEST_CASE_METHOD(TraceCallExecutorTest, "TraceCallExecutor::trace_filter") {
             .WillOnce(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> {
                 co_return kBlockBodyValue2;
             }));
+        EXPECT_CALL(db_reader, get_one(db::table::kExtraBlockDataName, _)).WillRepeatedly(InvokeWithoutArgs([]() -> boost::asio::awaitable<Bytes> { co_return Bytes{}; }));
 
         BlockCache block_cache;
         std::shared_ptr<test::MockCursorDupSort> mock_cursor = std::make_shared<test::MockCursorDupSort>();

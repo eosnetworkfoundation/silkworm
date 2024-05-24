@@ -47,8 +47,9 @@ void Stage::throw_if_stopping() {
 }
 
 const evmone::gas_parameters& Stage::get_gas_params(db::ROTxn& txn, const Block& block) {
-    if(block.consensus_parameter_index != last_consensus_parameter_index) {
-        auto consensus_params = silkworm::db::read_consensus_parameters(txn, block.consensus_parameter_index.value());
+    auto curr_consensus_parameter_index = block.get_consensus_parameter_index();
+    if(curr_consensus_parameter_index != last_consensus_parameter_index) {
+        auto consensus_params = silkworm::db::read_consensus_parameters(txn, block);
         if(consensus_params.has_value() && consensus_params->gas_fee_parameters.has_value()) {
             last_gas_params = evmone::gas_parameters(
                 consensus_params->gas_fee_parameters->gas_txnewaccount,
@@ -60,7 +61,7 @@ const evmone::gas_parameters& Stage::get_gas_params(db::ROTxn& txn, const Block&
         } else {
             last_gas_params=evmone::gas_parameters{};
         }
-        last_consensus_parameter_index = block.consensus_parameter_index;
+        last_consensus_parameter_index = curr_consensus_parameter_index;
     }
     return last_gas_params;
 }

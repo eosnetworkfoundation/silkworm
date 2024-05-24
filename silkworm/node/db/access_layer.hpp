@@ -120,6 +120,8 @@ size_t process_blocks_at_height(ROTxn& txn, BlockNum height, std::function<void(
 void write_body(RWTxn& txn, const BlockBody& body, const evmc::bytes32& hash, BlockNum bn);
 void write_body(RWTxn& txn, const BlockBody& body, const uint8_t (&hash)[kHashLength], BlockNum number);
 
+void read_extra_block_data(ROTxn& txn, const Bytes& key, BlockBody& out);
+
 // See Erigon ReadTd
 std::optional<intx::uint256> read_total_difficulty(ROTxn& txn, BlockNum, const evmc::bytes32& hash);
 std::optional<intx::uint256> read_total_difficulty(ROTxn& txn, BlockNum, const uint8_t (&hash)[kHashLength]);
@@ -253,6 +255,9 @@ void write_runtime_states_u64(RWTxn& txn, RuntimeState runtime_state, uint64_t n
 
 //! \brief  Read ConsensusParameters indexed by blocknum that it is added.
 std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, const evmc::bytes32& index);
+
+//! \brief  Read ConsensusParameters for block.
+std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn, const Block& block);
 
 //! \brief  Write ConsensusParameters indexed by blocknum that it is added. Can overwrite during forks.
 void update_consensus_parameters(RWTxn& txn, const evmc::bytes32&, const eosevm::ConsensusParameters& config);
