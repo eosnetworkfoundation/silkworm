@@ -128,6 +128,8 @@ class EthereumRpcApi {
     awaitable<void> handle_eth_get_logs(const nlohmann::json& request, std::string& reply);
     awaitable<void> handle_eth_call(const nlohmann::json& request, std::string& reply);
 
+    std::optional<eosevm::ConsensusParameters> get_consensus_parameter(std::shared_ptr<BlockWithHash> block_with_hash);
+
     boost::asio::io_context& io_context_;
     BlockCache* block_cache_;
     ethdb::kv::StateCache* state_cache_;

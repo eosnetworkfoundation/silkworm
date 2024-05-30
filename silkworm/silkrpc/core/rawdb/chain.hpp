@@ -31,6 +31,7 @@
 #include <silkworm/silkrpc/types/block.hpp>
 #include <silkworm/silkrpc/types/chain_config.hpp>
 #include <silkworm/silkrpc/types/receipt.hpp>
+#include <eosevm/consensus_parameters.hpp>
 
 namespace silkworm::rpc::core::rawdb {
 
@@ -89,6 +90,8 @@ boost::asio::awaitable<intx::uint256> read_total_burnt(const core::rawdb::Databa
 
 boost::asio::awaitable<intx::uint256> read_cumulative_gas_used(const core::rawdb::DatabaseReader& reader, uint64_t block_number);
 
-boost::asio::awaitable<std::optional<eosevm::ConsensusParameters>> read_consensus_parameters(const core::rawdb::DatabaseReader& reader, const evmc::bytes32& block_number);
+boost::asio::awaitable<std::optional<eosevm::ConsensusParameters>> read_consensus_parameters(const core::rawdb::DatabaseReader& reader, const std::optional<evmc::bytes32>& index);
+
+boost::asio::awaitable<std::optional<eosevm::block_extra_data>> read_extra_block_data(const core::rawdb::DatabaseReader& reader, const evmc::bytes32& block_hash, uint64_t block_number);
 
 }  // namespace silkworm::rpc::core::rawdb

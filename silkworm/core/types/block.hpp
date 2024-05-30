@@ -32,7 +32,7 @@
 #include <silkworm/core/types/transaction.hpp>
 #include <silkworm/core/types/withdrawal.hpp>
 
-#include <eosevm/consensus_parameters.hpp>
+#include <eosevm/block_extra_data.hpp>
 
 namespace silkworm {
 
@@ -96,8 +96,22 @@ struct BlockBody {
     std::vector<BlockHeader> ommers;
     std::optional<std::vector<Withdrawal>> withdrawals{std::nullopt};
 
-    // EOS-EVM 
-    std::optional<evmc::bytes32> consensus_parameter_index{std::nullopt};
+    // EOS-EVM
+    std::optional<eosevm::block_extra_data> eosevm_extra_data{std::nullopt};
+
+    bool has_consensus_parameter_index() {
+        return eosevm_extra_data.has_value() && eosevm_extra_data->consensus_parameter_index.has_value();
+    }
+
+    void set_consensus_parameter_index(const std::optional<evmc::bytes32>& index) {
+        if(!eosevm_extra_data.has_value()) eosevm_extra_data=eosevm::block_extra_data{};
+        eosevm_extra_data->consensus_parameter_index = index;
+    }
+
+    std::optional<evmc::bytes32> get_consensus_parameter_index() const {
+        if(!eosevm_extra_data.has_value()) return {};
+        return eosevm_extra_data.value().consensus_parameter_index;
+    }
 
     friend bool operator==(const BlockBody&, const BlockBody&);
 };
@@ -105,7 +119,9 @@ struct BlockBody {
 struct Block : public BlockBody {
     BlockHeader header;
 
+    // EOS-EVM
     bool irreversible{false};
+
     void recover_senders();
 };
 
