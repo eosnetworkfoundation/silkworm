@@ -881,7 +881,7 @@ TEST_CASE("read rlp encoded transactions") {
 
     for (size_t i = 0; i < rlp_transactions.size(); i++) {
         Bytes rlp_tx;
-        CHECK_NOTHROW(rlp::encode(rlp_tx, body.transactions[i]));
+        CHECK_NOTHROW(rlp::encode(rlp_tx, body.transactions[i], false));
         CHECK(rlp_transactions[i] == rlp_tx);
     }
 }
