@@ -355,7 +355,7 @@ boost::asio::awaitable<Transactions> read_canonical_transactions(const DatabaseR
         SILK_TRACE << "v: " << silkworm::to_hex(v);
         silkworm::ByteView value{v};
         silkworm::Transaction tx{};
-        const auto error = silkworm::rlp::decode(value, tx);
+        const auto error = silkworm::rlp::decode_transaction(value, tx, silkworm::rlp::Eip2718Wrapping::kNone);
         if (!error) {
             SILK_ERROR << "invalid RLP decoding for transaction index " << i;
             return false;

@@ -313,7 +313,7 @@ void write_transactions(RWTxn& txn, const std::vector<Transaction>& transactions
     auto key{db::block_key(base_id)};
     for (const auto& transaction : transactions) {
         Bytes value{};
-        rlp::encode(value, transaction);
+        rlp::encode(value, transaction, false);
         mdbx::slice value_slice{value.data(), value.length()};
         cursor->put(to_slice(key), &value_slice, MDBX_APPEND);
         ++base_id;
@@ -333,7 +333,7 @@ void read_transactions(ROCursor& txn_table, uint64_t base_id, uint64_t count, st
     for (auto data{txn_table.find(to_slice(key), false)}; data.done && i < count;
          data = txn_table.to_next(/*throw_notfound = */ false), ++i) {
         ByteView data_view{from_slice(data.value)};
-        success_or_throw(rlp::decode(data_view, v.at(i)));
+        success_or_throw(rlp::decode_transaction(data_view, v.at(i), silkworm::rlp::Eip2718Wrapping::kNone));
     }
     SILKWORM_ASSERT(i == count);
 }
