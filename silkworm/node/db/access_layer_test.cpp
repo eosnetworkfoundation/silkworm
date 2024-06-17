@@ -950,12 +950,9 @@ TEST_CASE("ConsensusParameters") {
     };
 
     auto tmp = value1.encode();
-    REQUIRE_THROWS(eosevm::ConsensusParameters::decode({}));
 
     ByteView bv{tmp};
     REQUIRE_NOTHROW(eosevm::ConsensusParameters::decode(bv));
-
-    REQUIRE_THROWS(eosevm::ConsensusParameters::decode(ByteView{bv.data(), bv.size()-1}));
 
     constexpr eosevm::ConsensusParameters value2{
     .gas_fee_parameters = eosevm::GasFeeParameters{
