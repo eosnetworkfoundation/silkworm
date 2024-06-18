@@ -62,12 +62,12 @@ std::optional<ConsensusParameters> ConsensusParameters::decode(silkworm::ByteVie
     // Parse according to version. For now, only 0.
     switch (version) {
         case 0: {
-            constexpr size_t size_before_fee_param = sizeof(uint64_t);
-            SILKWORM_ASSERT(encoded.length() > size_before_fee_param);
-            config.gas_fee_parameters = GasFeeParameters::decode(silkworm::ByteView{&encoded[size_before_fee_param], encoded.length() - size_before_fee_param});
+            config.gas_fee_parameters = GasFeeParameters::decode(silkworm::ByteView{&encoded[sizeof(uint64_t)], encoded.length() - sizeof(uint64_t)});
             break;
-            }
-        default: SILKWORM_ASSERT(version <= 0);
+        }
+        default: {
+            SILKWORM_ASSERT(false);
+        }
     }
 
     return config;

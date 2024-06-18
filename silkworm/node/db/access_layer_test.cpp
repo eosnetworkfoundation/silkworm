@@ -949,6 +949,11 @@ TEST_CASE("ConsensusParameters") {
     }
     };
 
+    auto tmp = value1.encode();
+
+    ByteView bv{tmp};
+    REQUIRE_NOTHROW(eosevm::ConsensusParameters::decode(bv));
+
     constexpr eosevm::ConsensusParameters value2{
     .gas_fee_parameters = eosevm::GasFeeParameters{
         .gas_txnewaccount = 2,
