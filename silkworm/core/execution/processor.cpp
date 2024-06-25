@@ -104,11 +104,19 @@ uint64_t ExecutionProcessor::available_gas() const noexcept {
 uint64_t ExecutionProcessor::refund_gas(const Transaction& txn, uint64_t gas_left, uint64_t gas_refund) noexcept {
     const evmc_revision rev{evm_.revision()};
 
-    const uint64_t max_refund_quotient{rev >= EVMC_LONDON ? protocol::kMaxRefundQuotientLondon
-                                                          : protocol::kMaxRefundQuotientFrontier};
-    const uint64_t max_refund{(txn.gas_limit - gas_left) / max_refund_quotient};
-    uint64_t refund = std::min(gas_refund, max_refund);
-    gas_left += refund;
+    if( evm_.get_eos_evm_version() < 2 ) {
+        const uint64_t max_refund_quotient{rev >= EVMC_LONDON ? protocol::kMaxRefundQuotientLondon
+                                                            : protocol::kMaxRefundQuotientFrontier};
+        const uint64_t max_refund{(txn.gas_limit - gas_left) / max_refund_quotient};
+        uint64_t refund = std::min(gas_refund, max_refund);
+        gas_left += refund;
+    } else {
+        gas_left += gas_refund;
+        if( gas_left > txn.gas_limit - silkworm::protocol::fee::kGTransaction ) {
+            gas_left = txn.gas_limit - silkworm::protocol::fee::kGTransaction;
+        }
+    }
+
 
     const intx::uint256 base_fee_per_gas{evm_.block().header.base_fee_per_gas.value_or(0)};
     const intx::uint256 effective_gas_price{txn.effective_gas_price(base_fee_per_gas)};
