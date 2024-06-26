@@ -367,6 +367,10 @@ void EVM::add_tracer(EvmTracer& tracer) noexcept {
 bool EVM::account_exists(const evmc::address& address) const noexcept {
     const evmc_revision rev{revision()};
 
+    if(get_eos_evm_version() >= 1 && is_reserved_address(address)) {
+        return true;
+    }
+
     if (rev >= EVMC_SPURIOUS_DRAGON) {
         return !state_.is_dead(address);
     } else {

@@ -126,7 +126,7 @@ TEST_CASE("No refund on error") {
 
 TEST_CASE("refund eosevm v2") {
 
-    auto deploy_and_execute = [&](uint64_t v) {
+    auto deploy_and_execute = [&](uint64_t v, uint64_t times=10) {
         Block block{};
         block.header.number = 10'050'107;
         block.header.gas_limit = 10'000'000;
@@ -176,7 +176,7 @@ TEST_CASE("refund eosevm v2") {
         // Call run(10) on the newly created contract //a444f5e9 = run, 00..0a = 10
         txn.nonce     = nonce + 1;
         txn.to        = create_address(caller, nonce);
-        txn.data      = *from_hex("a444f5e9000000000000000000000000000000000000000000000000000000000000000a");
+        txn.data      = *from_hex("a444f5e9" + to_hex(evmc::bytes32{times}));
         txn.gas_limit = 800'000;
 
         Receipt receipt2;
@@ -193,6 +193,9 @@ TEST_CASE("refund eosevm v2") {
 
     auto gas_used_v2 = deploy_and_execute(2);
     CHECK(gas_used_v2 == 27760);
+
+    auto gas_used_v2_0_times = deploy_and_execute(2, 0);
+    CHECK(gas_used_v2_0_times == 21608);
 }
 
 
