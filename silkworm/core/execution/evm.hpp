@@ -113,7 +113,7 @@ class EVM {
       return gas_params_;
     }
 
-    uint64_t get_eos_evm_version() {
+    uint64_t get_eos_evm_version()const {
       return eos_evm_version_;
     }
 
