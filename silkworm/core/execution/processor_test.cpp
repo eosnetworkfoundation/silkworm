@@ -124,6 +124,78 @@ TEST_CASE("No refund on error") {
     CHECK(receipt2.cumulative_gas_used - receipt1.cumulative_gas_used == txn.gas_limit);
 }
 
+TEST_CASE("refund eosevm v2") {
+
+    auto deploy_and_execute = [&](uint64_t v) {
+        Block block{};
+        block.header.number = 10'050'107;
+        block.header.gas_limit = 10'000'000;
+        block.header.nonce = eosevm::version_to_nonce(v);
+        block.header.beneficiary = 0x5146556427ff689250ed1801a783d12138c3dd5e_address;
+        evmc::address caller{0x834e9b529ac9fa63b39a06f8d8c9b0d6791fa5df_address};
+        uint64_t nonce{3};
+
+        /*
+        // SPDX-License-Identifier: GPL-3.0
+        pragma solidity >=0.8.2 <0.9.0;
+        contract Refund {
+            uint256 number;
+            function run(uint256 times) public {
+                for (uint i = 0; i < times; i++) {
+                    number = 1;
+                    number = 0;
+                }
+            }
+        }
+        */
+        Bytes code{*from_hex("608060405234801561001057600080fd5b50610192806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a444f5e914610030575b600080fd5b61004a600480360381019061004591906100b8565b61004c565b005b60005b8181101561007957600160008190555060008081905550808061007190610114565b91505061004f565b5050565b600080fd5b6000819050919050565b61009581610082565b81146100a057600080fd5b50565b6000813590506100b28161008c565b92915050565b6000602082840312156100ce576100cd61007d565b5b60006100dc848285016100a3565b91505092915050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b600061011f82610082565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8203610151576101506100e5565b5b60018201905091905056fea26469706673582212203d88f52fc817048f72a222d4f3e50f4c76512b2119e3b493958f9b2bc033363a64736f6c63430008110033")};
+
+        InMemoryState state;
+        auto rule_set{protocol::rule_set_factory(kEOSEVMMainnetConfig)};
+        ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}};
+
+        Transaction txn{
+            {.nonce = nonce,
+            .max_priority_fee_per_gas = 150 * kGiga,
+            .max_fee_per_gas = 150 * kGiga,
+            .gas_limit = 150'000,
+            .data = code},
+            false,  // odd_y_parity
+            1,      // r
+            1,      // s
+        };
+
+        processor.evm().state().add_to_balance(caller, 100*kEther);
+        processor.evm().state().set_nonce(caller, nonce);
+        txn.from = caller;
+
+        Receipt receipt1;
+        processor.execute_transaction(txn, receipt1);
+        CHECK(receipt1.success);
+
+        // Call run(10) on the newly created contract //a444f5e9 = run, 00..0a = 10
+        txn.nonce     = nonce + 1;
+        txn.to        = create_address(caller, nonce);
+        txn.data      = *from_hex("a444f5e9000000000000000000000000000000000000000000000000000000000000000a");
+        txn.gas_limit = 800'000;
+
+        Receipt receipt2;
+        processor.execute_transaction(txn, receipt2);
+        CHECK(receipt2.success);
+        return receipt2.cumulative_gas_used - receipt1.cumulative_gas_used;
+    };
+
+    auto gas_used_v0 = deploy_and_execute(0);
+    CHECK(gas_used_v0 == 115830);
+
+    auto gas_used_v1 = deploy_and_execute(1);
+    CHECK(gas_used_v1 == 181408);
+
+    auto gas_used_v2 = deploy_and_execute(2);
+    CHECK(gas_used_v2 == 27760);
+}
+
+
 TEST_CASE("Self-destruct") {
     Block block{};
     block.header.number = 1'487'375;
