@@ -789,4 +789,46 @@ TEST_CASE("EOS EVM G_txnewaccount") {
 
 }
 
+TEST_CASE("EOS EVM send value to reserved address (tx)") {
+
+    auto send_tx_to_reserved_address = [&](uint64_t version, const evmone::gas_parameters& gas_params, uint64_t gas_limit) {
+
+        Block block{};
+        block.header.number = 1;
+        block.header.nonce = eosevm::version_to_nonce(version);
+
+        evmc::address sender{0x0a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
+        evmc::address receiver1{make_reserved_address(0x3ab3400000000000)}; //beto
+
+        InMemoryState db;
+        IntraBlockState state{db};
+        state.set_balance(sender, intx::uint256{1e18});
+        EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+
+        Transaction txn{};
+        txn.from = sender;
+        txn.to = receiver1;
+        txn.value = intx::uint256{1};
+
+        CallResult res = evm.execute(txn, gas_limit);
+        return res;
+    };
+
+    evmone::gas_parameters gas_params;
+
+    //version = 1, G_txnewaccount = 0, gas_limit = 1000
+    gas_params.G_txnewaccount = 0;
+    auto res1 = send_tx_to_reserved_address(1, gas_params, 1000);
+    CHECK(res1.status == EVMC_SUCCESS);
+    CHECK(res1.gas_left == 1000);
+    CHECK(res1.gas_refund == 0);
+
+    //version = 2, G_txnewaccount = 5000, gas_limit = 4999
+    gas_params.G_txnewaccount = 5000;
+    auto res2 = send_tx_to_reserved_address(1, gas_params, 4999);
+    CHECK(res2.status == EVMC_SUCCESS);
+    CHECK(res2.gas_left == 4999);
+    CHECK(res2.gas_refund == 0);
+}
+
 }  // namespace silkworm
