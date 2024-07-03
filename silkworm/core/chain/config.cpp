@@ -261,6 +261,8 @@ std::optional<std::pair<const std::string, const ChainConfig*>> lookup_known_cha
         })};
 
     if (it == kKnownChainConfigs.end()) {
+        if (chain_id == 0) return std::nullopt;
+        
         ChainConfig *_config = new ChainConfig(get_kEOSEVMConfigTemplate(chain_id));
         kKnownChainConfigs.emplace_back("eosevm", _config);
         auto it2{
