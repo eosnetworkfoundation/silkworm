@@ -27,11 +27,7 @@
 namespace silkworm {
 
 static std::vector<std::pair<std::string, const ChainConfig*>> kKnownChainConfigs{
-#if defined(ANTELOPE)
-    {"mainnet", new ChainConfig(get_kMainnetConfig())},
-    {"goerli", new ChainConfig(get_kGoerliConfig())},
-    {"sepolia", new ChainConfig(get_kSepoliaConfig())}
-#else
+#if not defined(ANTELOPE)
     {"mainnet", &kMainnetConfig},
     {"goerli", &kGoerliConfig},
     {"sepolia", &kSepoliaConfig}
