@@ -26,14 +26,12 @@
 
 namespace silkworm {
 
-static const std::vector<std::pair<std::string, const ChainConfig*>> kKnownChainConfigs{
+static std::vector<std::pair<std::string, const ChainConfig*>> kKnownChainConfigs{
+#if not defined(ANTELOPE)
     {"mainnet", &kMainnetConfig},
     {"goerli", &kGoerliConfig},
-    {"sepolia", &kSepoliaConfig},
-    {"eosevm-mainnet", &kEOSEVMMainnetConfig},
-    {"eosevm-oldtestnet", &kEOSEVMOldTestnetConfig},
-    {"eosevm-testnet", &kEOSEVMTestnetConfig},
-    {"eosevm-localtestnet", &kEOSEVMLocalTestnetConfig}
+    {"sepolia", &kSepoliaConfig}
+#endif
 };
 
 constexpr const char* kTerminalTotalDifficulty{"terminalTotalDifficulty"};
@@ -265,7 +263,18 @@ std::optional<std::pair<const std::string, const ChainConfig*>> lookup_known_cha
         })};
 
     if (it == kKnownChainConfigs.end()) {
-        return std::nullopt;
+        if (chain_id == 0) return std::nullopt;
+        
+        ChainConfig *_config = new ChainConfig(get_kEOSEVMConfigTemplate(chain_id));
+        kKnownChainConfigs.emplace_back("eosevm", _config);
+        auto it2{
+        as_range::find_if(kKnownChainConfigs, [&chain_id](const std::pair<std::string, const ChainConfig*>& x) -> bool {
+            return x.second->chain_id == chain_id;
+        })};
+        if (it2 == kKnownChainConfigs.end()) // should not happen
+            return std::nullopt;
+        else
+            return std::make_pair(it2->first, it2->second);
     }
     return std::make_pair(it->first, it->second);
 }
