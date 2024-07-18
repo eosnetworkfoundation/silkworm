@@ -244,7 +244,7 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
     // secp256k1_context is thread safe and can be reused, but the creation is expensive (~10ms)
     static secp256k1_context* context = secp256k1_context_create(SILKWORM_SECP256K1_CONTEXT_FLAGS);
     // release only when the process exits
-    static auto _ = gsl::finally([&]() { if (context) std::free(context); });
+    static auto _ = gsl::finally([&]() { if (context) secp256k1_context_destroy(context); });
 
     Stage::Result ret{Stage::Result::kSuccess};
     try {
