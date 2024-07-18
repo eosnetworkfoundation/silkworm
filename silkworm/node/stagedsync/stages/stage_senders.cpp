@@ -240,6 +240,12 @@ Stage::Result Senders::prune(db::RWTxn& txn) {
 }
 
 Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
+
+    // secp256k1_context is thread safe and can be reused, but the creation is expensive (~10ms)
+    static secp256k1_context* context = secp256k1_context_create(SILKWORM_SECP256K1_CONTEXT_FLAGS);
+    // release only when the process exits
+    static auto _ = gsl::finally([&]() { if (context) std::free(context); });
+
     Stage::Result ret{Stage::Result::kSuccess};
     try {
         db::DataModel data_model{txn};
@@ -263,10 +269,6 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
         log::Info(log_prefix_, {"op", "parallel_recover",
                                 "num_threads", std::to_string(std::thread::hardware_concurrency()),
                                 "max_batch_size", std::to_string(max_batch_size_)});
-
-        secp256k1_context* context = secp256k1_context_create(SILKWORM_SECP256K1_CONTEXT_FLAGS);
-        if (!context) throw std::runtime_error("Could not create elliptic curve context");
-        auto _ = gsl::finally([&]() { if (context) std::free(context); });
 
         BlockNum start_block_num{previous_progress + 1u};
 
