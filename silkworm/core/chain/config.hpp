@@ -213,114 +213,95 @@ struct ChainConfig {
 
 std::ostream& operator<<(std::ostream& out, const ChainConfig& obj);
 
-inline constexpr ChainConfig kEOSEVMMainnetConfig{
-    .chain_id = 17777,
-    .protocol_rule_set = protocol::RuleSetType::kTrust,
-    ._homestead_block = 0,
-    ._dao_block = 0,
-    ._tangerine_whistle_block = 0,
-    ._spurious_dragon_block = 0,
-    ._byzantium_block = 0,
-    ._constantinople_block = 0,
-    ._petersburg_block = 0,
-    ._istanbul_block = 0,
-};
-
-inline constexpr ChainConfig kEOSEVMOldTestnetConfig{
-    .chain_id = 15555,
-    .protocol_rule_set = protocol::RuleSetType::kTrust,
-    ._homestead_block = 0,
-    ._dao_block = 0,
-    ._tangerine_whistle_block = 0,
-    ._spurious_dragon_block = 0,
-    ._byzantium_block = 0,
-    ._constantinople_block = 0,
-    ._petersburg_block = 0,
-    ._istanbul_block = 0,
-};
-
-inline constexpr ChainConfig kEOSEVMTestnetConfig{
-    .chain_id = 15557,
-    .protocol_rule_set = protocol::RuleSetType::kTrust,
-    ._homestead_block = 0,
-    ._dao_block = 0,
-    ._tangerine_whistle_block = 0,
-    ._spurious_dragon_block = 0,
-    ._byzantium_block = 0,
-    ._constantinople_block = 0,
-    ._petersburg_block = 0,
-    ._istanbul_block = 0,
-};
-
-inline constexpr ChainConfig kEOSEVMLocalTestnetConfig{
-    .chain_id = 25555,
-    .protocol_rule_set = protocol::RuleSetType::kTrust,
-    ._homestead_block = 0,
-    ._dao_block = 0,
-    ._tangerine_whistle_block = 0,
-    ._spurious_dragon_block = 0,
-    ._byzantium_block = 0,
-    ._constantinople_block = 0,
-    ._petersburg_block = 0,
-    ._istanbul_block = 0,
-};
+inline constexpr ChainConfig get_kEOSEVMConfigTemplate(uint64_t _chain_id) {
+    return ChainConfig{
+        .chain_id = _chain_id,
+        .protocol_rule_set = protocol::RuleSetType::kTrust,
+        ._homestead_block = 0,
+        ._dao_block = 0,
+        ._tangerine_whistle_block = 0,
+        ._spurious_dragon_block = 0,
+        ._byzantium_block = 0,
+        ._constantinople_block = 0,
+        ._petersburg_block = 0,
+        ._istanbul_block = 0,
+    };
+}
+#if not defined(ANTELOPE)
+inline constexpr ChainConfig kEOSEVMMainnetConfig = get_kEOSEVMConfigTemplate(17777);
+#endif
 
 inline constexpr evmc::bytes32 kMainnetGenesisHash{0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32};
-inline constexpr ChainConfig kMainnetConfig{
-    .chain_id = 1,
-    .protocol_rule_set = protocol::RuleSetType::kEthash,
-    ._homestead_block = 1'150'000,
-    ._dao_block = 1'920'000,
-    ._tangerine_whistle_block = 2'463'000,
-    ._spurious_dragon_block = 2'675'000,
-    ._byzantium_block = 4'370'000,
-    ._constantinople_block = 7'280'000,
-    ._petersburg_block = 7'280'000,
-    ._istanbul_block = 9'069'000,
-    ._muir_glacier_block = 9'200'000,
-    ._berlin_block = 12'244'000,
-    ._london_block = 12'965'000,
-    ._arrow_glacier_block = 13'773'000,
-    ._gray_glacier_block = 15'050'000,
-    ._terminal_total_difficulty = intx::from_string<intx::uint256>("58750000000000000000000"),
-    ._shanghai_time = 1681338455,
-};
+inline constexpr ChainConfig get_kMainnetConfig() {
+    return ChainConfig{
+        .chain_id = 1,
+        .protocol_rule_set = protocol::RuleSetType::kEthash,
+        ._homestead_block = 1'150'000,
+        ._dao_block = 1'920'000,
+        ._tangerine_whistle_block = 2'463'000,
+        ._spurious_dragon_block = 2'675'000,
+        ._byzantium_block = 4'370'000,
+        ._constantinople_block = 7'280'000,
+        ._petersburg_block = 7'280'000,
+        ._istanbul_block = 9'069'000,
+        ._muir_glacier_block = 9'200'000,
+        ._berlin_block = 12'244'000,
+        ._london_block = 12'965'000,
+        ._arrow_glacier_block = 13'773'000,
+        ._gray_glacier_block = 15'050'000,
+        ._terminal_total_difficulty = intx::from_string<intx::uint256>("58750000000000000000000"),
+        ._shanghai_time = 1681338455,
+    };
+}
+#if not defined(ANTELOPE)
+inline constexpr ChainConfig kMainnetConfig = get_kMainnetConfig();
+#endif
 
 inline constexpr evmc::bytes32 kGoerliGenesisHash{0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a_bytes32};
-inline constexpr ChainConfig kGoerliConfig{
-    .chain_id = 5,
-    .protocol_rule_set = protocol::RuleSetType::kClique,
-    ._homestead_block = 0,
-    ._tangerine_whistle_block = 0,
-    ._spurious_dragon_block = 0,
-    ._byzantium_block = 0,
-    ._constantinople_block = 0,
-    ._petersburg_block = 0,
-    ._istanbul_block = 1'561'651,
-    ._berlin_block = 4'460'644,
-    ._london_block = 5'062'605,
-    ._terminal_total_difficulty = 10790000,
-    ._shanghai_time = 1678832736,
-};
+inline constexpr ChainConfig get_kGoerliConfig() {
+    return ChainConfig {
+        .chain_id = 5,
+        .protocol_rule_set = protocol::RuleSetType::kClique,
+        ._homestead_block = 0,
+        ._tangerine_whistle_block = 0,
+        ._spurious_dragon_block = 0,
+        ._byzantium_block = 0,
+        ._constantinople_block = 0,
+        ._petersburg_block = 0,
+        ._istanbul_block = 1'561'651,
+        ._berlin_block = 4'460'644,
+        ._london_block = 5'062'605,
+        ._terminal_total_difficulty = 10790000,
+        ._shanghai_time = 1678832736
+    };
+}
+#if not defined(ANTELOPE)
+inline constexpr ChainConfig kGoerliConfig = get_kGoerliConfig();
+#endif
 
 inline constexpr evmc::bytes32 kSepoliaGenesisHash{0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9_bytes32};
-inline constexpr ChainConfig kSepoliaConfig{
-    .chain_id = 11155111,
-    .protocol_rule_set = protocol::RuleSetType::kEthash,
-    ._homestead_block = 0,
-    ._tangerine_whistle_block = 0,
-    ._spurious_dragon_block = 0,
-    ._byzantium_block = 0,
-    ._constantinople_block = 0,
-    ._petersburg_block = 0,
-    ._istanbul_block = 0,
-    ._muir_glacier_block = 0,
-    ._berlin_block = 0,
-    ._london_block = 0,
-    ._terminal_total_difficulty = 17000000000000000,
-    ._merge_netsplit_block = 1'735'371,
-    ._shanghai_time = 1677557088,
-};
+inline constexpr ChainConfig get_kSepoliaConfig() {
+    return ChainConfig{
+        .chain_id = 11155111,
+        .protocol_rule_set = protocol::RuleSetType::kEthash,
+        ._homestead_block = 0,
+        ._tangerine_whistle_block = 0,
+        ._spurious_dragon_block = 0,
+        ._byzantium_block = 0,
+        ._constantinople_block = 0,
+        ._petersburg_block = 0,
+        ._istanbul_block = 0,
+        ._muir_glacier_block = 0,
+        ._berlin_block = 0,
+        ._london_block = 0,
+        ._terminal_total_difficulty = 17000000000000000,
+        ._merge_netsplit_block = 1'735'371,
+        ._shanghai_time = 1677557088
+    };
+}
+#if not defined(ANTELOPE)
+inline constexpr ChainConfig kSepoliaConfig = get_kSepoliaConfig();
+#endif
 
 //! \brief Looks up a known chain config provided its chain ID
 std::optional<std::pair<const std::string, const ChainConfig*>> lookup_known_chain(uint64_t chain_id) noexcept;
