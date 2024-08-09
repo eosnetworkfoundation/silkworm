@@ -131,14 +131,13 @@ static inline mdbx::cursor::move_operation move_operation(CursorMoveDirection di
     }
 
     ::mdbx::env_managed::create_parameters cp{};  // Default create parameters
-    if (!config.shared) {
-        auto max_map_size = static_cast<intptr_t>(config.in_memory ? 128_Mebi : config.max_size);
-        auto growth_size = static_cast<intptr_t>(config.in_memory ? 8_Mebi : config.growth_size);
-        cp.geometry.make_dynamic(::mdbx::env::geometry::default_value, max_map_size);
-        cp.geometry.growth_step = growth_size;
-        if (!db_ondisk_file_size)
-            cp.geometry.pagesize = static_cast<intptr_t>(config.page_size);
-    }
+    // We will set create_parameters even when opening existing db so that we can update max_map_size if config changed.
+    auto max_map_size = static_cast<intptr_t>(config.in_memory ? 128_Mebi : config.max_size);
+    auto growth_size = static_cast<intptr_t>(config.in_memory ? 8_Mebi : config.growth_size);
+    cp.geometry.make_dynamic(::mdbx::env::geometry::default_value, max_map_size);
+    cp.geometry.growth_step = growth_size;
+    if (!db_ondisk_file_size)
+        cp.geometry.pagesize = static_cast<intptr_t>(config.page_size);
 
     using OP = ::mdbx::env::operate_parameters;
     OP op{};  // Operational parameters
@@ -157,7 +156,8 @@ static inline mdbx::cursor::move_operation move_operation(CursorMoveDirection di
             " db has " + human_size(db_page_size));
     }
 
-    if (!config.shared) {
+    // Those settings should only need to be set once during creation.
+    if (config.create) {
         // C++ bindings don't have setoptions
         ::mdbx::error::success_or_throw(::mdbx_env_set_option(ret, MDBX_opt_rp_augment_limit, 32_Mebi));
         if (!config.readonly) {
