@@ -38,7 +38,7 @@ if(NOT SILKWORM_HAS_PARENT)
 endif()
 
 project(silkworm)
-set(PROJECT_VERSION 0.1.0-dev)
+set(PROJECT_VERSION 0.2.1)
 
 include(CableBuildInfo)
 
