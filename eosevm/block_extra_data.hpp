@@ -6,6 +6,7 @@ namespace eosevm {
 
 struct block_extra_data {
     std::optional<evmc::bytes32> consensus_parameter_index;
+    std::optional<evmc::bytes32> gas_prices_index;
 };
 
 } // namespace eosevm
