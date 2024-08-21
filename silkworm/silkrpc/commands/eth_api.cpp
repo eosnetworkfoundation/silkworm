@@ -1148,6 +1148,11 @@ awaitable<void> EthereumRpcApi::handle_eth_call(const nlohmann::json& request, s
         silkworm::Transaction txn{call.to_transaction()};
         if(!txn.from.has_value()) txn.from = evmc::address{0};
 
+        auto base_fee_per_gas = block_with_hash->block.header.base_fee_per_gas.value_or(0);
+        if(txn.max_fee_per_gas == 0 && base_fee_per_gas > 0) {
+            txn.max_fee_per_gas = base_fee_per_gas;
+        }
+
         const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
 
         const core::rawdb::DatabaseReader& db_reader =
