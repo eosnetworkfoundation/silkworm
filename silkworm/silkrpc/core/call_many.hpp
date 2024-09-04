@@ -39,6 +39,7 @@
 #include <silkworm/silkrpc/types/block.hpp>
 #include <silkworm/silkrpc/types/call.hpp>
 #include <silkworm/silkrpc/types/transaction.hpp>
+#include <silkworm/silkrpc/core/gas_parameters.hpp>
 
 namespace silkworm::rpc::call {
 
@@ -68,7 +69,9 @@ class CallExecutor {
                                         std::optional<std::uint64_t> opt_timeout,
                                         const AccountsOverrides& accounts_overrides,
                                         int32_t transaction_index,
-                                        boost::asio::any_io_executor& executor);
+                                        boost::asio::any_io_executor& executor,
+                                        const evmone::gas_parameters& gas_params,
+                                        uint64_t eos_evm_version);
 
   private:
     ethdb::Transaction& transaction_;

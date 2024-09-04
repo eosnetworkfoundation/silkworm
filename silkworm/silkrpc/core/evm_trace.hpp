@@ -45,6 +45,7 @@
 #include <silkworm/silkrpc/types/block.hpp>
 #include <silkworm/silkrpc/types/call.hpp>
 #include <silkworm/silkrpc/types/transaction.hpp>
+#include <silkworm/silkrpc/core/gas_parameters.hpp>
 
 namespace silkworm::rpc::trace {
 

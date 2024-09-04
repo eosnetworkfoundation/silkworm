@@ -220,11 +220,11 @@ std::optional<std::string> EVMExecutor::pre_check(const EVM& evm, const silkworm
 ExecutionResult EVMExecutor::call(
     const silkworm::Block& block,
     const silkworm::Transaction& txn,
+    const evmone::gas_parameters& gas_params,
+    uint64_t eos_evm_version,
     Tracers tracers,
     bool refund,
-    bool gas_bailout,
-    uint64_t eos_evm_version,
-    const evmone::gas_parameters& gas_params) {
+    bool gas_bailout) {
     SILK_DEBUG << "EVMExecutor::call: " << block.header.number << " gasLimit: " << txn.gas_limit << " refund: " << refund << " gasBailout: " << gas_bailout;
     SILK_DEBUG << "EVMExecutor::call: transaction: " << &txn;
 
@@ -334,18 +334,18 @@ awaitable<ExecutionResult> EVMExecutor::call(const silkworm::ChainConfig& config
                                              const silkworm::Block& block,
                                              const silkworm::Transaction& txn,
                                              StateFactory state_factory,
+                                             const evmone::gas_parameters& gas_params,
+                                             uint64_t eos_evm_version,
                                              Tracers tracers,
                                              bool refund,
-                                             bool gas_bailout,
-                                             uint64_t eos_evm_version,
-                                             const evmone::gas_parameters& gas_params) {
+                                             bool gas_bailout) {
     auto this_executor = co_await boost::asio::this_coro::executor;
     const auto execution_result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(ExecutionResult)>(
         [&](auto&& self) {
             boost::asio::post(workers, [&, self = std::move(self)]() mutable {
                 auto state = state_factory(this_executor, block.header.number);
                 EVMExecutor executor{config, workers, state};
-                auto exec_result = executor.call(block, txn, tracers, refund, gas_bailout, eos_evm_version, gas_params);
+                auto exec_result = executor.call(block, txn, gas_params, eos_evm_version, tracers, refund, gas_bailout);
                 boost::asio::post(this_executor, [exec_result, self = std::move(self)]() mutable {
                     self.complete(exec_result);
                 });
