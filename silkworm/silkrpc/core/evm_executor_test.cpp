@@ -81,7 +81,7 @@ TEST_CASE("EVMExecutor") {
         test::DummyTransaction tx{0, mock_cursor};
         auto state = tx.create_state(current_executor, tx_database, block_number);
         EVMExecutor executor{*chain_config_ptr, workers, state};
-        auto result = executor.call(block, txn, {});
+        auto result = executor.call(block, txn, {}, 0, {});
         my_pool.stop();
         my_pool.join();
         CHECK(result.error_code == std::nullopt);
@@ -110,7 +110,7 @@ TEST_CASE("EVMExecutor") {
         test::DummyTransaction tx{0, mock_cursor};
         auto state = tx.create_state(current_executor, tx_database, block_number);
         EVMExecutor executor{*chain_config_ptr, workers, state};
-        auto result = executor.call(block, txn, {});
+        auto result = executor.call(block, txn, {}, 0, {});
         my_pool.stop();
         my_pool.join();
         CHECK(result.error_code == std::nullopt);
@@ -140,7 +140,7 @@ TEST_CASE("EVMExecutor") {
         test::DummyTransaction tx{0, mock_cursor};
         auto state = tx.create_state(current_executor, tx_database, block_number);
         EVMExecutor executor{*chain_config_ptr, workers, state};
-        auto result = executor.call(block, txn, {});
+        auto result = executor.call(block, txn, {}, 0, {});
         my_pool.stop();
         my_pool.join();
         CHECK(result.error_code == std::nullopt);
@@ -170,7 +170,7 @@ TEST_CASE("EVMExecutor") {
         test::DummyTransaction tx{0, mock_cursor};
         auto state = tx.create_state(current_executor, tx_database, block_number);
         EVMExecutor executor{*chain_config_ptr, workers, state};
-        auto result = executor.call(block, txn, {});
+        auto result = executor.call(block, txn, {}, 0, {});
         my_pool.stop();
         my_pool.join();
         CHECK(result.error_code == std::nullopt);
@@ -200,7 +200,7 @@ TEST_CASE("EVMExecutor") {
         test::DummyTransaction tx{0, mock_cursor};
         auto state = tx.create_state(current_executor, tx_database, block_number);
         EVMExecutor executor{*chain_config_ptr, workers, state};
-        auto result = executor.call(block, txn, {}, false, /* gasBailout */ true);
+        auto result = executor.call(block, txn, {}, 0, {}, false, /* gasBailout */ true);
         executor.reset();
         my_pool.stop();
         my_pool.join();
@@ -238,7 +238,7 @@ TEST_CASE("EVMExecutor") {
         test::DummyTransaction tx{0, mock_cursor};
         auto state = tx.create_state(current_executor, tx_database, block_number);
         EVMExecutor executor{*chain_config_ptr, workers, state};
-        auto result = executor.call(block, txn, {}, true, /* gasBailout */ true);
+        auto result = executor.call(block, txn, {}, 0, {}, true, /* gasBailout */ true);
         my_pool.stop();
         my_pool.join();
         CHECK(result.error_code == 0);
