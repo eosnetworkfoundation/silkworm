@@ -1155,7 +1155,7 @@ awaitable<void> EthereumRpcApi::handle_eth_call(const nlohmann::json& request, s
         const auto execution_result = co_await EVMExecutor::call(
             *chain_config_ptr, workers_, block_with_hash->block, txn, [&](auto& io_executor, auto block_num) {
                 return tx->create_state(io_executor, db_reader, block_num);
-            }, gas_params, eos_evm_version, {}, true, false);
+            }, gas_params, eos_evm_version, {}, true, txn.from == evmc::address{0});
 
         if (execution_result.success()) {
             make_glaze_json_content(reply, request["id"], execution_result.data);
