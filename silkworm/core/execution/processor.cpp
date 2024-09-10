@@ -70,12 +70,18 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     const intx::uint256 data_gas_price{evm_.block().header.data_gas_price().value_or(0)};
     state_.subtract_from_balance(*txn.from, txn.total_data_gas() * data_gas_price);
 
+    printf("execute_transaction effective_gas_price %lld, total_data_gas %lld data_gas_price %lld, ", (long long int)effective_gas_price, (long long int)txn.total_data_gas(), (long long int) data_gas_price);
+
     const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, evm_.get_eos_evm_version(), evm_.get_gas_params())};
     assert(g0 <= UINT64_MAX);  // true due to the precondition (transaction must be valid)
+
+    printf("execute_transaction g0 %lld,", (long long int)g0);
 
     const CallResult vm_res{evm_.execute(txn, txn.gas_limit - static_cast<uint64_t>(g0))};
 
     const uint64_t gas_used{txn.gas_limit - refund_gas(txn, vm_res.gas_left, vm_res.gas_refund)};
+
+    printf("execute_transaction left %lld, refund %lld, used %lld, ", (long long int)vm_res.gas_left, (long long int)vm_res.gas_refund, (long long int)gas_used);
 
     // award the fee recipient
     const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
@@ -120,6 +126,8 @@ uint64_t ExecutionProcessor::refund_gas(const Transaction& txn, uint64_t gas_lef
 
     const intx::uint256 base_fee_per_gas{evm_.block().header.base_fee_per_gas.value_or(0)};
     const intx::uint256 effective_gas_price{txn.effective_gas_price(base_fee_per_gas)};
+
+    printf("refund_gas add balance left %lld, price %lld, ", (long long int)gas_left, (long long int)effective_gas_price[0]);
     state_.add_to_balance(*txn.from, gas_left * effective_gas_price);
 
     return gas_left;

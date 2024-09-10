@@ -177,13 +177,20 @@ void IntraBlockState::add_to_balance(const evmc::address& address, const intx::u
     auto& obj{get_or_create_object(address)};
     journal_.emplace_back(new state::UpdateBalanceDelta{address, obj.current->balance});
     obj.current->balance += addend;
+
+    printf("add_to_balance +%s bal:%s, ", intx::to_string(addend).c_str(), intx::to_string(obj.current->balance).c_str());
     touch(address);
 }
 
 void IntraBlockState::subtract_from_balance(const evmc::address& address, const intx::uint256& subtrahend) noexcept {
     auto& obj{get_or_create_object(address)};
     journal_.emplace_back(new state::UpdateBalanceDelta{address, obj.current->balance});
+
+    printf("subtract_from_balance orig bal:%s ", intx::to_string(obj.current->balance).c_str());
+
     obj.current->balance -= subtrahend;
+
+    printf(" -%s bal:%s, ", intx::to_string(subtrahend).c_str(), intx::to_string(obj.current->balance).c_str());
     touch(address);
 }
 
