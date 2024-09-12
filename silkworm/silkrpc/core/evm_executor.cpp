@@ -180,7 +180,8 @@ uint64_t EVMExecutor::refund_gas(const EVM& evm, const silkworm::Transaction& tx
     }
 
     const intx::uint256 base_fee_per_gas{evm.block().header.base_fee_per_gas.value_or(0)};
-    const intx::uint256 effective_gas_price{txn.effective_gas_price(base_fee_per_gas)};
+    const intx::uint256 effective_gas_price{txn.max_fee_per_gas >= base_fee_per_gas ? txn.effective_gas_price(base_fee_per_gas)
+                                                                                    : txn.max_priority_fee_per_gas};
     SILK_DEBUG << "EVMExecutor::refund_gas effective_gas_price: " << effective_gas_price << ", txn.max_fee_per_gas: " << txn.max_fee_per_gas << ", base_fee_per_gas: " << base_fee_per_gas;
     ibs_state_.add_to_balance(*txn.from, gas_left * effective_gas_price);
     return gas_left;
@@ -265,7 +266,8 @@ ExecutionResult EVMExecutor::call(
     }
 
     intx::uint256 want;
-    const intx::uint256 effective_gas_price{txn.effective_gas_price(base_fee_per_gas)};
+    const intx::uint256 effective_gas_price{txn.max_fee_per_gas >= base_fee_per_gas ? txn.effective_gas_price(base_fee_per_gas)
+                                                                                    : txn.max_priority_fee_per_gas};
     if (txn.max_fee_per_gas > 0 || txn.max_priority_fee_per_gas > 0) {
         // This method should be called after check (max_fee and base_fee) present in pre_check() method
         want = txn.gas_limit * effective_gas_price;
