@@ -1160,7 +1160,7 @@ awaitable<void> EthereumRpcApi::handle_eth_call(const nlohmann::json& request, s
         const auto execution_result = co_await EVMExecutor::call(
             *chain_config_ptr, workers_, block_with_hash->block, txn, [&](auto& io_executor, auto block_num) {
                 return tx->create_state(io_executor, db_reader, block_num);
-            }, {}, true, false, eos_evm_version, gas_params);
+            }, gas_params, eos_evm_version, {}, true, txn.from == evmc::address{0});
 
         if (execution_result.success()) {
             make_glaze_json_content(reply, request["id"], execution_result.data);
@@ -1343,8 +1343,8 @@ awaitable<void> EthereumRpcApi::handle_eth_create_access_list(const nlohmann::js
             const auto execution_result = co_await EVMExecutor::call(
                 *chain_config_ptr, workers_, block_with_hash->block, txn, [&](auto& io_executor, auto block_num) {
                     return tx->create_state(io_executor, db_reader, block_num);
-                },
-                std::move(tracers), /* refund */ true, /* gasBailout */ false, eos_evm_version, gas_params);
+                }, gas_params, eos_evm_version,
+                std::move(tracers), /* refund */ true, /* gasBailout */ false);
 
             if (execution_result.pre_check_error) {
                 reply = make_json_error(request["id"], -32000, execution_result.pre_check_error.value());
@@ -1434,7 +1434,7 @@ awaitable<void> EthereumRpcApi::handle_eth_call_bundle(const nlohmann::json& req
             const auto execution_result = co_await EVMExecutor::call(
                 *chain_config_ptr, workers_, block_with_hash->block, tx_with_block->transaction, [&](auto& io_executor, auto block_num) {
                     return tx->create_state(io_executor, db_reader, block_num);
-                }, {}, true, false, eos_evm_version, gas_params);
+                }, gas_params, eos_evm_version, {}, true, false);
             if (execution_result.pre_check_error) {
                 reply = make_json_error(request["id"], -32000, execution_result.pre_check_error.value());
                 error = true;

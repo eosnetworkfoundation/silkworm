@@ -32,7 +32,8 @@
 #include <silkworm/silkrpc/json/types.hpp>
 #include <silkworm/silkrpc/types/call.hpp>
 #include <silkworm/silkrpc/commands/rpc_api_quirk.hpp>
-
+#include <silkworm/silkrpc/core/rawdb/chain.hpp>
+#include <silkworm/silkrpc/core/gas_parameters.hpp>
 namespace silkworm::rpc::commands {
 
 // https://eth.wiki/json-rpc/API#trace_call
