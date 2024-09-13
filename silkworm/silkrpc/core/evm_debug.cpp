@@ -35,7 +35,7 @@
 #include <silkworm/silkrpc/core/rawdb/chain.hpp>
 #include <silkworm/silkrpc/ethdb/transaction_database.hpp>
 #include <silkworm/silkrpc/json/types.hpp>
-
+#include <silkworm/silkrpc/core/gas_parameters.hpp>
 namespace silkworm::rpc::debug {
 
 using boost::asio::awaitable;
@@ -347,6 +347,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream, const silkworm::Blo
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     const auto chain_config_ptr = lookup_chain_config(chain_id);
+    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
     auto current_executor = co_await boost::asio::this_coro::executor;
 
     co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(void)>(
@@ -371,7 +372,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream, const silkworm::Blo
                     stream.open_array();
 
                     Tracers tracers{debug_tracer};
-                    const auto execution_result = executor.call(block, txn, std::move(tracers), /* refund */ false, /* gasBailout */ false);
+                    const auto execution_result = executor.call(block, txn, gas_params, eos_evm_version, std::move(tracers), /* refund */ false, /* gasBailout */ false);
 
                     debug_tracer->flush_logs();
                     stream.close_array();
@@ -411,6 +412,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream, uint64_t block_numb
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     const auto chain_config_ptr = lookup_chain_config(chain_id);
+    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
     auto current_executor = co_await boost::asio::this_coro::executor;
 
     co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(void)>(
@@ -425,7 +427,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream, uint64_t block_numb
                     if (!txn.from) {
                         txn.recover_sender();
                     }
-                    executor.call(block, txn);
+                    executor.call(block, txn, gas_params, eos_evm_version);
                 }
                 executor.reset();
 
@@ -435,7 +437,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream, uint64_t block_numb
                 stream.open_array();
 
                 Tracers tracers{debug_tracer};
-                const auto execution_result = executor.call(block, transaction, std::move(tracers));
+                const auto execution_result = executor.call(block, transaction, gas_params, eos_evm_version, std::move(tracers));
 
                 debug_tracer->flush_logs();
                 stream.close_array();
@@ -473,6 +475,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream,
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     const auto chain_config_ptr = lookup_chain_config(chain_id);
+    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
 
     auto current_executor = co_await boost::asio::this_coro::executor;
     co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(void)>(
@@ -488,7 +491,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream,
                         txn.recover_sender();
                     }
 
-                    executor.call(block, txn);
+                    executor.call(block, txn, gas_params, eos_evm_version);
                 }
                 executor.reset();
 
@@ -527,7 +530,7 @@ awaitable<void> DebugExecutor::execute(json::Stream& stream,
                         auto debug_tracer = std::make_shared<debug::DebugTracer>(stream, config_);
                         Tracers tracers{debug_tracer};
 
-                        const auto execution_result = executor.call(blockContext.block, txn, std::move(tracers), /* refund */ false, /* gasBailout */ false);
+                        const auto execution_result = executor.call(blockContext.block, txn, gas_params, eos_evm_version, std::move(tracers), /* refund */ false, /* gasBailout */ false);
 
                         debug_tracer->flush_logs();
                         stream.close_array();
