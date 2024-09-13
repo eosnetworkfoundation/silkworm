@@ -166,17 +166,23 @@ std::string EVMExecutor::get_error_message(int64_t error_code, const Bytes& erro
 
 uint64_t EVMExecutor::refund_gas(const EVM& evm, const silkworm::Transaction& txn, uint64_t gas_left, uint64_t gas_refund) {
     const evmc_revision rev{evm.revision()};
-    const uint64_t max_refund_quotient{rev >= EVMC_LONDON ? protocol::kMaxRefundQuotientLondon
-                                                          : protocol::kMaxRefundQuotientFrontier};
-    const uint64_t max_refund{(txn.gas_limit - gas_left) / max_refund_quotient};
-    uint64_t refund = gas_refund < max_refund ? gas_refund : max_refund;  // min
-    gas_left += refund;
+    if( evm.get_eos_evm_version() < 2 ) {
+        const uint64_t max_refund_quotient{rev >= EVMC_LONDON ? protocol::kMaxRefundQuotientLondon
+                                                            : protocol::kMaxRefundQuotientFrontier};
+        const uint64_t max_refund{(txn.gas_limit - gas_left) / max_refund_quotient};
+        uint64_t refund = gas_refund < max_refund ? gas_refund : max_refund;  // min
+        gas_left += refund;
+    } else {
+        gas_left += gas_refund;
+        if( gas_left > txn.gas_limit - silkworm::protocol::fee::kGTransaction ) {
+            gas_left = txn.gas_limit - silkworm::protocol::fee::kGTransaction;
+        }
+    }
 
     const intx::uint256 base_fee_per_gas{evm.block().header.base_fee_per_gas.value_or(0)};
-    SILK_DEBUG << "EVMExecutor::refund_gas txn.max_fee_per_gas: " << txn.max_fee_per_gas << " base_fee_per_gas: " << base_fee_per_gas;
     const intx::uint256 effective_gas_price{txn.max_fee_per_gas >= base_fee_per_gas ? txn.effective_gas_price(base_fee_per_gas)
                                                                                     : txn.max_priority_fee_per_gas};
-    SILK_DEBUG << "EVMExecutor::refund_gas effective_gas_price: " << effective_gas_price;
+    SILK_DEBUG << "EVMExecutor::refund_gas effective_gas_price: " << effective_gas_price << ", txn.max_fee_per_gas: " << txn.max_fee_per_gas << ", base_fee_per_gas: " << base_fee_per_gas;
     ibs_state_.add_to_balance(*txn.from, gas_left * effective_gas_price);
     return gas_left;
 }
@@ -220,11 +226,11 @@ std::optional<std::string> EVMExecutor::pre_check(const EVM& evm, const silkworm
 ExecutionResult EVMExecutor::call(
     const silkworm::Block& block,
     const silkworm::Transaction& txn,
+    const evmone::gas_parameters& gas_params,
+    uint64_t eos_evm_version,
     Tracers tracers,
     bool refund,
-    bool gas_bailout,
-    uint64_t eos_evm_version,
-    const evmone::gas_parameters& gas_params) {
+    bool gas_bailout) {
     SILK_DEBUG << "EVMExecutor::call: " << block.header.number << " gasLimit: " << txn.gas_limit << " refund: " << refund << " gasBailout: " << gas_bailout;
     SILK_DEBUG << "EVMExecutor::call: transaction: " << &txn;
 
@@ -260,13 +266,19 @@ ExecutionResult EVMExecutor::call(
     }
 
     intx::uint256 want;
+    const intx::uint256 effective_gas_price{txn.max_fee_per_gas >= base_fee_per_gas ? txn.effective_gas_price(base_fee_per_gas)
+                                                                                    : txn.max_priority_fee_per_gas};
     if (txn.max_fee_per_gas > 0 || txn.max_priority_fee_per_gas > 0) {
         // This method should be called after check (max_fee and base_fee) present in pre_check() method
-        const intx::uint256 effective_gas_price{txn.effective_gas_price(base_fee_per_gas)};
         want = txn.gas_limit * effective_gas_price;
     } else {
         want = 0;
     }
+
+    // EIP-4844 data gas cost (calc_data_fee)
+    const intx::uint256 data_gas_price{evm.block().header.data_gas_price().value_or(0)};
+    want += txn.total_data_gas() * data_gas_price;
+
     const auto have = ibs_state_.get_balance(*txn.from);
     if (have < want + txn.value) {
         if (!gas_bailout) {
@@ -290,6 +302,12 @@ ExecutionResult EVMExecutor::call(
             ibs_state_.access_storage(ae.account, key);
         }
     }
+
+    if (rev >= EVMC_SHANGHAI) {
+        // EIP-3651: Warm COINBASE
+        ibs_state_.access_account(evm.beneficiary);
+    }
+
     silkworm::CallResult result;
     try {
         SILK_DEBUG << "EVMExecutor::call execute on EVM txn: " << &txn << " g0: " << static_cast<uint64_t>(g0) << " start";
@@ -312,10 +330,9 @@ ExecutionResult EVMExecutor::call(
     }
 
     // Reward the fee recipient
-    const intx::uint256 priority_fee_per_gas{txn.max_fee_per_gas >= base_fee_per_gas ? txn.priority_fee_per_gas(base_fee_per_gas)
-                                                                                     : txn.max_priority_fee_per_gas};
-    SILK_DEBUG << "EVMExecutor::call evm.beneficiary: " << evm.beneficiary << " balance: " << priority_fee_per_gas * gas_used;
-    ibs_state_.add_to_balance(evm.beneficiary, priority_fee_per_gas * gas_used);
+    const intx::uint256 price{evm.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
+    ibs_state_.add_to_balance(evm.beneficiary, price * gas_used);
+    SILK_DEBUG << "EVMExecutor::call evm.beneficiary: " << evm.beneficiary << " balance: " << price * gas_used;
 
     for (auto tracer : evm.tracers()) {
         tracer.get().on_reward_granted(result, evm.state());
@@ -334,18 +351,18 @@ awaitable<ExecutionResult> EVMExecutor::call(const silkworm::ChainConfig& config
                                              const silkworm::Block& block,
                                              const silkworm::Transaction& txn,
                                              StateFactory state_factory,
+                                             const evmone::gas_parameters& gas_params,
+                                             uint64_t eos_evm_version,
                                              Tracers tracers,
                                              bool refund,
-                                             bool gas_bailout,
-                                             uint64_t eos_evm_version,
-                                             const evmone::gas_parameters& gas_params) {
+                                             bool gas_bailout) {
     auto this_executor = co_await boost::asio::this_coro::executor;
     const auto execution_result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(ExecutionResult)>(
         [&](auto&& self) {
             boost::asio::post(workers, [&, self = std::move(self)]() mutable {
                 auto state = state_factory(this_executor, block.header.number);
                 EVMExecutor executor{config, workers, state};
-                auto exec_result = executor.call(block, txn, tracers, refund, gas_bailout, eos_evm_version, gas_params);
+                auto exec_result = executor.call(block, txn, gas_params, eos_evm_version, tracers, refund, gas_bailout);
                 boost::asio::post(this_executor, [exec_result, self = std::move(self)]() mutable {
                     self.complete(exec_result);
                 });
