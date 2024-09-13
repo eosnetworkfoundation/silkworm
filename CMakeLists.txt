@@ -35,7 +35,7 @@ if(NOT SILKWORM_HAS_PARENT)
 endif()
 
 project(silkworm)
-set(PROJECT_VERSION 1.0.4)
+set(PROJECT_VERSION 1.0.5)
 
 # conan must be initiailzed after project definition to properly detect target architecture.
 if(NOT SILKWORM_HAS_PARENT)
