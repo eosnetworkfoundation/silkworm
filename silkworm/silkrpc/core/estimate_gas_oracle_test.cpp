@@ -345,7 +345,7 @@ TEST_CASE("estimate gas") {
     SECTION("Call gas above allowance, always succeeds, gas capped") {
         ExecutionResult expect_result_ok{.error_code = evmc_status_code::EVMC_SUCCESS};
         call.gas = kGasCap * 2;
-        EXPECT_CALL(estimate_gas_oracle, try_execution(_, _, _, _, _)).Times(24).WillRepeatedly(Return(expect_result_ok));
+        EXPECT_CALL(estimate_gas_oracle, try_execution(_, _, _, _, _)).Times(26).WillRepeatedly(Return(expect_result_ok));
         auto result = boost::asio::co_spawn(pool, estimate_gas_oracle.estimate_gas(call, block), boost::asio::use_future);
         const intx::uint256& estimate_gas = result.get();
 

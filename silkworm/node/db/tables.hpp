@@ -389,6 +389,9 @@ inline constexpr db::MapConfig kRuntimeStates{kRuntimeStatesName};
 inline constexpr const char* kConsensusParametersName{"ConsensusParameters"};
 inline constexpr db::MapConfig kConsensusParameters{kConsensusParametersName};
 
+inline constexpr const char* kGasPricesName{"GasPrices"};
+inline constexpr db::MapConfig kGasPrices{kGasPricesName};
+
 inline constexpr db::MapConfig kChainDataTables[]{
     kAccountChangeSet,
     kAccountHistory,
@@ -435,7 +438,8 @@ inline constexpr db::MapConfig kChainDataTables[]{
     kTxLookup,
     kRuntimeStates,
     kConsensusParameters,
-    kExtraBlockData
+    kExtraBlockData,
+    kGasPrices
 };
 
 //! \brief Ensures all defined tables are present in db with consistent flags. Should a table not exist it gets created

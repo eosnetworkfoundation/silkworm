@@ -33,6 +33,7 @@
 #include <silkworm/node/snapshot/repository.hpp>
 
 #include <eosevm/consensus_parameters.hpp>
+#include <eosevm/gas_prices.hpp>
 
 namespace silkworm::db {
 
@@ -261,6 +262,11 @@ std::optional<eosevm::ConsensusParameters> read_consensus_parameters(ROTxn& txn,
 
 //! \brief  Write ConsensusParameters indexed by blocknum that it is added. Can overwrite during forks.
 void update_consensus_parameters(RWTxn& txn, const evmc::bytes32&, const eosevm::ConsensusParameters& config);
+
+std::optional<eosevm::gas_prices> read_gas_prices(ROTxn& txn, const evmc::bytes32& index);
+std::optional<eosevm::gas_prices> read_gas_prices(ROTxn& txn, const Block& block);
+void update_gas_prices(RWTxn& txn, const evmc::bytes32&, const eosevm::gas_prices& prices);
+
 
 class DataModel {
   public:

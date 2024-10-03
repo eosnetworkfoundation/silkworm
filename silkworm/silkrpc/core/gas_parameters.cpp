@@ -3,7 +3,7 @@
 
 namespace silkworm {
 
-awaitable<std::tuple<uint64_t, evmone::gas_parameters>> load_gas_parameters(TransactionDatabase& tx_database, const silkworm::ChainConfig* chain_config_ptr, const silkworm::Block& block) {
+awaitable<std::tuple<uint64_t, evmone::gas_parameters>> load_gas_parameters(const DatabaseReader& tx_database, const silkworm::ChainConfig* chain_config_ptr, const silkworm::Block& block) {
 
     auto eos_evm_version = chain_config_ptr->eos_evm_version(block.header);
     evmone::gas_parameters gas_params;

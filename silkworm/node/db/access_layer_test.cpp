@@ -987,4 +987,47 @@ TEST_CASE("ConsensusParameters") {
     CHECK(read_consensus_parameters(txn, value2.hash()) == value2);
 }
 
+TEST_CASE("gas_prices") {
+    test::Context context;
+    auto& txn{context.rw_txn()};
+
+    constexpr eosevm::gas_prices value1{
+        .overhead_price = 1,
+        .storage_price  = 1
+    };
+
+    auto tmp = value1.encode();
+
+    ByteView bv{tmp};
+    REQUIRE_NOTHROW(eosevm::gas_prices::decode(bv));
+
+    constexpr eosevm::gas_prices value2{
+        .overhead_price = 2,
+        .storage_price  = 2
+    };
+
+    CHECK(read_gas_prices(txn, evmc::bytes32(0)) == std::nullopt);
+
+    update_gas_prices(txn, evmc::bytes32(0), value1 );
+    CHECK(read_gas_prices(txn, evmc::bytes32(0)) == value1);
+
+    update_gas_prices(txn, evmc::bytes32(0), value2 );
+    CHECK(read_gas_prices(txn, evmc::bytes32(0)) == value2);
+
+    CHECK(read_gas_prices(txn, evmc::bytes32(1)) == std::nullopt);
+
+    update_gas_prices(txn, evmc::bytes32(1), value2 );
+    CHECK(read_gas_prices(txn, evmc::bytes32(1)) == value2);
+
+    update_gas_prices(txn, evmc::bytes32(1), value1 );
+    CHECK(read_gas_prices(txn, evmc::bytes32(1)) == value1);
+
+    update_gas_prices(txn, value1.hash(), value1 );
+    CHECK(read_gas_prices(txn, value1.hash()) == value1);
+
+    update_gas_prices(txn, value2.hash(), value2 );
+    CHECK(read_gas_prices(txn, value2.hash()) == value2);
+}
+
+
 }  // namespace silkworm::db

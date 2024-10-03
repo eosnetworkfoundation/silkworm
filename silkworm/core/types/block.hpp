@@ -113,6 +113,20 @@ struct BlockBody {
         return eosevm_extra_data.value().consensus_parameter_index;
     }
 
+    bool has_gas_prices_index() {
+        return eosevm_extra_data.has_value() && eosevm_extra_data->gas_prices_index.has_value();
+    }
+
+    void set_gas_prices_index(const std::optional<evmc::bytes32>& index) {
+        if(!eosevm_extra_data.has_value()) eosevm_extra_data=eosevm::block_extra_data{};
+        eosevm_extra_data->gas_prices_index = index;
+    }
+
+    std::optional<evmc::bytes32> get_gas_prices_index() const {
+        if(!eosevm_extra_data.has_value()) return {};
+        return eosevm_extra_data.value().gas_prices_index;
+    }
+
     friend bool operator==(const BlockBody&, const BlockBody&);
 };
 
