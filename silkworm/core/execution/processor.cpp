@@ -70,16 +70,40 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     const intx::uint256 data_gas_price{evm_.block().header.data_gas_price().value_or(0)};
     state_.subtract_from_balance(*txn.from, txn.total_data_gas() * data_gas_price);
 
-    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, evm_.get_eos_evm_version(), evm_.get_gas_params())};
+    const auto eos_evm_version = evm_.get_eos_evm_version();
+    const auto& gas_params = evm_.get_gas_params();
+
+    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, eos_evm_version, gas_params)};
     assert(g0 <= UINT64_MAX);  // true due to the precondition (transaction must be valid)
 
     const CallResult vm_res{evm_.execute(txn, txn.gas_limit - static_cast<uint64_t>(g0))};
 
-    const uint64_t gas_used{txn.gas_limit - refund_gas(txn, vm_res.gas_left, vm_res.gas_refund)};
+    uint64_t gas_used{0};
+    if(eos_evm_version < 3) {
+        gas_used = txn.gas_limit - refund_gas(txn, vm_res.gas_left, vm_res.gas_refund);
 
-    // award the fee recipient
-    const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
-    state_.add_to_balance(evm_.beneficiary, price * gas_used);
+        // award the fee recipient
+        const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
+        state_.add_to_balance(evm_.beneficiary, price * gas_used);
+    } else {
+        uint64_t storage_gas_consumed{vm_res.storage_gas_consumed};
+        const bool contract_creation{!txn.to};
+        if(contract_creation) {
+            storage_gas_consumed += gas_params.G_txcreate; //correct storage gas consumed to account for initial G_txcreate storage gas
+        }
+
+        evmone::gas_state_t vm_res_gas_state(eos_evm_version, static_cast<int64_t>(vm_res.gas_refund),
+             static_cast<int64_t>(storage_gas_consumed), static_cast<int64_t>(vm_res.storage_gas_refund), static_cast<int64_t>(vm_res.speculative_cpu_gas_consumed));
+        gas_used = txn.gas_limit - vm_res.gas_left;
+        gas_used -= static_cast<uint64_t>(vm_res_gas_state.collapse());
+        assert(vm_res_gas_state.cpu_gas_refund() == 0);
+        const auto total_storage_gas_consumed = vm_res_gas_state.storage_gas_consumed();
+        const auto total_cpu_gas_consumed = gas_used - static_cast<uint64_t>(total_storage_gas_consumed);
+
+        // award the fee recipient
+        const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
+        state_.add_to_balance(evm_.beneficiary, price * total_cpu_gas_consumed);
+    }
 
     state_.destruct_suicides();
     if (rev >= EVMC_SPURIOUS_DRAGON) {
@@ -103,8 +127,9 @@ uint64_t ExecutionProcessor::available_gas() const noexcept {
 
 uint64_t ExecutionProcessor::refund_gas(const Transaction& txn, uint64_t gas_left, uint64_t gas_refund) noexcept {
     const evmc_revision rev{evm_.revision()};
-
-    if( evm_.get_eos_evm_version() < 2 ) {
+    const auto version = evm_.get_eos_evm_version();
+    assert(version < 3);
+    if( version < 2 ) {
         const uint64_t max_refund_quotient{rev >= EVMC_LONDON ? protocol::kMaxRefundQuotientLondon
                                                             : protocol::kMaxRefundQuotientFrontier};
         const uint64_t max_refund{(txn.gas_limit - gas_left) / max_refund_quotient};
@@ -116,7 +141,6 @@ uint64_t ExecutionProcessor::refund_gas(const Transaction& txn, uint64_t gas_lef
             gas_left = txn.gas_limit - silkworm::protocol::fee::kGTransaction;
         }
     }
-
 
     const intx::uint256 base_fee_per_gas{evm_.block().header.base_fee_per_gas.value_or(0)};
     const intx::uint256 effective_gas_price{txn.effective_gas_price(base_fee_per_gas)};
