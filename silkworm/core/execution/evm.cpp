@@ -103,7 +103,7 @@ CallResult EVM::execute(const Transaction& txn, uint64_t gas) noexcept {
 }
 
 evmc::Result EVM::create(const evmc_message& message) noexcept {
-    evmc::Result res(EVMC_SUCCESS, message.gas, 0, 0, 0, nullptr, 0);
+    evmc::Result res(EVMC_SUCCESS, message.gas, 0, 0, 0, 0, nullptr, 0);
 
     auto value{intx::be::load<intx::uint256>(message.value)};
     if (state_.get_balance(message.sender) < value) {
@@ -182,6 +182,8 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
             if(eos_evm_version_ >= 3) {
                 evmone::gas_state_t tmp_gas_state(eos_evm_version_, evm_res.gas_refund, evm_res.storage_gas_consumed, evm_res.storage_gas_refund, evm_res.speculative_cpu_gas_consumed);
                 code_deploy_gas = static_cast<uint64_t>(tmp_gas_state.apply_storage_gas_delta(static_cast<int64_t>(code_deploy_gas)));
+                evm_res.storage_gas_consumed = tmp_gas_state.storage_gas_consumed();
+                evm_res.storage_gas_refund = tmp_gas_state.storage_gas_refund();
             }
             evm_res.gas_left -= static_cast<int64_t>(code_deploy_gas);
             state_.set_code(contract_addr, {evm_res.output_data, evm_res.output_size});
@@ -210,7 +212,7 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
 }
 
 evmc::Result EVM::call(const evmc_message& message) noexcept {
-    evmc::Result res(EVMC_SUCCESS, message.gas, 0, 0, 0, nullptr, 0);
+    evmc::Result res(EVMC_SUCCESS, message.gas, 0, 0, 0, 0, nullptr, 0);
 
     auto at_exit = gsl::finally([&] {
         if(res.status_code == EVMC_SUCCESS && message_filter_ && (*message_filter_)(message)) {
@@ -272,15 +274,15 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
     } else {
         evmc_message revisited_message{message};
         if(eos_evm_version_ > 0 && revisited_message.depth == 0 && !is_zero(evmc::bytes32{revisited_message.value}) && !recipient_exists) {
-            int64_t cost = gas_params_.G_txnewaccount;
-            if( eos_evm_version_ >= 3 ) {
-                res.storage_gas_consumed = gas_params_.G_txnewaccount;
-            }
+            int64_t cost = static_cast<int64_t>(gas_params_.G_txnewaccount);
             if ((res.gas_left -= cost) < 0) {
                 // If we run out of gas lets do everything here
                 state_.revert_to_snapshot(snapshot);
                 res.status_code = EVMC_OUT_OF_GAS;
                 res.gas_refund = 0;
+                if( eos_evm_version_ >= 3 ) {
+                    res.storage_gas_consumed = cost + res.gas_left;
+                }
                 res.gas_left = 0;
                 for (auto tracer : tracers_) {
                     tracer.get().on_execution_start(rev, revisited_message, {});
@@ -288,6 +290,7 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
                 }
                 return res;
             }
+            res.storage_gas_consumed = cost;
             revisited_message.gas = res.gas_left;
         }
 
@@ -297,11 +300,11 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
         }
 
         const evmc::bytes32 code_hash{state_.get_code_hash(revisited_message.code_address)};
-        auto exec_result = evmc::Result{execute(revisited_message, code, &code_hash)};
+        auto storage_gas_consumed = res.storage_gas_consumed;
+        res = evmc::Result{execute(revisited_message, code, &code_hash)};
         if( eos_evm_version_ >= 3 ) {
-            exec_result.storage_gas_consumed += gas_params_.G_txnewaccount;
+            res.storage_gas_consumed += storage_gas_consumed;
         }
-        res = exec_result;
     }
 
     if (res.status_code != EVMC_SUCCESS) {
@@ -518,7 +521,7 @@ evmc::Result EvmHost::call(const evmc_message& message) noexcept {
             // geth returns CREATE output only in case of REVERT
             return res;
         } else {
-            evmc::Result res_with_no_output{res.status_code, res.gas_left, res.gas_refund, res.storage_gas_consumed, res.storage_gas_refund};
+            evmc::Result res_with_no_output(res.status_code, res.gas_left, res.gas_refund, res.storage_gas_consumed, res.storage_gas_refund, res.speculative_cpu_gas_consumed, nullptr, 0);
             res_with_no_output.create_address = res.create_address;
             return res_with_no_output;
         }
