@@ -753,9 +753,47 @@ TEST_CASE("EOS EVM codedeposit test") {
     CallResult res = evm.execute(txn, 1'500'000);
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(gas-res.gas_left == 123 + 500*371); //G_codedeposit=500, codelen=371
+    CHECK(res.storage_gas_consumed == 0);
+    CHECK(res.storage_gas_refund == 0);
+    CHECK(res.speculative_cpu_gas_consumed == 0);
 }
 
 TEST_CASE("EOS EVM codedeposit v3 test") {
+    Block block{};
+    block.header.number = 1;
+    block.header.nonce = eosevm::version_to_nonce(3);
+
+    evmc::address caller{0x0a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
+    Bytes code{*from_hex("608060405234801561001057600080fd5b50610173806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c806313bdfacd14610030575b600080fd5b61003861004e565b604051610045919061011b565b60405180910390f35b60606040518060400160405280600c81526020017f48656c6c6f20576f726c64210000000000000000000000000000000000000000815250905090565b600081519050919050565b600082825260208201905092915050565b60005b838110156100c55780820151818401526020810190506100aa565b60008484015250505050565b6000601f19601f8301169050919050565b60006100ed8261008b565b6100f78185610096565b93506101078185602086016100a7565b610110816100d1565b840191505092915050565b6000602082019050818103600083015261013581846100e2565b90509291505056fea264697066735822122046344ce4c7e7c91dba98aef897cc7773af40fbff6b6da10885c36037b9d37a3764736f6c63430008110033")};
+
+    evmone::gas_parameters gas_params;
+    gas_params.G_codedeposit = 500;
+
+    InMemoryState db;
+    IntraBlockState state{db};
+    state.set_balance(caller, intx::uint256{1e18});
+    state.set_nonce(caller, 10);
+    EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+
+    Transaction txn{};
+    txn.from = caller;
+    txn.data = code;
+
+    uint64_t gas = 1'500'000;
+    CallResult res = evm.execute(txn, gas);
+    CHECK(res.status == EVMC_SUCCESS);
+    CHECK(gas-res.gas_left == 123 + 500*371); //G_codedeposit=500, codelen=371
+    CHECK(res.storage_gas_consumed == 500*371);
+    CHECK(res.storage_gas_refund == 0);
+    CHECK(res.speculative_cpu_gas_consumed == 0);
+
+    // verify that the code was indeed persisted
+    auto contract_addr = create_address(caller, 10);
+    auto c = state.get_code(contract_addr);
+    CHECK(c.size() != 0);
+}
+
+TEST_CASE("EOS EVM codedeposit v3 test oog") {
     Block block{};
     block.header.number = 1;
     block.header.nonce = eosevm::version_to_nonce(3);
@@ -775,13 +813,30 @@ TEST_CASE("EOS EVM codedeposit v3 test") {
     txn.from = caller;
     txn.data = code;
 
-    uint64_t gas = 1'500'000;
+    uint64_t gas = 123 + 500*370; // enough to run initialization (real), but not enough to store code (speculative)
     CallResult res = evm.execute(txn, gas);
-    CHECK(res.status == EVMC_SUCCESS);
-    CHECK(gas-res.gas_left == 123 + 500*371); //G_codedeposit=500, codelen=371
-    CHECK(res.storage_gas_consumed == 500*371);
+    CHECK(res.status == EVMC_OUT_OF_GAS);
+    CHECK(res.gas_left == 500*370);
+    CHECK(res.storage_gas_consumed == 0);
     CHECK(res.storage_gas_refund == 0);
     CHECK(res.speculative_cpu_gas_consumed == 0);
+
+    InMemoryState db2;
+    IntraBlockState state2{db2};
+    state2.set_balance(caller, intx::uint256{1e18});
+    EVM evm2{block, state2, test::kIstanbulTrustConfig, gas_params};
+
+    Transaction txn2{};
+    txn2.from = caller;
+    txn2.data = code;
+
+    uint64_t gas2 = 122; // not-enough to run initialization (real)
+    CallResult res2 = evm2.execute(txn, gas2);
+    CHECK(res2.status == EVMC_OUT_OF_GAS);
+    CHECK(res2.gas_left == 0);
+    CHECK(res2.storage_gas_consumed == 0);
+    CHECK(res2.storage_gas_refund == 0);
+    CHECK(res2.speculative_cpu_gas_consumed == 0);
 }
 
 TEST_CASE("EOS EVM G_txnewaccount") {
@@ -810,6 +865,9 @@ TEST_CASE("EOS EVM G_txnewaccount") {
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.gas_left == 0);
     CHECK(res.gas_refund == 0);
+    CHECK(res.storage_gas_consumed == 0);
+    CHECK(res.storage_gas_refund == 0);
+    CHECK(res.speculative_cpu_gas_consumed == 0);
 
     txn.to = receiver2;
     gas_params.G_txnewaccount = 1;
@@ -819,13 +877,15 @@ TEST_CASE("EOS EVM G_txnewaccount") {
     CHECK(res.status == EVMC_OUT_OF_GAS);
     CHECK(res.gas_refund == 0);
     CHECK(res.gas_left == 0);
-
+    CHECK(res.storage_gas_consumed == 0);
+    CHECK(res.storage_gas_refund == 0);
+    CHECK(res.speculative_cpu_gas_consumed == 0);
 }
 
 TEST_CASE("EOS EVM G_txnewaccount v3") {
     Block block{};
     block.header.number = 1;
-    block.header.nonce = eosevm::version_to_nonce(1);
+    block.header.nonce = eosevm::version_to_nonce(3);
 
     evmc::address sender{0x0a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
     evmc::address receiver1{0x1a6bb546b9208cfab9e8fa2b9b2c042b18df7030_address};
@@ -851,6 +911,24 @@ TEST_CASE("EOS EVM G_txnewaccount v3") {
     CHECK(res.storage_gas_consumed == 1000);
     CHECK(res.storage_gas_refund == 0);
     CHECK(res.speculative_cpu_gas_consumed == 0);
+
+    InMemoryState db2;
+    IntraBlockState state2{db2};
+    state2.set_balance(sender, intx::uint256{1e18});
+    EVM evm2{block, state2, test::kIstanbulTrustConfig, gas_params};
+
+    Transaction txn2{};
+    txn2.from = sender;
+    txn2.to = receiver1;
+    txn2.value = intx::uint256{1};
+
+    CallResult res2 = evm2.execute(txn2, 999);
+    CHECK(res2.status == EVMC_OUT_OF_GAS);
+    CHECK(res2.gas_left == 999);
+    CHECK(res2.gas_refund == 0);
+    CHECK(res2.storage_gas_consumed == 0);
+    CHECK(res2.storage_gas_refund == 0);
+    CHECK(res2.speculative_cpu_gas_consumed == 0);
 }
 
 
@@ -887,6 +965,9 @@ TEST_CASE("EOS EVM send value to reserved address (tx)") {
     CHECK(res1.status == EVMC_SUCCESS);
     CHECK(res1.gas_left == 1000);
     CHECK(res1.gas_refund == 0);
+    CHECK(res1.storage_gas_consumed == 0);
+    CHECK(res1.storage_gas_refund == 0);
+    CHECK(res1.speculative_cpu_gas_consumed == 0);
 
     //version = 2, G_txnewaccount = 5000, gas_limit = 4999
     gas_params.G_txnewaccount = 5000;
@@ -894,6 +975,10 @@ TEST_CASE("EOS EVM send value to reserved address (tx)") {
     CHECK(res2.status == EVMC_SUCCESS);
     CHECK(res2.gas_left == 4999);
     CHECK(res2.gas_refund == 0);
+    CHECK(res2.storage_gas_consumed == 0);
+    CHECK(res2.storage_gas_refund == 0);
+    CHECK(res2.speculative_cpu_gas_consumed == 0);
+
 }
 
 }  // namespace silkworm

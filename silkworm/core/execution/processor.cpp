@@ -77,7 +77,6 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     assert(g0 <= UINT64_MAX);  // true due to the precondition (transaction must be valid)
 
     const CallResult vm_res{evm_.execute(txn, txn.gas_limit - static_cast<uint64_t>(g0))};
-
     uint64_t gas_used{0};
     if(eos_evm_version < 3) {
         gas_used = txn.gas_limit - refund_gas(txn, vm_res.gas_left, vm_res.gas_refund);
@@ -88,21 +87,30 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     } else {
         uint64_t storage_gas_consumed{vm_res.storage_gas_consumed};
         const bool contract_creation{!txn.to};
+        auto gas_left = vm_res.gas_left;
         if(contract_creation) {
-            storage_gas_consumed += gas_params.G_txcreate; //correct storage gas consumed to account for initial G_txcreate storage gas
+            if( vm_res.status == EVMC_SUCCESS ) {
+                storage_gas_consumed += gas_params.G_txcreate; //correct storage gas consumed to account for initial G_txcreate storage gas
+            } else {
+                gas_left += gas_params.G_txcreate;
+            }
         }
 
         evmone::gas_state_t vm_res_gas_state(eos_evm_version, static_cast<int64_t>(vm_res.gas_refund),
              static_cast<int64_t>(storage_gas_consumed), static_cast<int64_t>(vm_res.storage_gas_refund), static_cast<int64_t>(vm_res.speculative_cpu_gas_consumed));
-        gas_used = txn.gas_limit - vm_res.gas_left;
-        gas_used -= static_cast<uint64_t>(vm_res_gas_state.collapse());
+
+        gas_left += static_cast<uint64_t>(vm_res_gas_state.collapse());
+        gas_used = txn.gas_limit - gas_left;
         assert(vm_res_gas_state.cpu_gas_refund() == 0);
         const auto total_storage_gas_consumed = vm_res_gas_state.storage_gas_consumed();
+        assert(gas_used > static_cast<uint64_t>(total_storage_gas_consumed));
         const auto total_cpu_gas_consumed = gas_used - static_cast<uint64_t>(total_storage_gas_consumed);
+        (void)total_cpu_gas_consumed;
 
         // award the fee recipient
         const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
-        state_.add_to_balance(evm_.beneficiary, price * total_cpu_gas_consumed);
+        state_.add_to_balance(evm_.beneficiary, price * gas_used);
+        state_.add_to_balance(*txn.from, price * gas_left);
     }
 
     state_.destruct_suicides();
