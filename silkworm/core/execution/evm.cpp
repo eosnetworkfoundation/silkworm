@@ -36,6 +36,24 @@
 
 namespace silkworm {
 
+void revert_speculative_gas(evmc::Result& res) {
+    res.gas_left += res.storage_gas_consumed;
+    res.gas_left += res.speculative_cpu_gas_consumed;
+    res.gas_refund = 0;
+    res.storage_gas_consumed = 0;
+    res.storage_gas_refund = 0;
+    res.speculative_cpu_gas_consumed = 0;
+};
+
+void revert_speculative_gas(evmc_result& res) {
+    res.gas_left += res.storage_gas_consumed;
+    res.gas_left += res.speculative_cpu_gas_consumed;
+    res.gas_refund = 0;
+    res.storage_gas_consumed = 0;
+    res.storage_gas_refund = 0;
+    res.speculative_cpu_gas_consumed = 0;
+};
+
 class DelegatingTracer : public evmone::Tracer {
   public:
     explicit DelegatingTracer(EvmTracer& tracer, IntraBlockState& intra_block_state) noexcept
@@ -96,11 +114,14 @@ CallResult EVM::execute(const Transaction& txn, uint64_t gas) noexcept {
 
     const auto gas_left = static_cast<uint64_t>(res.gas_left);
     const auto gas_refund = static_cast<uint64_t>(res.gas_refund);
-    return {res.status_code, gas_left, gas_refund, {res.output_data, res.output_size}};
+    const auto storage_gas_consumed = static_cast<uint64_t>(res.storage_gas_consumed);
+    const auto storage_gas_refund = static_cast<uint64_t>(res.storage_gas_refund);
+    const auto speculative_cpu_gas_consumed = static_cast<uint64_t>(res.speculative_cpu_gas_consumed);
+    return {res.status_code, gas_left, gas_refund, storage_gas_consumed, storage_gas_refund, speculative_cpu_gas_consumed, {res.output_data, res.output_size}};
 }
 
 evmc::Result EVM::create(const evmc_message& message) noexcept {
-    evmc::Result res{EVMC_SUCCESS, message.gas, 0};
+    evmc::Result res(EVMC_SUCCESS, message.gas, 0, 0, 0, 0, nullptr, 0);
 
     auto value{intx::be::load<intx::uint256>(message.value)};
     if (state_.get_balance(message.sender) < value) {
@@ -160,14 +181,26 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
 
     if (evm_res.status_code == EVMC_SUCCESS) {
         const size_t code_len{evm_res.output_size};
-        const uint64_t code_deploy_gas{code_len * (eos_evm_version_ > 0 ? gas_params_.G_codedeposit : protocol::fee::kGCodeDeposit)};
-
+        uint64_t code_deploy_gas{code_len * (eos_evm_version_ > 0 ? gas_params_.G_codedeposit : protocol::fee::kGCodeDeposit)};
         if (rev >= EVMC_SPURIOUS_DRAGON && code_len > protocol::kMaxCodeSize) {
             // EIP-170: Contract code size limit
             evm_res.status_code = EVMC_OUT_OF_GAS;
         } else if (rev >= EVMC_LONDON && code_len > 0 && evm_res.output_data[0] == 0xEF) {
             // EIP-3541: Reject new contract code starting with the 0xEF byte
             evm_res.status_code = EVMC_CONTRACT_VALIDATION_FAILURE;
+        } else if (eos_evm_version_ >= 3) {
+            evmone::gas_state_t tmp_gas_state(eos_evm_version_, evm_res.gas_refund, evm_res.storage_gas_consumed, evm_res.storage_gas_refund, evm_res.speculative_cpu_gas_consumed);
+            code_deploy_gas = static_cast<uint64_t>(tmp_gas_state.apply_storage_gas_delta(static_cast<int64_t>(code_deploy_gas)));
+            if((evm_res.gas_left -= static_cast<int64_t>(code_deploy_gas)) < 0) {
+                evm_res.status_code = EVMC_OUT_OF_GAS;
+            } else {
+                state_.set_code(contract_addr, {evm_res.output_data, evm_res.output_size});
+            }
+            assert(tmp_gas_state.cpu_gas_refund() == emv_res.gas_refund);
+            assert(tmp_gas_state.speculative_cpu_gas_consumed() == emv_res.speculative_cpu_gas_consumed);
+            evm_res.storage_gas_consumed = tmp_gas_state.storage_gas_consumed();
+            evm_res.storage_gas_refund = tmp_gas_state.storage_gas_refund();
+            state_.set_code(contract_addr, {evm_res.output_data, evm_res.output_size});
         } else if (evm_res.gas_left >= 0 && static_cast<uint64_t>(evm_res.gas_left) >= code_deploy_gas) {
             evm_res.gas_left -= static_cast<int64_t>(code_deploy_gas);
             state_.set_code(contract_addr, {evm_res.output_data, evm_res.output_size});
@@ -180,9 +213,13 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
         evm_res.create_address = contract_addr;
     } else {
         state_.revert_to_snapshot(snapshot);
-        evm_res.gas_refund = 0;
-        if (evm_res.status_code != EVMC_REVERT) {
-            evm_res.gas_left = 0;
+        if(eos_evm_version_ >= 3) {
+            revert_speculative_gas(evm_res);
+        } else {
+            evm_res.gas_refund = 0;
+            if (evm_res.status_code != EVMC_REVERT) {
+                evm_res.gas_left = 0;
+            }
         }
     }
 
@@ -194,8 +231,9 @@ evmc::Result EVM::create(const evmc_message& message) noexcept {
     return evmc::Result{evm_res};
 }
 
-evmc::Result EVM::call(const evmc_message& message) noexcept {
-    evmc::Result res{EVMC_SUCCESS, message.gas};
+evmc::Result EVM::call(const evmc_message& msg) noexcept {
+    evmc_message message{msg};
+    evmc::Result res(EVMC_SUCCESS, message.gas, 0, 0, 0, 0, nullptr, 0);
 
     auto at_exit = gsl::finally([&] {
         if(res.status_code == EVMC_SUCCESS && message_filter_ && (*message_filter_)(message)) {
@@ -255,38 +293,54 @@ evmc::Result EVM::call(const evmc_message& message) noexcept {
             tracer.get().on_execution_end(res.raw(),state_);
         }
     } else {
-
-        evmc_message revisted_message{message};
-        if(eos_evm_version_ > 0 && revisted_message.depth == 0 && !is_zero(evmc::bytes32{revisted_message.value}) && !recipient_exists) {
-            if ((res.gas_left -= static_cast<int64_t>(gas_params_.G_txnewaccount)) < 0) {
+        if(eos_evm_version_ > 0 && message.depth == 0 && !is_zero(evmc::bytes32{message.value}) && !recipient_exists) {
+            int64_t cost = static_cast<int64_t>(gas_params_.G_txnewaccount);
+            if( eos_evm_version_ >= 3 ) {
+                assert(res.storage_gas_consumed == 0);
+                assert(res.storage_gas_refund == 0);
+                res.storage_gas_consumed = cost; // This is equivalent to state.apply_storage_gas_delta(cost)
+            }
+            if ((res.gas_left -= cost) < 0) {
+                res.status_code = EVMC_OUT_OF_GAS;
                 // If we run out of gas lets do everything here
                 state_.revert_to_snapshot(snapshot);
-                res.status_code = EVMC_OUT_OF_GAS;
-                res.gas_refund = 0;
-                res.gas_left = 0;
+                if( eos_evm_version_ >= 3 ) {
+                    revert_speculative_gas(res);
+                } else {
+                    res.gas_refund = 0;
+                    res.gas_left = 0;
+                }
                 for (auto tracer : tracers_) {
-                    tracer.get().on_execution_start(rev, revisted_message, {});
+                    tracer.get().on_execution_start(rev, message, {});
                     tracer.get().on_execution_end(res.raw(), state_);
                 }
                 return res;
             }
-            revisted_message.gas = res.gas_left;
+            message.gas = res.gas_left;
         }
 
-        const ByteView code{state_.get_code(revisted_message.code_address)};
+        const ByteView code{state_.get_code(message.code_address)};
         if (code.empty() && tracers_.empty()) {  // Do not skip execution if there are any tracers
             return res;
         }
 
-        const evmc::bytes32 code_hash{state_.get_code_hash(revisted_message.code_address)};
-        res = evmc::Result{execute(revisted_message, code, &code_hash)};
+        const evmc::bytes32 code_hash{state_.get_code_hash(message.code_address)};
+        const auto storage_gas_consumed = res.storage_gas_consumed;
+        res = evmc::Result{execute(message, code, &code_hash)};
+        if( eos_evm_version_ >= 3 ) {
+            res.storage_gas_consumed += storage_gas_consumed;
+        }
     }
 
     if (res.status_code != EVMC_SUCCESS) {
         state_.revert_to_snapshot(snapshot);
-        res.gas_refund = 0;
-        if (res.status_code != EVMC_REVERT) {
-            res.gas_left = 0;
+        if(eos_evm_version_ >= 3) {
+            revert_speculative_gas(res);
+        } else {
+            res.gas_refund = 0;
+            if (res.status_code != EVMC_REVERT) {
+                res.gas_left = 0;
+            }
         }
     }
 
@@ -343,8 +397,7 @@ evmc_result EVM::execute_with_baseline_interpreter(evmc_revision rev, const evmc
     EvmHost host{*this};
     gsl::owner<evmone::ExecutionState*> state{acquire_state()};
 
-    state->reset(msg, rev, host.get_interface(), host.to_context(), code, gas_params_);
-    state->eos_evm_version = eos_evm_version_;
+    state->reset(msg, rev, host.get_interface(), host.to_context(), code, gas_params_, eos_evm_version_);
 
     const auto vm{static_cast<evmone::VM*>(evm1_)};
     evmc_result res{evmone::baseline::execute(*vm, msg.gas, *state, *analysis)};
@@ -497,7 +550,7 @@ evmc::Result EvmHost::call(const evmc_message& message) noexcept {
             // geth returns CREATE output only in case of REVERT
             return res;
         } else {
-            evmc::Result res_with_no_output{res.status_code, res.gas_left, res.gas_refund};
+            evmc::Result res_with_no_output(res.status_code, res.gas_left, res.gas_refund, res.storage_gas_consumed, res.storage_gas_refund, res.speculative_cpu_gas_consumed, nullptr, 0);
             res_with_no_output.create_address = res.create_address;
             return res_with_no_output;
         }

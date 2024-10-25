@@ -124,81 +124,6 @@ TEST_CASE("No refund on error") {
     CHECK(receipt2.cumulative_gas_used - receipt1.cumulative_gas_used == txn.gas_limit);
 }
 
-TEST_CASE("refund eosevm v2") {
-
-    auto deploy_and_execute = [&](uint64_t v, uint64_t times=10) {
-        Block block{};
-        block.header.number = 10'050'107;
-        block.header.gas_limit = 10'000'000;
-        block.header.nonce = eosevm::version_to_nonce(v);
-        block.header.beneficiary = 0x5146556427ff689250ed1801a783d12138c3dd5e_address;
-        evmc::address caller{0x834e9b529ac9fa63b39a06f8d8c9b0d6791fa5df_address};
-        uint64_t nonce{3};
-
-        /*
-        // SPDX-License-Identifier: GPL-3.0
-        pragma solidity >=0.8.2 <0.9.0;
-        contract Refund {
-            uint256 number;
-            function run(uint256 times) public {
-                for (uint i = 0; i < times; i++) {
-                    number = 1;
-                    number = 0;
-                }
-            }
-        }
-        */
-        Bytes code{*from_hex("608060405234801561001057600080fd5b50610192806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a444f5e914610030575b600080fd5b61004a600480360381019061004591906100b8565b61004c565b005b60005b8181101561007957600160008190555060008081905550808061007190610114565b91505061004f565b5050565b600080fd5b6000819050919050565b61009581610082565b81146100a057600080fd5b50565b6000813590506100b28161008c565b92915050565b6000602082840312156100ce576100cd61007d565b5b60006100dc848285016100a3565b91505092915050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b600061011f82610082565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8203610151576101506100e5565b5b60018201905091905056fea26469706673582212203d88f52fc817048f72a222d4f3e50f4c76512b2119e3b493958f9b2bc033363a64736f6c63430008110033")};
-
-        InMemoryState state;
-        auto rule_set{protocol::rule_set_factory(kEOSEVMMainnetConfig)};
-        ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}};
-
-        Transaction txn{
-            {.nonce = nonce,
-            .max_priority_fee_per_gas = 150 * kGiga,
-            .max_fee_per_gas = 150 * kGiga,
-            .gas_limit = 150'000,
-            .data = code},
-            false,  // odd_y_parity
-            1,      // r
-            1,      // s
-        };
-
-        processor.evm().state().add_to_balance(caller, 100*kEther);
-        processor.evm().state().set_nonce(caller, nonce);
-        txn.from = caller;
-
-        Receipt receipt1;
-        processor.execute_transaction(txn, receipt1);
-        CHECK(receipt1.success);
-
-        // Call run(10) on the newly created contract //a444f5e9 = run, 00..0a = 10
-        txn.nonce     = nonce + 1;
-        txn.to        = create_address(caller, nonce);
-        txn.data      = *from_hex("a444f5e9" + to_hex(evmc::bytes32{times}));
-        txn.gas_limit = 800'000;
-
-        Receipt receipt2;
-        processor.execute_transaction(txn, receipt2);
-        CHECK(receipt2.success);
-        return receipt2.cumulative_gas_used - receipt1.cumulative_gas_used;
-    };
-
-    auto gas_used_v0 = deploy_and_execute(0);
-    CHECK(gas_used_v0 == 115830);
-
-    auto gas_used_v1 = deploy_and_execute(1);
-    CHECK(gas_used_v1 == 181408);
-
-    auto gas_used_v2 = deploy_and_execute(2);
-    CHECK(gas_used_v2 == 27760);
-
-    auto gas_used_v2_0_times = deploy_and_execute(2, 0);
-    CHECK(gas_used_v2_0_times == 21608);
-}
-
-
 TEST_CASE("Self-destruct") {
     Block block{};
     block.header.number = 1'487'375;
@@ -463,7 +388,81 @@ TEST_CASE("Empty suicide beneficiary") {
     CHECK(!state.read_account(suicide_beneficiary));
 }
 
-TEST_CASE("EVM message filter") {
+TEST_CASE("EOS EVM refund v2") {
+
+    auto deploy_and_execute = [&](uint64_t v, uint64_t times=10) {
+        Block block{};
+        block.header.number = 10'050'107;
+        block.header.gas_limit = 10'000'000;
+        block.header.nonce = eosevm::version_to_nonce(v);
+        block.header.beneficiary = 0x5146556427ff689250ed1801a783d12138c3dd5e_address;
+        evmc::address caller{0x834e9b529ac9fa63b39a06f8d8c9b0d6791fa5df_address};
+        uint64_t nonce{3};
+
+        /*
+        // SPDX-License-Identifier: GPL-3.0
+        pragma solidity >=0.8.2 <0.9.0;
+        contract Refund {
+            uint256 number;
+            function run(uint256 times) public {
+                for (uint i = 0; i < times; i++) {
+                    number = 1;
+                    number = 0;
+                }
+            }
+        }
+        */
+        Bytes code{*from_hex("608060405234801561001057600080fd5b50610192806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a444f5e914610030575b600080fd5b61004a600480360381019061004591906100b8565b61004c565b005b60005b8181101561007957600160008190555060008081905550808061007190610114565b91505061004f565b5050565b600080fd5b6000819050919050565b61009581610082565b81146100a057600080fd5b50565b6000813590506100b28161008c565b92915050565b6000602082840312156100ce576100cd61007d565b5b60006100dc848285016100a3565b91505092915050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b600061011f82610082565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8203610151576101506100e5565b5b60018201905091905056fea26469706673582212203d88f52fc817048f72a222d4f3e50f4c76512b2119e3b493958f9b2bc033363a64736f6c63430008110033")};
+
+        InMemoryState state;
+        auto rule_set{protocol::rule_set_factory(kEOSEVMMainnetConfig)};
+        ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}};
+
+        Transaction txn{
+            {.nonce = nonce,
+            .max_priority_fee_per_gas = 150 * kGiga,
+            .max_fee_per_gas = 150 * kGiga,
+            .gas_limit = 150'000,
+            .data = code},
+            false,  // odd_y_parity
+            1,      // r
+            1,      // s
+        };
+
+        processor.evm().state().add_to_balance(caller, 100*kEther);
+        processor.evm().state().set_nonce(caller, nonce);
+        txn.from = caller;
+
+        Receipt receipt1;
+        processor.execute_transaction(txn, receipt1);
+        CHECK(receipt1.success);
+
+        // Call run(10) on the newly created contract //a444f5e9 = run, 00..0a = 10
+        txn.nonce     = nonce + 1;
+        txn.to        = create_address(caller, nonce);
+        txn.data      = *from_hex("a444f5e9" + to_hex(evmc::bytes32{times}));
+        txn.gas_limit = 800'000;
+
+        Receipt receipt2;
+        processor.execute_transaction(txn, receipt2);
+        CHECK(receipt2.success);
+        return receipt2.cumulative_gas_used - receipt1.cumulative_gas_used;
+    };
+
+    auto gas_used_v0 = deploy_and_execute(0);
+    CHECK(gas_used_v0 == 115830);
+
+    auto gas_used_v1 = deploy_and_execute(1);
+    CHECK(gas_used_v1 == 181408);
+
+    auto gas_used_v2 = deploy_and_execute(2);
+    CHECK(gas_used_v2 == 27760);
+
+    auto gas_used_v2_0_times = deploy_and_execute(2, 0);
+    CHECK(gas_used_v2_0_times == 21608);
+}
+
+TEST_CASE("EOS EVM message filter") {
 
     Block block{};
     block.header.number = 100;
@@ -565,7 +564,7 @@ TEST_CASE("EVM message filter") {
     CHECK(fm2[0].data == *from_hex("0xB0CA"));
 }
 
-TEST_CASE("EVM message filter revert") {
+TEST_CASE("EOS EVM message filter revert") {
 
     Block block{};
     block.header.number = 100;
@@ -688,7 +687,7 @@ TEST_CASE("EVM message filter revert") {
     CHECK(filtered_messages2[0].data == *from_hex("0xf781185b0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000003796573000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010100000000000000000000000000000000000000000000000000000000000000"));
 }
 
-TEST_CASE("No fee burn when chain uses trust ruleset") {
+TEST_CASE("EOS EVM No fee burn when chain uses trust ruleset") {
 
     intx::uint256 max_priority_fee_per_gas = 5 * kGiga;
     intx::uint256 max_fee_per_gas = 105 * kGiga;
@@ -779,6 +778,98 @@ TEST_CASE("No fee burn when chain uses trust ruleset") {
     // Priority fee credited to beneficiary_balance (kEthash RuleSet)
     std::tie(gas_used, beneficiary_balance) = deploy_contract(kMainnetConfig);
     CHECK(beneficiary_balance == pf*gas_used);
+}
+
+TEST_CASE("EOS EVM v3 contract creation") {
+
+    intx::uint256 max_priority_fee_per_gas = 5 * kGiga;
+    intx::uint256 max_fee_per_gas = 105 * kGiga;
+    intx::uint256 base_fee_per_gas = 80 * kGiga;
+
+    auto deploy_contract = [&](const ChainConfig& chain_config, uint64_t gas_limit) -> auto {
+
+        Block block{};
+        block.header.number = 9'069'000;
+        block.header.gas_limit = 0x7fffffff;
+        block.header.beneficiary = 0xbbbbbbbbbbbbbbbbbbbbbbbb0000000000000000_address;
+        block.header.nonce = eosevm::version_to_nonce(3);
+        block.header.base_fee_per_gas = base_fee_per_gas;
+
+        evmc::address caller{0x834e9b529ac9fa63b39a06f8d8c9b0d6791fa5df_address};
+        uint64_t nonce{3};
+
+        /*
+        // SPDX-License-Identifier: MIT
+        pragma solidity ^0.8.0;
+        contract HeavyInit {
+            // Example of 10 storage slots
+            uint256[10] public storageSlots;
+            constructor() {
+                for (uint256 i = 0; i < 10; i++) {
+                    storageSlots[i] = 1;
+                }
+            }
+            function retrieve(uint256 index) public view returns (uint256){
+                return storageSlots[index];
+            }
+        }
+        */
+        Bytes code{*from_hex("6080604052348015600e575f80fd5b505f5b600a811015603c5760015f82600a8110602b57602a6041565b5b018190555080806001019150506011565b50606e565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b6101ba8061007b5f395ff3fe608060405234801561000f575f80fd5b5060043610610034575f3560e01c80635387694b146100385780638f88708b14610068575b5f80fd5b610052600480360381019061004d9190610104565b610098565b60405161005f919061013e565b60405180910390f35b610082600480360381019061007d9190610104565b6100b0565b60405161008f919061013e565b60405180910390f35b5f81600a81106100a6575f80fd5b015f915090505481565b5f8082600a81106100c4576100c3610157565b5b01549050919050565b5f80fd5b5f819050919050565b6100e3816100d1565b81146100ed575f80fd5b50565b5f813590506100fe816100da565b92915050565b5f60208284031215610119576101186100cd565b5b5f610126848285016100f0565b91505092915050565b610138816100d1565b82525050565b5f6020820190506101515f83018461012f565b92915050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffdfea2646970667358221220702d8bb14041667c80c0f9380e5ddc6b1b1e6fdcf1e572f9af923407673c305e64736f6c634300081a0033")};
+
+        InMemoryState state;
+        auto rule_set{protocol::rule_set_factory(chain_config)};
+
+        evmone::gas_parameters gas_params;
+        gas_params.G_txcreate = 50000;
+
+        ExecutionProcessor processor{block, *rule_set, state, chain_config, gas_params};
+
+        Transaction txn{{
+                .type = TransactionType::kDynamicFee,
+                .nonce = nonce,
+                .max_priority_fee_per_gas = max_priority_fee_per_gas,
+                .max_fee_per_gas = max_fee_per_gas,
+                .gas_limit = gas_limit,
+                .data = code
+            },
+            false,  // odd_y_parity
+            1,      // r
+            1,      // s
+        };
+
+        processor.evm().state().add_to_balance(caller, kEther*100);
+        processor.evm().state().set_nonce(caller, nonce);
+        txn.from = caller;
+
+        Receipt receipt1;
+        processor.execute_transaction(txn, receipt1);
+
+        return std::make_tuple(
+            receipt1,
+            processor.evm().state().get_balance(block.header.beneficiary)
+        );
+    };
+
+    // g_txcreate = 50000
+    // g0 = 29092+g_txcreate = 79092
+    // init = 23156 (real) + 171000 (storage spec) + 28000 (cpu spec) = 222156
+    // code_deposit = 442 * 200 = 88400
+
+    auto [receipt1, _unused1] = deploy_contract(kEOSEVMMainnetConfig, 79092);
+    CHECK(receipt1.success == false);
+    CHECK(receipt1.cumulative_gas_used == 29092); // Only the real intrinsic gas (g_txcreate is refunded)
+
+    auto [receipt2, _unused2] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 222156 - 1);
+    CHECK(receipt2.success == false);
+    CHECK(receipt2.cumulative_gas_used == 29092+23156-1); // Only the real intrinsic+constructor
+
+    auto [receipt3, _unused3] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 222156 + 88400 - 1);
+    CHECK(receipt3.success == false);
+    CHECK(receipt3.cumulative_gas_used == 29092+23156); // Only the real intrinsic+constructor (full)
+
+    auto [receipt4, _unused4] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 222156 + 88400);
+    CHECK(receipt4.success == true);
+    CHECK(receipt4.cumulative_gas_used == 79092+222156+88400);
 }
 
 }  // namespace silkworm

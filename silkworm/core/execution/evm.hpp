@@ -37,6 +37,9 @@ struct CallResult {
     evmc_status_code status{EVMC_SUCCESS};
     uint64_t gas_left{0};
     uint64_t gas_refund{0};
+    uint64_t storage_gas_consumed{0};
+    uint64_t storage_gas_refund{0};
+    uint64_t speculative_cpu_gas_consumed{0};
     Bytes data;
 };
 
