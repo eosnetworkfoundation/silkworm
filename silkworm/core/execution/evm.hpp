@@ -32,6 +32,14 @@
 #include <silkworm/core/types/block.hpp>
 
 namespace silkworm {
+struct ExecutionResult {
+  // inclusion_fee+overhead_fee+storage_fee == receipt.cumulative_gas_used*effective_price
+  uint64_t discounted_storage_gas_consumed{0};
+  uint64_t cpu_gas_consumed{0};
+  intx::uint256 overhead_fee;  //approx. => cpu_gas_consumed * overhead_price
+  intx::uint256 inclusion_fee; //approx. => cpu_gas_consumed * inclusion_price
+  intx::uint256 storage_fee;   //exactly => discounted_storage_gas_consumed * effective_price
+};
 
 struct CallResult {
     evmc_status_code status{EVMC_SUCCESS};
@@ -112,7 +120,7 @@ class EVM {
        gas_params_ = gas_params;
     }
 
-    const evmone::gas_parameters& get_gas_params() {
+    const evmone::gas_parameters get_gas_params() {
       return gas_params_;
     }
 

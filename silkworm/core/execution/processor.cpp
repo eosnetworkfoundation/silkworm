@@ -26,13 +26,15 @@
 namespace silkworm {
 
 ExecutionProcessor::ExecutionProcessor(const Block& block, protocol::IRuleSet& rule_set, State& state,
-                                       const ChainConfig& config, const evmone::gas_parameters& gas_params)
-    : state_{state}, rule_set_{rule_set}, evm_{block, state_, config, gas_params} {
+                                       const ChainConfig& config, const evmone::gas_parameters& gas_params, const gas_prices_t& gas_prices)
+    : state_{state}, rule_set_{rule_set}, evm_{block, state_, config, gas_params}, gas_params_{gas_params}, gas_prices_{gas_prices} {
     evm_.beneficiary = rule_set.get_beneficiary(block.header);
 }
 
-void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& receipt) noexcept {
+ExecutionResult ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& receipt) noexcept {
     assert(protocol::validate_transaction(txn, state_, available_gas()) == ValidationResult::kOk);
+
+    ExecutionResult res;
 
     // Optimization: since receipt.logs might have some capacity, let's reuse it.
     std::swap(receipt.logs, state_.logs());
@@ -71,9 +73,10 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     state_.subtract_from_balance(*txn.from, txn.total_data_gas() * data_gas_price);
 
     const auto eos_evm_version = evm_.get_eos_evm_version();
-    const auto& gas_params = evm_.get_gas_params();
+    intx::uint256 inclusion_price;
+    if( eos_evm_version >= 3 ) inclusion_price = std::min(txn.max_priority_fee_per_gas, txn.max_fee_per_gas - base_fee_per_gas);
 
-    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, eos_evm_version, gas_params)};
+    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, eos_evm_version, gas_params_)};
     assert(g0 <= UINT64_MAX);  // true due to the precondition (transaction must be valid)
 
     const CallResult vm_res{evm_.execute(txn, txn.gas_limit - static_cast<uint64_t>(g0))};
@@ -90,9 +93,9 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
         auto gas_left = vm_res.gas_left;
         if(contract_creation) {
             if( vm_res.status == EVMC_SUCCESS ) {
-                storage_gas_consumed += gas_params.G_txcreate; //correct storage gas consumed to account for initial G_txcreate storage gas
+                storage_gas_consumed += gas_params_.G_txcreate; //correct storage gas consumed to account for initial G_txcreate storage gas
             } else {
-                gas_left += gas_params.G_txcreate;
+                gas_left += gas_params_.G_txcreate;
             }
         }
 
@@ -102,14 +105,46 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
         gas_left += static_cast<uint64_t>(vm_res_gas_state.collapse());
         gas_used = txn.gas_limit - gas_left;
         assert(vm_res_gas_state.cpu_gas_refund() == 0);
-        const auto total_storage_gas_consumed = vm_res_gas_state.storage_gas_consumed();
-        assert(gas_used > static_cast<uint64_t>(total_storage_gas_consumed));
-        const auto total_cpu_gas_consumed = gas_used - static_cast<uint64_t>(total_storage_gas_consumed);
-        (void)total_cpu_gas_consumed;
+        const auto total_storage_gas_consumed = static_cast<uint64_t>(vm_res_gas_state.storage_gas_consumed());
+        assert(gas_used > total_storage_gas_consumed);
+        const auto total_cpu_gas_consumed = gas_used - total_storage_gas_consumed;
+
+        const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
+
+        res.cpu_gas_consumed = total_cpu_gas_consumed;
+        res.discounted_storage_gas_consumed = static_cast<uint64_t>(total_storage_gas_consumed);
+        res.inclusion_fee = intx::uint256(total_cpu_gas_consumed)*inclusion_price;
+        res.storage_fee = intx::uint256(total_storage_gas_consumed)*price;
+
+        auto final_fee = price * gas_used;
+        if(gas_prices_.storage_price >= gas_prices_.overhead_price) {
+            intx::uint256 gas_refund = intx::uint256(total_cpu_gas_consumed);
+            gas_refund *= intx::uint256(gas_prices_.storage_price-gas_prices_.overhead_price);
+            gas_refund /= price;
+
+            SILKWORM_ASSERT(gas_refund <= gas_used);
+            gas_left += static_cast<uint64_t>(gas_refund);
+            assert(txn.gas_limit >= gas_left);
+            gas_used = txn.gas_limit - gas_left;
+            SILKWORM_ASSERT(gas_used >= total_storage_gas_consumed);
+            final_fee = price * gas_used;
+
+            assert(final_fee >= res.storage_fee);
+            const auto overhead_and_inclusion_fee = final_fee - res.storage_fee;
+            if( overhead_and_inclusion_fee >= res.inclusion_fee ) {
+                res.overhead_fee = overhead_and_inclusion_fee - res.inclusion_fee;
+            } else {
+                res.inclusion_fee = overhead_and_inclusion_fee;
+                res.overhead_fee = 0;
+            }
+        } else {
+            res.overhead_fee = final_fee - res.inclusion_fee - res.storage_fee;
+        }
+
+        assert(final_fee == res.inclusion_fee + res.storage_fee + res.overhead_fee);
 
         // award the fee recipient
-        const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
-        state_.add_to_balance(evm_.beneficiary, price * gas_used);
+        state_.add_to_balance(evm_.beneficiary, final_fee);
         state_.add_to_balance(*txn.from, price * gas_left);
     }
 
@@ -127,6 +162,7 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     receipt.cumulative_gas_used = cumulative_gas_used_;
     receipt.bloom = logs_bloom(state_.logs());
     std::swap(receipt.logs, state_.logs());
+    return res;
 }
 
 uint64_t ExecutionProcessor::available_gas() const noexcept {

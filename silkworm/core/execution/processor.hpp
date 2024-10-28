@@ -25,6 +25,7 @@
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/core/types/receipt.hpp>
 #include <silkworm/core/types/transaction.hpp>
+#include <silkworm/core/types/gas_prices.hpp>
 
 namespace silkworm {
 
@@ -33,13 +34,13 @@ class ExecutionProcessor {
     ExecutionProcessor(const ExecutionProcessor&) = delete;
     ExecutionProcessor& operator=(const ExecutionProcessor&) = delete;
 
-    ExecutionProcessor(const Block& block, protocol::IRuleSet& rule_set, State& state, const ChainConfig& config, const evmone::gas_parameters& gas_params);
+    ExecutionProcessor(const Block& block, protocol::IRuleSet& rule_set, State& state, const ChainConfig& config, const evmone::gas_parameters& gas_params, const gas_prices_t& gas_prices);
 
     /**
      * Execute a transaction, but do not write to the DB yet.
      * Precondition: transaction must be valid.
      */
-    void execute_transaction(const Transaction& txn, Receipt& receipt) noexcept;
+    ExecutionResult execute_transaction(const Transaction& txn, Receipt& receipt) noexcept;
 
     //! \brief Execute the block and write the result to the DB.
     //! \remarks Warning: This method does not verify state root; pre-Byzantium receipt root isn't validated either.
@@ -71,6 +72,8 @@ class ExecutionProcessor {
     IntraBlockState state_;
     protocol::IRuleSet& rule_set_;
     EVM evm_;
+    evmone::gas_parameters gas_params_;
+    gas_prices_t gas_prices_;
 };
 
 }  // namespace silkworm

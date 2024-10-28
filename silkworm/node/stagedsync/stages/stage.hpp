@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <exception>
 #include <mutex>
+#include <optional>
 
 #include <evmone/execution_state.hpp>
 #include <silkworm/infra/common/log.hpp>
@@ -27,6 +28,7 @@
 #include <silkworm/node/db/stages.hpp>
 #include <silkworm/node/db/tables.hpp>
 #include <silkworm/node/etl/collector.hpp>
+#include <silkworm/core/types/gas_prices.hpp>
 
 namespace silkworm::stagedsync {
 
@@ -127,6 +129,10 @@ class Stage : public Stoppable {
     evmone::gas_parameters last_gas_params;
     std::optional<evmc::bytes32> last_consensus_parameter_index{std::nullopt};
     const evmone::gas_parameters& get_gas_params(db::ROTxn& txn, const Block& block);
+
+    gas_prices_t last_gas_prices;
+    std::optional<evmc::bytes32> last_gas_prices_index{std::nullopt};
+    const gas_prices_t& get_gas_prices(db::ROTxn& txn, const Block& block);
 
     SyncContext* sync_context_;                                  // Shared context across stages
     const char* stage_name_;                                     // Human friendly identifier of the stage

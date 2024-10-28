@@ -304,7 +304,7 @@ TEST_CASE("Sync Stages") {
         // ---------------------------------------
         auto expected_validation_result{magic_enum::enum_name(ValidationResult::kOk)};
         auto actual_validation_result{
-            magic_enum::enum_name(execute_block(block, buffer, node_settings.chain_config.value(), {}))};
+            magic_enum::enum_name(execute_block(block, buffer, node_settings.chain_config.value(), {}, {}))};
         REQUIRE(expected_validation_result == actual_validation_result);
         auto contract_address{create_address(sender, /*nonce=*/0)};
 
@@ -325,7 +325,7 @@ TEST_CASE("Sync Stages") {
         block.transactions[0].data = ByteView(new_val);
 
         actual_validation_result =
-            magic_enum::enum_name(execute_block(block, buffer, node_settings.chain_config.value(), {}));
+            magic_enum::enum_name(execute_block(block, buffer, node_settings.chain_config.value(), {}, {}));
         REQUIRE(expected_validation_result == actual_validation_result);
 
         // ---------------------------------------
@@ -342,7 +342,7 @@ TEST_CASE("Sync Stages") {
         block.transactions[0].data = ByteView{new_val};
 
         actual_validation_result =
-            magic_enum::enum_name(execute_block(block, buffer, node_settings.chain_config.value(), {}));
+            magic_enum::enum_name(execute_block(block, buffer, node_settings.chain_config.value(), {}, {}));
         REQUIRE(expected_validation_result == actual_validation_result);
         REQUIRE_NOTHROW(buffer.write_to_db());
         REQUIRE_NOTHROW(db::stages::write_stage_progress(txn, db::stages::kExecutionKey, 3));

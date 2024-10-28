@@ -238,7 +238,7 @@ Stage::Result Execution::execute_batch(db::RWTxn& txn, BlockNum max_block_num, A
                 log_time = now + 5s;
             }
 
-            ExecutionProcessor processor(block, *rule_set_, buffer, node_settings_->chain_config.value(), get_gas_params(txn, block));
+            ExecutionProcessor processor(block, *rule_set_, buffer, node_settings_->chain_config.value(), get_gas_params(txn, block), get_gas_prices(txn, block));
             processor.evm().analysis_cache = &analysis_cache;
             processor.evm().state_pool = &state_pool;
 
