@@ -510,7 +510,7 @@ evmc_tx_context EvmHost::get_tx_context() const noexcept {
     const BlockHeader& header{evm_.block_.header};
     evmc_tx_context context{};
     const intx::uint256 base_fee_per_gas{header.base_fee_per_gas.value_or(0)};
-    const intx::uint256 effective_gas_price{evm_.txn_->effective_gas_price(base_fee_per_gas)};
+    const intx::uint256 effective_gas_price{evm_.txn_->max_fee_per_gas >= base_fee_per_gas ? evm_.txn_->effective_gas_price(base_fee_per_gas):evm_.txn_->max_priority_fee_per_gas};
     intx::be::store(context.tx_gas_price.bytes, effective_gas_price);
     context.tx_origin = *evm_.txn_->from;
     context.block_coinbase = evm_.beneficiary;
