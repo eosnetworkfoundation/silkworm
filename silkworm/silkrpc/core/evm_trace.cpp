@@ -716,7 +716,7 @@ void TraceTracer::on_execution_start(evmc_revision rev, const evmc_message& msg,
 
     current_depth_ = msg.depth;
 
-    auto create = (!initial_ibs_.exists(recipient) && created_address_.find(recipient) == created_address_.end() && recipient != code_address);
+    auto create = ((initial_ibs_.get_nonce(recipient) == 0 && initial_ibs_.get_code_hash(recipient) == kEmptyHash) && created_address_.find(recipient) == created_address_.end() && recipient != code_address);
 
     start_gas_.push(msg.gas);
 
@@ -1675,7 +1675,7 @@ void CreateTracer::on_execution_start(evmc_revision, const evmc_message& msg, ev
     auto recipient = evmc::address{msg.recipient};
     auto code_address = evmc::address{msg.code_address};
 
-    bool create = (!initial_ibs_.exists(recipient) && recipient != code_address);
+    bool create = ((initial_ibs_.get_nonce(recipient) == 0 && initial_ibs_.get_code_hash(recipient) == kEmptyHash) && recipient != code_address);
 
     if (create && recipient == contract_address_) {
         this->found_ = true;
@@ -1696,7 +1696,8 @@ void EntryTracer::on_execution_start(evmc_revision, const evmc_message& msg, evm
     auto sender = evmc::address{msg.sender};
     auto recipient = evmc::address{msg.recipient};
     auto code_address = evmc::address{msg.code_address};
-    bool create = (!initial_ibs_.exists(recipient) && recipient != code_address);
+    
+    bool create = ((initial_ibs_.get_nonce(recipient) == 0 && initial_ibs_.get_code_hash(recipient) == kEmptyHash) && recipient != code_address);
     auto input = silkworm::ByteView{msg.input_data, msg.input_size};
 
     auto str_value = "0x" + intx::hex(intx::be::load<intx::uint256>(msg.value));
@@ -1753,7 +1754,7 @@ void OperationTracer::on_execution_start(evmc_revision, const evmc_message& msg,
     auto depth = msg.depth;
     auto kind = msg.kind;
 
-    bool create = (!initial_ibs_.exists(recipient) && recipient != code_address);
+    bool create = ((initial_ibs_.get_nonce(recipient) == 0 && initial_ibs_.get_code_hash(recipient) == kEmptyHash) && recipient != code_address);
     auto str_value = "0x" + intx::hex(intx::be::load<intx::uint256>(msg.value));
 
     if (create && msg.depth > 0) {
