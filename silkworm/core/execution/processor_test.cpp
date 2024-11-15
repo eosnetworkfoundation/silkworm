@@ -852,24 +852,24 @@ TEST_CASE("EOS EVM v3 contract creation") {
 
     // g_txcreate = 50000
     // g0 = 29092+g_txcreate = 79092
-    // init = 23156 (real) + 171000 (storage spec) + 28000 (cpu spec) = 222156
+    // init = 23156 (real) + 200000 (storage spec) + 28000 (cpu spec) = 251156
     // code_deposit = 442 * 200 = 88400
 
     auto [receipt1, _unused1] = deploy_contract(kEOSEVMMainnetConfig, 79092);
     CHECK(receipt1.success == false);
     CHECK(receipt1.cumulative_gas_used == 29092); // Only the real intrinsic gas (g_txcreate is refunded)
 
-    auto [receipt2, _unused2] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 222156 - 1);
+    auto [receipt2, _unused2] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 251156 - 1);
     CHECK(receipt2.success == false);
     CHECK(receipt2.cumulative_gas_used == 29092+23156-1); // Only the real intrinsic+constructor
 
-    auto [receipt3, _unused3] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 222156 + 88400 - 1);
+    auto [receipt3, _unused3] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 251156 + 88400 - 1);
     CHECK(receipt3.success == false);
     CHECK(receipt3.cumulative_gas_used == 29092+23156); // Only the real intrinsic+constructor (full)
 
-    auto [receipt4, _unused4] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 222156 + 88400);
+    auto [receipt4, _unused4] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 251156 + 88400);
     CHECK(receipt4.success == true);
-    CHECK(receipt4.cumulative_gas_used == 79092+222156+88400);
+    CHECK(receipt4.cumulative_gas_used == 79092+251156+88400);
 }
 
 TEST_CASE("EOS EVM v3 final refund") {
@@ -945,13 +945,13 @@ TEST_CASE("EOS EVM v3 final refund") {
 
     // g_txcreate = 50000
     // g0 = 29092 (cpu real) + g_txcreate (storage spec) = 79092
-    // init = 23156 (cpu real) + 171000 (storage spec) + 28000 (cpu spec) = 222156
+    // init = 23156 (cpu real) + 200000 (storage spec) + 28000 (cpu spec) = 251156
     // code_deposit = 442 * 200 = 88400
 
     // cpu_gas_consumed = 23156 + 28000 + 29092 = 80248
-    // storage_gas_consumed = 50000 + 171000 + 88400 = 309400
+    // storage_gas_consumed = 50000 + 200000 + 88400 = 338400
 
-    CHECK(79092+222156+88400 == 80248+309400);
+    CHECK(79092+251156+88400 == 80248+338400);
 
     gas_prices_t gp;
     gp.overhead_price = 70 * kGiga;
@@ -962,9 +962,9 @@ TEST_CASE("EOS EVM v3 final refund") {
     // storage_price >= overhead_price
     uint64_t expected_refund = 9440;
 
-    auto [res, receipt, balance, effective_gas_price] = deploy_contract(kEOSEVMMainnetConfig, 79092+222156+88400, gp);
+    auto [res, receipt, balance, effective_gas_price] = deploy_contract(kEOSEVMMainnetConfig, 79092+251156+88400, gp);
     CHECK(receipt.success == true);
-    CHECK(receipt.cumulative_gas_used == 79092+222156+88400-expected_refund);
+    CHECK(receipt.cumulative_gas_used == 79092+251156+88400-expected_refund);
 
     auto inclusion_fee = inclusion_price * intx::uint256(res.cpu_gas_consumed);
     CHECK(res.inclusion_fee == inclusion_fee);
@@ -972,9 +972,9 @@ TEST_CASE("EOS EVM v3 final refund") {
 
     auto storage_fee = res.discounted_storage_gas_consumed*effective_gas_price;
     CHECK(res.storage_fee == storage_fee);
-    CHECK(res.discounted_storage_gas_consumed == 309400);
+    CHECK(res.discounted_storage_gas_consumed == 338400);
 
-    CHECK(receipt.cumulative_gas_used+expected_refund == 80248+309400);
+    CHECK(receipt.cumulative_gas_used+expected_refund == 80248+338400);
     CHECK(balance == storage_fee + inclusion_fee + res.overhead_fee);
 
     // storage_price < overhead_price
@@ -984,9 +984,9 @@ TEST_CASE("EOS EVM v3 final refund") {
     inclusion_price = std::min(max_priority_fee_per_gas, max_fee_per_gas - base_fee_per_gas);
     expected_refund = 0;
 
-    std::tie(res, receipt, balance, effective_gas_price) = deploy_contract(kEOSEVMMainnetConfig, 79092+222156+88400, gp);
+    std::tie(res, receipt, balance, effective_gas_price) = deploy_contract(kEOSEVMMainnetConfig, 79092+251156+88400, gp);
     CHECK(receipt.success == true);
-    CHECK(receipt.cumulative_gas_used == 79092+222156+88400-expected_refund);
+    CHECK(receipt.cumulative_gas_used == 79092+251156+88400-expected_refund);
 
     inclusion_fee = inclusion_price * intx::uint256(res.cpu_gas_consumed);
     CHECK(res.inclusion_fee == inclusion_fee);
@@ -994,9 +994,9 @@ TEST_CASE("EOS EVM v3 final refund") {
 
     storage_fee = res.discounted_storage_gas_consumed*effective_gas_price;
     CHECK(res.storage_fee == storage_fee);
-    CHECK(res.discounted_storage_gas_consumed == 309400);
+    CHECK(res.discounted_storage_gas_consumed == 338400);
 
-    CHECK(receipt.cumulative_gas_used+expected_refund == 80248+309400);
+    CHECK(receipt.cumulative_gas_used+expected_refund == 80248+338400);
     CHECK(balance == storage_fee + inclusion_fee + res.overhead_fee);
 }
 
