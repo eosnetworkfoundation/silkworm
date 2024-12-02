@@ -90,11 +90,11 @@ ValidationResult Blockchain::insert_block(Block& block, bool check_state_root) {
 }
 
 ValidationResult Blockchain::execute_block(const Block& block, bool check_state_root) {
-    ExecutionProcessor processor{block, *rule_set_, state_, config_, gas_params_, gas_prices_};
+    ExecutionProcessor processor{block, *rule_set_, state_, config_, gas_prices_};
     processor.evm().state_pool = state_pool;
     processor.evm().exo_evm = exo_evm;
 
-    if (const auto res{processor.execute_and_write_block(receipts_)}; res != ValidationResult::kOk) {
+    if (const auto res{processor.execute_and_write_block(receipts_, gas_params_)}; res != ValidationResult::kOk) {
         return res;
     }
 

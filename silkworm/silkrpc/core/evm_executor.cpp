@@ -33,7 +33,7 @@
 #include <silkworm/silkrpc/common/util.hpp>
 #include <silkworm/silkrpc/core/local_state.hpp>
 #include <silkworm/silkrpc/types/transaction.hpp>
-
+#include <eosevm/refund_v3.hpp>
 namespace silkworm::rpc {
 
 std::string ExecutionResult::error_message(bool full_error) const {
@@ -227,6 +227,7 @@ ExecutionResult EVMExecutor::call(
     const silkworm::Block& block,
     const silkworm::Transaction& txn,
     const evmone::gas_parameters& gas_params,
+    const silkworm::gas_prices_t& gas_prices,
     uint64_t eos_evm_version,
     Tracers tracers,
     bool refund,
@@ -236,7 +237,7 @@ ExecutionResult EVMExecutor::call(
 
     auto& svc = use_service<AnalysisCacheService>(workers_);
     //TODO: get gas parameters
-    EVM evm{block, ibs_state_, config_, gas_params};
+    EVM evm{block, ibs_state_, config_};
     evm.analysis_cache = svc.get_analysis_cache();
     evm.state_pool = svc.get_object_pool();
     evm.beneficiary = rule_set_->get_beneficiary(block.header);
@@ -256,7 +257,21 @@ ExecutionResult EVMExecutor::call(
 
     const evmc_revision rev{evm.revision()};
     const intx::uint256 base_fee_per_gas{evm.block().header.base_fee_per_gas.value_or(0)};
-    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, eos_evm_version, gas_params)};
+
+    intx::uint256 inclusion_price;
+    evmone::gas_parameters scaled_gas_params;
+    if( eos_evm_version >= 3 ) {
+        inclusion_price = std::min(txn.max_priority_fee_per_gas, txn.max_fee_per_gas - base_fee_per_gas);
+        if(!gas_prices.is_zero()) {
+            scaled_gas_params = evmone::gas_parameters::apply_discount_factor(inclusion_price, static_cast<uint64_t>(base_fee_per_gas), gas_prices.storage_price, gas_params);
+        } else {
+            scaled_gas_params = gas_params;
+        }
+    } else {
+        scaled_gas_params = gas_params;
+    }
+
+    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, eos_evm_version, scaled_gas_params)};
     SILKWORM_ASSERT(g0 <= UINT64_MAX);  // true due to the precondition (transaction must be valid)
 
     const auto error = pre_check(evm, txn, base_fee_per_gas, g0);
@@ -311,7 +326,7 @@ ExecutionResult EVMExecutor::call(
     silkworm::CallResult result;
     try {
         SILK_DEBUG << "EVMExecutor::call execute on EVM txn: " << &txn << " g0: " << static_cast<uint64_t>(g0) << " start";
-        result = evm.execute(txn, txn.gas_limit - static_cast<uint64_t>(g0));
+        result = evm.execute(txn, txn.gas_limit - static_cast<uint64_t>(g0), scaled_gas_params);
         SILK_DEBUG << "EVMExecutor::call execute on EVM txn: " << &txn << " gas_left: " << result.gas_left << " end";
     } catch (const std::exception& e) {
         SILK_ERROR << "exception: evm_execute: " << e.what() << "\n";
@@ -323,16 +338,27 @@ ExecutionResult EVMExecutor::call(
         return {std::nullopt, txn.gas_limit, /* data */ {}, "evm.execute: unknown exception"};
     }
 
-    uint64_t gas_left = result.gas_left;
-    const uint64_t gas_used{txn.gas_limit - refund_gas(evm, txn, result.gas_left, result.gas_refund)};
-    if (refund) {
-        gas_left = txn.gas_limit - gas_used;
-    }
-
-    // Reward the fee recipient
     const intx::uint256 price{evm.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
-    ibs_state_.add_to_balance(evm.beneficiary, price * gas_used);
-    SILK_DEBUG << "EVMExecutor::call evm.beneficiary: " << evm.beneficiary << " balance: " << price * gas_used;
+    uint64_t gas_left{0};
+    uint64_t gas_used{0};
+    if(eos_evm_version < 3) {
+        gas_left = result.gas_left;
+        gas_used = txn.gas_limit - refund_gas(evm, txn, result.gas_left, result.gas_refund);
+        if (refund) {
+            gas_left = txn.gas_limit - gas_used;
+        }
+        // Reward the fee recipient
+        ibs_state_.add_to_balance(evm.beneficiary, price * gas_used);
+        SILK_DEBUG << "EVMExecutor::call evm.beneficiary: " << evm.beneficiary << " balance: " << price * gas_used;
+    } else {
+        intx::uint256 final_fee{0};
+        silkworm::ExecutionResult res;
+        std::tie(res, final_fee, gas_used, gas_left) = eosevm::gas_refund_v3(eos_evm_version, result, txn, scaled_gas_params, price, gas_prices, inclusion_price);
+
+        // award the fee recipient
+        ibs_state_.add_to_balance(evm.beneficiary, final_fee);
+        ibs_state_.add_to_balance(*txn.from, price * gas_left);
+    }
 
     for (auto tracer : evm.tracers()) {
         tracer.get().on_reward_granted(result, evm.state());
@@ -352,6 +378,7 @@ awaitable<ExecutionResult> EVMExecutor::call(const silkworm::ChainConfig& config
                                              const silkworm::Transaction& txn,
                                              StateFactory state_factory,
                                              const evmone::gas_parameters& gas_params,
+                                             const silkworm::gas_prices_t& gas_prices,
                                              uint64_t eos_evm_version,
                                              Tracers tracers,
                                              bool refund,
@@ -362,7 +389,7 @@ awaitable<ExecutionResult> EVMExecutor::call(const silkworm::ChainConfig& config
             boost::asio::post(workers, [&, self = std::move(self)]() mutable {
                 auto state = state_factory(this_executor, block.header.number);
                 EVMExecutor executor{config, workers, state};
-                auto exec_result = executor.call(block, txn, gas_params, eos_evm_version, tracers, refund, gas_bailout);
+                auto exec_result = executor.call(block, txn, gas_params, gas_prices, eos_evm_version, tracers, refund, gas_bailout);
                 boost::asio::post(this_executor, [exec_result, self = std::move(self)]() mutable {
                     self.complete(exec_result);
                 });

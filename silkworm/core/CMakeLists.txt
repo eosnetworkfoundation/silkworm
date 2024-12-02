@@ -48,6 +48,7 @@ set(SILKWORM_CORE_PUBLIC_LIBS
     nlohmann_json::nlohmann_json
     secp256k1
     tl::expected
+    eos_evm
 )
 set(SILKWORM_CORE_PRIVATE_LIBS ff blst)
 

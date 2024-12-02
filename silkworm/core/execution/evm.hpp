@@ -83,7 +83,7 @@ class EVM {
     EVM(const EVM&) = delete;
     EVM& operator=(const EVM&) = delete;
 
-    EVM(const Block& block, IntraBlockState& state, const ChainConfig& config, const evmone::gas_parameters& gas_params)
+    EVM(const Block& block, IntraBlockState& state, const ChainConfig& config)
     noexcept;
 
     ~EVM();
@@ -96,7 +96,7 @@ class EVM {
     [[nodiscard]] const IntraBlockState& state() const noexcept { return state_; }
 
     // Precondition: txn.from must be recovered
-    CallResult execute(const Transaction& txn, uint64_t gas) noexcept;
+    CallResult execute(const Transaction& txn, uint64_t gas, const evmone::gas_parameters& gas_params) noexcept;
 
     [[nodiscard]] evmc_revision revision() const noexcept;
 
@@ -114,14 +114,6 @@ class EVM {
 
     void set_message_filter(std::optional<FilterFunction> message_filter) {
       message_filter_ = message_filter;
-    }
-
-    void update_gas_params(const evmone::gas_parameters& gas_params) {
-       gas_params_ = gas_params;
-    }
-
-    const evmone::gas_parameters get_gas_params() {
-      return gas_params_;
     }
 
     uint64_t get_eos_evm_version()const {

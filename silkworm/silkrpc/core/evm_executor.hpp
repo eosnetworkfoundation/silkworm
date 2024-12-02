@@ -39,7 +39,7 @@
 #include <silkworm/core/types/transaction.hpp>
 #include <silkworm/silkrpc/core/rawdb/accessors.hpp>
 #include <silkworm/silkrpc/core/state_reader.hpp>
-
+#include <silkworm/core/types/gas_prices.hpp>
 namespace silkworm::rpc {
 
 struct ExecutionResult {
@@ -85,6 +85,7 @@ class EVMExecutor {
                                            const silkworm::Transaction& txn,
                                            StateFactory state_factory,
                                            const evmone::gas_parameters& gas_params,
+                                           const silkworm::gas_prices_t& gas_prices,
                                            uint64_t eos_evm_version,
                                            Tracers tracers = {},
                                            bool refund = true,
@@ -107,7 +108,7 @@ class EVMExecutor {
     EVMExecutor(const EVMExecutor&) = delete;
     EVMExecutor& operator=(const EVMExecutor&) = delete;
 
-    ExecutionResult call(const silkworm::Block& block, const silkworm::Transaction& txn, const evmone::gas_parameters& gas_params, uint64_t eos_evm_version, Tracers tracers = {}, bool refund = true, bool gas_bailout = false);
+    ExecutionResult call(const silkworm::Block& block, const silkworm::Transaction& txn, const evmone::gas_parameters& gas_params, const silkworm::gas_prices_t& gas_prices, uint64_t eos_evm_version, Tracers tracers = {}, bool refund = true, bool gas_bailout = false);
     void reset();
     void reset_all();
 

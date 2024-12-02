@@ -47,10 +47,10 @@ TEST_CASE("Zero gas price") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}, {}};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
 
     Receipt receipt;
-    processor.execute_transaction(txn, receipt);
+    processor.execute_transaction(txn, receipt, {});
     CHECK(receipt.success);
 }
 
@@ -87,7 +87,7 @@ TEST_CASE("No refund on error") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}, {}};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
 
     Transaction txn{
         {.nonce = nonce,
@@ -105,7 +105,7 @@ TEST_CASE("No refund on error") {
     txn.from = caller;
 
     Receipt receipt1;
-    processor.execute_transaction(txn, receipt1);
+    processor.execute_transaction(txn, receipt1, {});
     CHECK(receipt1.success);
 
     // Call the newly created contract
@@ -119,7 +119,7 @@ TEST_CASE("No refund on error") {
     txn.gas_limit = protocol::fee::kGTransaction + 5'020;
 
     Receipt receipt2;
-    processor.execute_transaction(txn, receipt2);
+    processor.execute_transaction(txn, receipt2, {});
     CHECK(!receipt2.success);
     CHECK(receipt2.cumulative_gas_used - receipt1.cumulative_gas_used == txn.gas_limit);
 }
@@ -182,7 +182,7 @@ TEST_CASE("Self-destruct") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}, {}};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
 
     processor.evm().state().add_to_balance(originator, kEther);
     processor.evm().state().set_code(caller_address, caller_code);
@@ -203,7 +203,7 @@ TEST_CASE("Self-destruct") {
     txn.data = ByteView{address_as_hash};
 
     Receipt receipt1;
-    processor.execute_transaction(txn, receipt1);
+    processor.execute_transaction(txn, receipt1, {});
     CHECK(receipt1.success);
 
     CHECK(!processor.evm().state().exists(suicidal_address));
@@ -214,7 +214,7 @@ TEST_CASE("Self-destruct") {
     txn.data.clear();
 
     Receipt receipt2;
-    processor.execute_transaction(txn, receipt2);
+    processor.execute_transaction(txn, receipt2, {});
     CHECK(receipt2.success);
 
     CHECK(processor.evm().state().exists(suicidal_address));
@@ -332,11 +332,11 @@ TEST_CASE("Out of Gas during account re-creation") {
     };
 
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}, {}};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
     processor.evm().state().add_to_balance(caller, kEther);
 
     Receipt receipt;
-    processor.execute_transaction(txn, receipt);
+    processor.execute_transaction(txn, receipt, {});
     // out of gas
     CHECK(!receipt.success);
 
@@ -375,11 +375,11 @@ TEST_CASE("Empty suicide beneficiary") {
     InMemoryState state;
 
     auto rule_set{protocol::rule_set_factory(kMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}, {}};
+    ExecutionProcessor processor{block, *rule_set, state, kMainnetConfig, {}};
     processor.evm().state().add_to_balance(caller, kEther);
 
     Receipt receipt;
-    processor.execute_transaction(txn, receipt);
+    processor.execute_transaction(txn, receipt, {});
     CHECK(receipt.success);
 
     processor.evm().state().write_to_db(block_number);
@@ -416,7 +416,7 @@ TEST_CASE("EOS EVM refund v2") {
 
         InMemoryState state;
         auto rule_set{protocol::rule_set_factory(kEOSEVMMainnetConfig)};
-        ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}, {}};
+        ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}};
 
         Transaction txn{
             {.nonce = nonce,
@@ -434,7 +434,7 @@ TEST_CASE("EOS EVM refund v2") {
         txn.from = caller;
 
         Receipt receipt1;
-        processor.execute_transaction(txn, receipt1);
+        processor.execute_transaction(txn, receipt1, {});
         CHECK(receipt1.success);
 
         // Call run(10) on the newly created contract //a444f5e9 = run, 00..0a = 10
@@ -444,7 +444,7 @@ TEST_CASE("EOS EVM refund v2") {
         txn.gas_limit = 800'000;
 
         Receipt receipt2;
-        processor.execute_transaction(txn, receipt2);
+        processor.execute_transaction(txn, receipt2, {});
         CHECK(receipt2.success);
         return receipt2.cumulative_gas_used - receipt1.cumulative_gas_used;
     };
@@ -506,7 +506,7 @@ TEST_CASE("EOS EVM message filter") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kEOSEVMMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}, {}};
+    ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}};
 
     Transaction txn{
         {.nonce = nonce,
@@ -525,7 +525,7 @@ TEST_CASE("EOS EVM message filter") {
     txn.from = caller;
 
     Receipt receipt1;
-    processor.execute_transaction(txn, receipt1);
+    processor.execute_transaction(txn, receipt1, {});
     CHECK(receipt1.success);
 
     // Call the newly created contract
@@ -539,7 +539,7 @@ TEST_CASE("EOS EVM message filter") {
         return true;
     });
 
-    processor.execute_transaction(txn, receipt2);
+    processor.execute_transaction(txn, receipt2, {});
     CHECK(receipt2.success);
 
     const auto& filtered_messages = processor.state().filtered_messages();
@@ -557,7 +557,7 @@ TEST_CASE("EOS EVM message filter") {
 
     Receipt receipt3;
 
-    processor.execute_transaction(txn, receipt3);
+    processor.execute_transaction(txn, receipt3, {});
     const auto& fm2 = processor.state().filtered_messages();
     CHECK(receipt3.success);
     CHECK(fm2.size()==1);
@@ -610,7 +610,7 @@ TEST_CASE("EOS EVM message filter revert") {
 
     InMemoryState state;
     auto rule_set{protocol::rule_set_factory(kEOSEVMMainnetConfig)};
-    ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}, {}};
+    ExecutionProcessor processor{block, *rule_set, state, kEOSEVMMainnetConfig, {}};
 
     Transaction txn{
         {.nonce = nonce,
@@ -629,7 +629,7 @@ TEST_CASE("EOS EVM message filter revert") {
     txn.from = caller;
 
     Receipt receipt1;
-    processor.execute_transaction(txn, receipt1);
+    processor.execute_transaction(txn, receipt1, {});
     CHECK(receipt1.success);
 
     //Call failsucceed(no,false,0x00,yes,true,0x01)
@@ -643,7 +643,7 @@ TEST_CASE("EOS EVM message filter revert") {
         return message.recipient == 0xbbbbbbbbbbbbbbbbbbbbbbbb56e4000000000000_address && message.input_size > 0;
     });
 
-    processor.execute_transaction(txn, receipt2);
+    processor.execute_transaction(txn, receipt2, {});
     CHECK(receipt2.success);
 
     const auto& filtered_messages = processor.state().filtered_messages();
@@ -669,7 +669,7 @@ TEST_CASE("EOS EVM message filter revert") {
     Receipt receipt3;
     processor.state().filtered_messages().clear();
 
-    processor.execute_transaction(txn, receipt3);
+    processor.execute_transaction(txn, receipt3, {});
     CHECK(receipt3.success);
 
     const auto& filtered_messages2 = processor.state().filtered_messages();
@@ -739,7 +739,7 @@ TEST_CASE("EOS EVM No fee burn when chain uses trust ruleset") {
 
         InMemoryState state;
         auto rule_set{protocol::rule_set_factory(chain_config)};
-        ExecutionProcessor processor{block, *rule_set, state, chain_config, {}, {}};
+        ExecutionProcessor processor{block, *rule_set, state, chain_config, {}};
 
         Transaction txn{{
                 .type = TransactionType::kDynamicFee,
@@ -759,7 +759,7 @@ TEST_CASE("EOS EVM No fee burn when chain uses trust ruleset") {
         txn.from = caller;
 
         Receipt receipt1;
-        processor.execute_transaction(txn, receipt1);
+        processor.execute_transaction(txn, receipt1, {});
         CHECK(receipt1.success);
 
         return std::make_tuple(
@@ -822,7 +822,7 @@ TEST_CASE("EOS EVM v3 contract creation") {
         evmone::gas_parameters gas_params;
         gas_params.G_txcreate = 50000;
 
-        ExecutionProcessor processor{block, *rule_set, state, chain_config, gas_params, {}};
+        ExecutionProcessor processor{block, *rule_set, state, chain_config, {}};
 
         Transaction txn{{
                 .type = TransactionType::kDynamicFee,
@@ -842,7 +842,7 @@ TEST_CASE("EOS EVM v3 contract creation") {
         txn.from = caller;
 
         Receipt receipt1;
-        processor.execute_transaction(txn, receipt1);
+        processor.execute_transaction(txn, receipt1, gas_params);
 
         return std::make_tuple(
             receipt1,
@@ -913,7 +913,7 @@ TEST_CASE("EOS EVM v3 final refund") {
         evmone::gas_parameters gas_params;
         gas_params.G_txcreate = 50000;
 
-        ExecutionProcessor processor{block, *rule_set, state, chain_config, gas_params, gas_prices};
+        ExecutionProcessor processor{block, *rule_set, state, chain_config, gas_prices};
 
         Transaction txn{{
                 .type = TransactionType::kDynamicFee,
@@ -933,7 +933,7 @@ TEST_CASE("EOS EVM v3 final refund") {
         txn.from = caller;
 
         Receipt receipt1;
-        auto res = processor.execute_transaction(txn, receipt1);
+        auto res = processor.execute_transaction(txn, receipt1, gas_params);
 
         return std::make_tuple(
             res,
@@ -943,28 +943,26 @@ TEST_CASE("EOS EVM v3 final refund") {
         );
     };
 
-    // g_txcreate = 50000
-    // g0 = 29092 (cpu real) + g_txcreate (storage spec) = 79092
-    // init = 23156 (cpu real) + 200000 (storage spec) + 28000 (cpu spec) = 251156
-    // code_deposit = 442 * 200 = 88400
-
-    // cpu_gas_consumed = 23156 + 28000 + 29092 = 80248
-    // storage_gas_consumed = 50000 + 200000 + 88400 = 338400
-
-    CHECK(79092+251156+88400 == 80248+338400);
-
     gas_prices_t gp;
     gp.overhead_price = 70 * kGiga;
     gp.storage_price = 80 * kGiga;
     auto base_fee_per_gas = gp.get_base_price();
     auto inclusion_price = std::min(max_priority_fee_per_gas, max_fee_per_gas - base_fee_per_gas);
 
-    // storage_price >= overhead_price
+    // ***** storage_price >= overhead_price *****
+    // g_txcreate = 47058 (50000 scaled)
+    // g0 = 29092 (cpu real) + g_txcreate (storage spec) = 76150
+    // init = 23156 (cpu real) + 188230 (200000 scaled) (storage spec) + 28000 (cpu spec) = 239386
+    // code_deposit = 442 * 188 (200 scaled) = 83096
+    // cpu_gas_consumed = 23156 + 28000 + 29092 = 80248
+    // storage_gas_consumed = 47058 + 188230 + 83096 = 318384
+    CHECK(76150+239386+83096 == 80248+318384);
+
     uint64_t expected_refund = 9440;
 
-    auto [res, receipt, balance, effective_gas_price] = deploy_contract(kEOSEVMMainnetConfig, 79092+251156+88400, gp);
+    auto [res, receipt, balance, effective_gas_price] = deploy_contract(kEOSEVMMainnetConfig, 76150+239386+83096, gp);
     CHECK(receipt.success == true);
-    CHECK(receipt.cumulative_gas_used == 79092+251156+88400-expected_refund);
+    CHECK(receipt.cumulative_gas_used == 76150+239386+83096-expected_refund);
 
     auto inclusion_fee = inclusion_price * intx::uint256(res.cpu_gas_consumed);
     CHECK(res.inclusion_fee == inclusion_fee);
@@ -972,21 +970,29 @@ TEST_CASE("EOS EVM v3 final refund") {
 
     auto storage_fee = res.discounted_storage_gas_consumed*effective_gas_price;
     CHECK(res.storage_fee == storage_fee);
-    CHECK(res.discounted_storage_gas_consumed == 338400);
+    CHECK(res.discounted_storage_gas_consumed == 318384);
 
-    CHECK(receipt.cumulative_gas_used+expected_refund == 80248+338400);
+    CHECK(receipt.cumulative_gas_used+expected_refund == 80248+318384);
     CHECK(balance == storage_fee + inclusion_fee + res.overhead_fee);
 
     // storage_price < overhead_price
+    // g_txcreate = 41176 (50000 scaled)
+    // g0 = 29092 (cpu real) + g_txcreate (storage spec) = 70268
+    // init = 23156 (cpu real) + 164700 (200000 scaled) (storage spec) + 28000 (cpu spec) = 215856
+    // code_deposit = 442 * 164 (200 scaled) = 72488
+    // cpu_gas_consumed = 23156 + 28000 + 29092 = 80248
+    // storage_gas_consumed = 41176 + 164700 + 72488 = 278364
+    CHECK(70268+215856+72488 == 80248+278364);
+
     gp.overhead_price = 80 * kGiga;
     gp.storage_price = 70 * kGiga;
     base_fee_per_gas = gp.get_base_price();
     inclusion_price = std::min(max_priority_fee_per_gas, max_fee_per_gas - base_fee_per_gas);
     expected_refund = 0;
 
-    std::tie(res, receipt, balance, effective_gas_price) = deploy_contract(kEOSEVMMainnetConfig, 79092+251156+88400, gp);
+    std::tie(res, receipt, balance, effective_gas_price) = deploy_contract(kEOSEVMMainnetConfig, 70268+215856+72488, gp);
     CHECK(receipt.success == true);
-    CHECK(receipt.cumulative_gas_used == 79092+251156+88400-expected_refund);
+    CHECK(receipt.cumulative_gas_used == 70268+215856+72488-expected_refund);
 
     inclusion_fee = inclusion_price * intx::uint256(res.cpu_gas_consumed);
     CHECK(res.inclusion_fee == inclusion_fee);
@@ -994,9 +1000,9 @@ TEST_CASE("EOS EVM v3 final refund") {
 
     storage_fee = res.discounted_storage_gas_consumed*effective_gas_price;
     CHECK(res.storage_fee == storage_fee);
-    CHECK(res.discounted_storage_gas_consumed == 338400);
+    CHECK(res.discounted_storage_gas_consumed == 278364);
 
-    CHECK(receipt.cumulative_gas_used+expected_refund == 80248+338400);
+    CHECK(receipt.cumulative_gas_used+expected_refund == 80248+278364);
     CHECK(balance == storage_fee + inclusion_fee + res.overhead_fee);
 }
 

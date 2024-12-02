@@ -46,9 +46,9 @@ namespace silkworm {
     if (!rule_set) {
         return ValidationResult::kUnknownProtocolRuleSet;
     }
-    ExecutionProcessor processor{block, *rule_set, state, chain_config, gas_params, gas_prices};
+    ExecutionProcessor processor{block, *rule_set, state, chain_config, gas_prices};
     std::vector<Receipt> receipts;
-    return processor.execute_and_write_block(receipts);
+    return processor.execute_and_write_block(receipts, gas_params);
 }
 
 }  // namespace silkworm
