@@ -114,7 +114,7 @@ void RpcApiTable::add_eth_handlers() {
     method_handlers_[http::method::k_eth_chainId] = &commands::RpcApi::handle_eth_chain_id;
     method_handlers_[http::method::k_eth_protocolVersion] = &commands::RpcApi::handle_eth_protocol_version;
     method_handlers_[http::method::k_eth_syncing] = &commands::RpcApi::handle_eth_syncing;
-    //method_handlers_[http::method::k_eth_gasPrice] = &commands::RpcApi::handle_eth_gas_price;
+    method_handlers_[http::method::k_eth_gasPrice] = &commands::RpcApi::handle_eth_gas_price;
     method_handlers_[http::method::k_eth_getBlockByHash] = &commands::RpcApi::handle_eth_get_block_by_hash;
     method_handlers_[http::method::k_eth_getBlockByNumber] = &commands::RpcApi::handle_eth_get_block_by_number;
     method_handlers_[http::method::k_eth_getBlockTransactionCountByHash] = &commands::RpcApi::handle_eth_get_block_transaction_count_by_hash;
