@@ -25,7 +25,7 @@
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wconversion"
 #pragma GCC diagnostic ignored "-Wsign-conversion"
-#include <roaring/roaring64map.hh>
+#include <roaring/roaring.hh>
 #pragma GCC diagnostic pop
 
 #include <silkworm/core/common/util.hpp>
@@ -36,13 +36,13 @@ namespace silkworm::rpc::ethdb::bitmap {
 
 using boost::asio::awaitable;
 
-awaitable<roaring::Roaring64Map> get(core::rawdb::DatabaseReader& db_reader, const std::string& table,
+awaitable<roaring::Roaring> get(core::rawdb::DatabaseReader& db_reader, const std::string& table,
                                 silkworm::Bytes& key, uint32_t from_block, uint32_t to_block);
 
-awaitable<roaring::Roaring64Map> from_topics(core::rawdb::DatabaseReader& db_reader, const std::string& table,
+awaitable<roaring::Roaring> from_topics(core::rawdb::DatabaseReader& db_reader, const std::string& table,
                                         const FilterTopics& topics, uint64_t start, uint64_t end);
 
-awaitable<roaring::Roaring64Map> from_addresses(core::rawdb::DatabaseReader& db_reader, const std::string& table,
+awaitable<roaring::Roaring> from_addresses(core::rawdb::DatabaseReader& db_reader, const std::string& table,
                                            const FilterAddresses& addresses, uint64_t start, uint64_t end);
 
 }  // namespace silkworm::rpc::ethdb::bitmap
