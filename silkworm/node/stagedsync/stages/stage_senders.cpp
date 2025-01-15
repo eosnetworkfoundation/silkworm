@@ -370,7 +370,11 @@ Stage::Result Senders::add_to_batch(const BlockHeader& header, BlockNum block_nu
 
     // We're only interested in revisions up to London, so it's OK to not detect time-based forks.
     const evmc_revision rev{node_settings_->chain_config->revision(header)};
-    const bool has_homestead{rev >= EVMC_HOMESTEAD};
+    
+    // FIXME: enable has_homestead in some evm_version
+    //const bool has_homestead{rev >= EVMC_HOMESTEAD};
+    const bool has_homestead{false};
+
     const bool has_spurious_dragon{rev >= EVMC_SPURIOUS_DRAGON};
 
     uint32_t tx_id{0};
