@@ -29,6 +29,7 @@
 #include <silkworm/core/protocol/validation.hpp>
 #include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/node/db/access_layer.hpp>
+#include <eosevm/version.hpp>
 
 namespace silkworm::stagedsync {
 
@@ -371,9 +372,7 @@ Stage::Result Senders::add_to_batch(const BlockHeader& header, BlockNum block_nu
     // We're only interested in revisions up to London, so it's OK to not detect time-based forks.
     const evmc_revision rev{node_settings_->chain_config->revision(header)};
     
-    // FIXME: enable has_homestead in some evm_version
-    //const bool has_homestead{rev >= EVMC_HOMESTEAD};
-    const bool has_homestead{false};
+    const bool enforce_eip2{eosevm::nonce_to_version(header.nonce)>=3};
 
     const bool has_spurious_dragon{rev >= EVMC_SPURIOUS_DRAGON};
 
@@ -385,7 +384,7 @@ Stage::Result Senders::add_to_batch(const BlockHeader& header, BlockNum block_nu
             return Stage::Result::kInvalidTransaction;
         }
 
-        if (!is_special_signature(transaction.r, transaction.s) && !is_valid_signature(transaction.r, transaction.s, has_homestead)) {
+        if (!is_special_signature(transaction.r, transaction.s) && !is_valid_signature(transaction.r, transaction.s, enforce_eip2)) {
             log::Error(log_prefix_) << "Got invalid signature for transaction #" << tx_id << " in block #" << block_num;
             return Stage::Result::kInvalidTransaction;
         }

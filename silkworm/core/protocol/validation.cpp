@@ -66,11 +66,8 @@ ValidationResult pre_validate_transaction(const Transaction& txn, const evmc_rev
 
     /* Should the sender already be present it means the validation of signature already occurred */
     if (!txn.from.has_value()) {
-        // FIXME: enable has_homestead in some evm_version
-        //const bool has_homestead{rev >= EVMC_HOMESTEAD};
-        const bool has_homestead{false};
-
-        if (!is_special_signature(txn.r, txn.s) && !is_valid_signature(txn.r, txn.s, has_homestead)) {
+        const bool enforce_eip2{eos_evm_version >=3};
+        if (!is_special_signature(txn.r, txn.s) && !is_valid_signature(txn.r, txn.s, enforce_eip2)) {
             return ValidationResult::kInvalidSignature;
         }
     }
