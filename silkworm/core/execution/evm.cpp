@@ -79,19 +79,19 @@ class DelegatingTracer : public evmone::Tracer {
     IntraBlockState& intra_block_state_;
 };
 
-EVM::EVM(const Block& block, IntraBlockState& state, const ChainConfig& config, const evmone::gas_parameters& gas_params) noexcept
+EVM::EVM(const Block& block, IntraBlockState& state, const ChainConfig& config) noexcept
     : beneficiary{block.header.beneficiary},
       block_{block},
       state_{state},
       config_{config},
       evm1_{evmc_create_evmone()},
-      gas_params_{gas_params},
       eos_evm_version_{config.eos_evm_version(block.header)} { }
 
 EVM::~EVM() { evm1_->destroy(evm1_); }
 
-CallResult EVM::execute(const Transaction& txn, uint64_t gas) noexcept {
+CallResult EVM::execute(const Transaction& txn, uint64_t gas, const evmone::gas_parameters& gas_params) noexcept {
     assert(txn.from.has_value());  // sender must be recovered
+    gas_params_ = gas_params;
 
     txn_ = &txn;
 

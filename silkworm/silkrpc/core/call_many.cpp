@@ -55,6 +55,7 @@ CallManyResult CallExecutor::executes_all_bundles(const silkworm::ChainConfig* c
                                                   int32_t transaction_index,
                                                   boost::asio::any_io_executor& this_executor,
                                                   const evmone::gas_parameters& gas_params,
+                                                  const silkworm::gas_prices_t& gas_prices,
                                                   uint64_t eos_evm_version) {
     CallManyResult result;
     const auto& block = block_with_hash.block;
@@ -72,7 +73,7 @@ CallManyResult CallExecutor::executes_all_bundles(const silkworm::ChainConfig* c
             txn.recover_sender();
         }
 
-        auto exec_result = executor.call(block, txn, gas_params, eos_evm_version);
+        auto exec_result = executor.call(block, txn, gas_params, gas_prices, eos_evm_version);
 
         if ((clock_time::since(start_time) / 1000000) > timeout) {
             std::ostringstream oss;
@@ -112,7 +113,7 @@ CallManyResult CallExecutor::executes_all_bundles(const silkworm::ChainConfig* c
         for (const auto& call : bundle.transactions) {
             silkworm::Transaction txn{call.to_transaction()};
 
-            auto call_execution_result = executor.call(blockContext.block, txn, gas_params, eos_evm_version);
+            auto call_execution_result = executor.call(blockContext.block, txn, gas_params, gas_prices, eos_evm_version);
 
             if (call_execution_result.pre_check_error) {
                 result.error = call_execution_result.pre_check_error;
@@ -173,13 +174,13 @@ boost::asio::awaitable<CallManyResult> CallExecutor::execute(const Bundles& bund
     if (transaction_index == -1) {
         transaction_index = static_cast<std::int32_t>(block_with_hash->block.transactions.size());
     }
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
+    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
 
     auto this_executor = co_await boost::asio::this_coro::executor;
     result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(CallManyResult)>(
         [&](auto&& self) {
             boost::asio::post(workers_, [&, self = std::move(self)]() mutable {
-                result = executes_all_bundles(chain_config_ptr, *block_with_hash, tx_database, bundles, opt_timeout, accounts_overrides, transaction_index, this_executor, gas_params, eos_evm_version);
+                result = executes_all_bundles(chain_config_ptr, *block_with_hash, tx_database, bundles, opt_timeout, accounts_overrides, transaction_index, this_executor, gas_params, gas_prices, eos_evm_version);
                 boost::asio::post(this_executor, [result, self = std::move(self)]() mutable {
                     self.complete(result);
                 });

@@ -30,6 +30,8 @@ set(EOS_EVM_PUBLIC_LIBS
     evmc
     tl::expected
     nlohmann_json::nlohmann_json
+    evmone
+    Microsoft.GSL::GSL
 )
 
 target_link_libraries(

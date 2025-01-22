@@ -1148,14 +1148,14 @@ awaitable<void> EthereumRpcApi::handle_eth_call(const nlohmann::json& request, s
         silkworm::Transaction txn{call.to_transaction()};
         if(!txn.from.has_value()) txn.from = evmc::address{0};
 
-        const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
+        const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
 
         const core::rawdb::DatabaseReader& db_reader =
             is_latest_block ? static_cast<core::rawdb::DatabaseReader&>(cached_database) : static_cast<core::rawdb::DatabaseReader&>(tx_database);
         const auto execution_result = co_await EVMExecutor::call(
             *chain_config_ptr, workers_, block_with_hash->block, txn, [&](auto& io_executor, auto block_num) {
                 return tx->create_state(io_executor, db_reader, block_num);
-            }, gas_params, eos_evm_version, {}, true, txn.from == evmc::address{0});
+            }, gas_params, gas_prices, eos_evm_version, {}, true, txn.from == evmc::address{0});
 
         if (execution_result.success()) {
             make_glaze_json_content(reply, request["id"], execution_result.data);
@@ -1297,7 +1297,7 @@ awaitable<void> EthereumRpcApi::handle_eth_create_access_list(const nlohmann::js
         const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
         const auto chain_id = co_await core::rawdb::read_chain_id(tx_database);
         const auto chain_config_ptr = lookup_chain_config(chain_id);
-        const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
+        const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
 
         const bool is_latest_block = co_await core::get_latest_executed_block_number(tx_database) == block_with_hash->block.header.number;
         const core::rawdb::DatabaseReader& db_reader =
@@ -1338,7 +1338,7 @@ awaitable<void> EthereumRpcApi::handle_eth_create_access_list(const nlohmann::js
             const auto execution_result = co_await EVMExecutor::call(
                 *chain_config_ptr, workers_, block_with_hash->block, txn, [&](auto& io_executor, auto block_num) {
                     return tx->create_state(io_executor, db_reader, block_num);
-                }, gas_params, eos_evm_version,
+                }, gas_params, gas_prices, eos_evm_version,
                 std::move(tracers), /* refund */ true, /* gasBailout */ false);
 
             if (execution_result.pre_check_error) {
@@ -1403,7 +1403,7 @@ awaitable<void> EthereumRpcApi::handle_eth_call_bundle(const nlohmann::json& req
         const auto block_with_hash = co_await core::read_block_by_number_or_hash(*block_cache_, tx_database, block_number_or_hash);
         const auto chain_id = co_await core::rawdb::read_chain_id(tx_database);
         const auto chain_config_ptr = lookup_chain_config(chain_id);
-        const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
+        const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(tx_database, chain_config_ptr, block_with_hash->block);
 
         const bool is_latest_block = co_await core::get_latest_executed_block_number(tx_database) == block_with_hash->block.header.number;
         const core::rawdb::DatabaseReader& db_reader =
@@ -1429,7 +1429,7 @@ awaitable<void> EthereumRpcApi::handle_eth_call_bundle(const nlohmann::json& req
             const auto execution_result = co_await EVMExecutor::call(
                 *chain_config_ptr, workers_, block_with_hash->block, tx_with_block->transaction, [&](auto& io_executor, auto block_num) {
                     return tx->create_state(io_executor, db_reader, block_num);
-                }, gas_params, eos_evm_version, {}, true, false);
+                }, gas_params, gas_prices, eos_evm_version, {}, true, false);
             if (execution_result.pre_check_error) {
                 reply = make_json_error(request["id"], -32000, execution_result.pre_check_error.value());
                 error = true;

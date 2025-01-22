@@ -41,7 +41,7 @@ TEST_CASE("Value transfer") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig, {}};
+    EVM evm{block, state, kMainnetConfig};
 
     CHECK(state.get_balance(from) == 0);
     CHECK(state.get_balance(to) == 0);
@@ -51,13 +51,13 @@ TEST_CASE("Value transfer") {
     txn.to = to;
     txn.value = value;
 
-    CallResult res{evm.execute(txn, 0)};
+    CallResult res{evm.execute(txn, 0, {})};
     CHECK(res.status == EVMC_INSUFFICIENT_BALANCE);
     CHECK(res.data.empty());
 
     state.add_to_balance(from, kEther);
 
-    res = evm.execute(txn, 0);
+    res = evm.execute(txn, 0, {});
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data.empty());
 
@@ -97,19 +97,19 @@ TEST_CASE("Smart contract with storage") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, test::kShanghaiConfig, {}};
+    EVM evm{block, state, test::kShanghaiConfig};
 
     Transaction txn{};
     txn.from = caller;
     txn.data = code;
 
     uint64_t gas{0};
-    CallResult res{evm.execute(txn, gas)};
+    CallResult res{evm.execute(txn, gas, {})};
     CHECK(res.status == EVMC_OUT_OF_GAS);
     CHECK(res.data.empty());
 
     gas = 50'000;
-    res = evm.execute(txn, gas);
+    res = evm.execute(txn, gas, {});
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(to_hex(res.data) == "5f355f55");
 
@@ -121,7 +121,7 @@ TEST_CASE("Smart contract with storage") {
     txn.to = contract_address;
     txn.data = ByteView{new_val};
 
-    res = evm.execute(txn, gas);
+    res = evm.execute(txn, gas, {});
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data.empty());
     CHECK(state.get_current_storage(contract_address, key0) == new_val);
@@ -169,7 +169,7 @@ TEST_CASE("Maximum call depth") {
     IntraBlockState state{db};
     state.set_code(contract, code);
 
-    EVM evm{block, state, kMainnetConfig, {}};
+    EVM evm{block, state, kMainnetConfig};
 
     AnalysisCache analysis_cache{/*maxSize=*/16};
     evm.analysis_cache = &analysis_cache;
@@ -179,19 +179,19 @@ TEST_CASE("Maximum call depth") {
     txn.to = contract;
 
     uint64_t gas{1'000'000};
-    CallResult res{evm.execute(txn, gas)};
+    CallResult res{evm.execute(txn, gas, {})};
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data.empty());
 
     evmc::bytes32 num_of_recursions{to_bytes32(*from_hex("0400"))};
     txn.data = ByteView{num_of_recursions};
-    res = evm.execute(txn, gas);
+    res = evm.execute(txn, gas, {});
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data.empty());
 
     num_of_recursions = to_bytes32(*from_hex("0401"));
     txn.data = ByteView{num_of_recursions};
-    res = evm.execute(txn, gas);
+    res = evm.execute(txn, gas, {});
     CHECK(res.status == EVMC_INVALID_INSTRUCTION);
     CHECK(res.data.empty());
 }
@@ -228,7 +228,7 @@ TEST_CASE("DELEGATECALL") {
     state.set_code(caller_address, caller_code);
     state.set_code(callee_address, callee_code);
 
-    EVM evm{block, state, kMainnetConfig, {}};
+    EVM evm{block, state, kMainnetConfig};
 
     Transaction txn{};
     txn.from = caller_address;
@@ -236,7 +236,7 @@ TEST_CASE("DELEGATECALL") {
     txn.data = ByteView{to_bytes32(callee_address)};
 
     uint64_t gas{1'000'000};
-    CallResult res{evm.execute(txn, gas)};
+    CallResult res{evm.execute(txn, gas, {})};
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data.empty());
 
@@ -289,14 +289,14 @@ TEST_CASE("CREATE should only return on failure") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig, {}};
+    EVM evm{block, state, kMainnetConfig};
 
     Transaction txn{};
     txn.from = caller;
     txn.data = code;
 
     uint64_t gas{150'000};
-    CallResult res{evm.execute(txn, gas)};
+    CallResult res{evm.execute(txn, gas, {})};
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data.empty());
 
@@ -321,14 +321,14 @@ TEST_CASE("Contract overwrite") {
     IntraBlockState state{db};
     state.set_code(contract_address, old_code);
 
-    EVM evm{block, state, kMainnetConfig, {}};
+    EVM evm{block, state, kMainnetConfig};
 
     Transaction txn{};
     txn.from = caller;
     txn.data = new_code;
 
     uint64_t gas{100'000};
-    CallResult res{evm.execute(txn, gas)};
+    CallResult res{evm.execute(txn, gas, {})};
 
     CHECK(res.status == EVMC_INVALID_INSTRUCTION);
     CHECK(res.gas_left == 0);
@@ -344,7 +344,7 @@ TEST_CASE("EIP-3541: Reject new contracts starting with the 0xEF byte") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, config, {}};
+    EVM evm{block, state, config};
 
     Transaction txn;
     txn.from = 0x1000000000000000000000000000000000000000_address;
@@ -352,19 +352,19 @@ TEST_CASE("EIP-3541: Reject new contracts starting with the 0xEF byte") {
 
     // https://eips.ethereum.org/EIPS/eip-3541#test-cases
     txn.data = *from_hex("0x60ef60005360016000f3");
-    CHECK(evm.execute(txn, gas).status == EVMC_CONTRACT_VALIDATION_FAILURE);
+    CHECK(evm.execute(txn, gas, {}).status == EVMC_CONTRACT_VALIDATION_FAILURE);
 
     txn.data = *from_hex("0x60ef60005360026000f3");
-    CHECK(evm.execute(txn, gas).status == EVMC_CONTRACT_VALIDATION_FAILURE);
+    CHECK(evm.execute(txn, gas, {}).status == EVMC_CONTRACT_VALIDATION_FAILURE);
 
     txn.data = *from_hex("0x60ef60005360036000f3");
-    CHECK(evm.execute(txn, gas).status == EVMC_CONTRACT_VALIDATION_FAILURE);
+    CHECK(evm.execute(txn, gas, {}).status == EVMC_CONTRACT_VALIDATION_FAILURE);
 
     txn.data = *from_hex("0x60ef60005360206000f3");
-    CHECK(evm.execute(txn, gas).status == EVMC_CONTRACT_VALIDATION_FAILURE);
+    CHECK(evm.execute(txn, gas, {}).status == EVMC_CONTRACT_VALIDATION_FAILURE);
 
     txn.data = *from_hex("0x60fe60005360016000f3");
-    CHECK(evm.execute(txn, gas).status == EVMC_SUCCESS);
+    CHECK(evm.execute(txn, gas, {}).status == EVMC_SUCCESS);
 }
 
 class TestTracer : public EvmTracer {
@@ -470,7 +470,7 @@ TEST_CASE("Tracing smart contract with storage") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig, {}};
+    EVM evm{block, state, kMainnetConfig};
 
     Transaction txn{};
     txn.from = caller;
@@ -484,7 +484,7 @@ TEST_CASE("Tracing smart contract with storage") {
     CHECK(evm.tracers().size() == 1);
 
     uint64_t gas{0};
-    CallResult res{evm.execute(txn, gas)};
+    CallResult res{evm.execute(txn, gas, {})};
     CHECK(res.status == EVMC_OUT_OF_GAS);
     CHECK(res.data.empty());
 
@@ -507,7 +507,7 @@ TEST_CASE("Tracing smart contract with storage") {
     CHECK(evm.tracers().size() == 2);
 
     gas = 50'000;
-    res = evm.execute(txn, gas);
+    res = evm.execute(txn, gas, {});
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data == from_hex("600035600055"));
 
@@ -549,7 +549,7 @@ TEST_CASE("Tracing smart contract with storage") {
     txn.to = contract_address;
     txn.data = ByteView{new_val};
     gas = 50'000;
-    res = evm.execute(txn, gas);
+    res = evm.execute(txn, gas, {});
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data.empty());
     CHECK(state.get_current_storage(contract_address, key0) == new_val);
@@ -600,7 +600,7 @@ TEST_CASE("Tracing creation smart contract with CREATE2") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig, {}};
+    EVM evm{block, state, kMainnetConfig};
 
     Transaction txn{};
     txn.from = caller;
@@ -611,7 +611,7 @@ TEST_CASE("Tracing creation smart contract with CREATE2") {
     CHECK(evm.tracers().size() == 1);
 
     uint64_t gas = {100'000};
-    CallResult res{evm.execute(txn, gas)};
+    CallResult res{evm.execute(txn, gas, {})};
 
     CHECK(tracer.msg_stack().at(0).depth == 0);
     CHECK(tracer.msg_stack().at(1).depth == 1);
@@ -626,7 +626,7 @@ TEST_CASE("Tracing smart contract w/o code") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig, {}};
+    EVM evm{block, state, kMainnetConfig};
     CHECK(evm.tracers().empty());
 
     TestTracer tracer1;
@@ -642,7 +642,7 @@ TEST_CASE("Tracing smart contract w/o code") {
     txn.data = code;
     uint64_t gas{50'000};
 
-    CallResult res{evm.execute(txn, gas)};
+    CallResult res{evm.execute(txn, gas, {})};
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data.empty());
 
@@ -666,7 +666,7 @@ TEST_CASE("Tracing smart contract w/o code") {
 
     txn.to = contract_address;
     txn.data = ByteView{to_bytes32(*from_hex("f5"))};
-    res = evm.execute(txn, gas);
+    res = evm.execute(txn, gas, {});
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.data.empty());
 
@@ -687,7 +687,7 @@ TEST_CASE("Tracing precompiled contract failure") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, kMainnetConfig, {}};
+    EVM evm{block, state, kMainnetConfig};
     CHECK(evm.tracers().empty());
 
     TestTracer tracer1;
@@ -704,7 +704,7 @@ TEST_CASE("Tracing precompiled contract failure") {
     txn.to = blake2f_precompile;
     uint64_t gas{50'000};
 
-    CallResult res{evm.execute(txn, gas)};
+    CallResult res{evm.execute(txn, gas, {})};
     CHECK(res.status == EVMC_PRECOMPILE_FAILURE);
 }
 
@@ -717,7 +717,7 @@ TEST_CASE("Smart contract creation w/ insufficient balance") {
 
     InMemoryState db;
     IntraBlockState state{db};
-    EVM evm{block, state, test::kShanghaiConfig, {}};
+    EVM evm{block, state, test::kShanghaiConfig};
 
     Transaction txn{};
     txn.from = caller;
@@ -725,7 +725,7 @@ TEST_CASE("Smart contract creation w/ insufficient balance") {
     txn.value = intx::uint256{1};
 
     uint64_t gas = 50'000;
-    CallResult res = evm.execute(txn, gas);
+    CallResult res = evm.execute(txn, gas, {});
     CHECK(res.status == EVMC_INSUFFICIENT_BALANCE);
 }
 
@@ -743,14 +743,14 @@ TEST_CASE("EOS EVM codedeposit test") {
     InMemoryState db;
     IntraBlockState state{db};
     state.set_balance(caller, intx::uint256{1e18});
-    EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+    EVM evm{block, state, test::kIstanbulTrustConfig};
 
     Transaction txn{};
     txn.from = caller;
     txn.data = code;
 
     uint64_t gas = 1'500'000;
-    CallResult res = evm.execute(txn, 1'500'000);
+    CallResult res = evm.execute(txn, 1'500'000, gas_params);
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(gas-res.gas_left == 123 + 500*371); //G_codedeposit=500, codelen=371
     CHECK(res.storage_gas_consumed == 0);
@@ -773,14 +773,14 @@ TEST_CASE("EOS EVM codedeposit v3 test") {
     IntraBlockState state{db};
     state.set_balance(caller, intx::uint256{1e18});
     state.set_nonce(caller, 10);
-    EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+    EVM evm{block, state, test::kIstanbulTrustConfig};
 
     Transaction txn{};
     txn.from = caller;
     txn.data = code;
 
     uint64_t gas = 1'500'000;
-    CallResult res = evm.execute(txn, gas);
+    CallResult res = evm.execute(txn, gas, gas_params);
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(gas-res.gas_left == 123 + 500*371); //G_codedeposit=500, codelen=371
     CHECK(res.storage_gas_consumed == 500*371);
@@ -807,14 +807,14 @@ TEST_CASE("EOS EVM codedeposit v3 test oog") {
     InMemoryState db;
     IntraBlockState state{db};
     state.set_balance(caller, intx::uint256{1e18});
-    EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+    EVM evm{block, state, test::kIstanbulTrustConfig};
 
     Transaction txn{};
     txn.from = caller;
     txn.data = code;
 
     uint64_t gas = 123 + 500*370; // enough to run initialization (real), but not enough to store code (speculative)
-    CallResult res = evm.execute(txn, gas);
+    CallResult res = evm.execute(txn, gas, gas_params);
     CHECK(res.status == EVMC_OUT_OF_GAS);
     CHECK(res.gas_left == 500*370);
     CHECK(res.storage_gas_consumed == 0);
@@ -824,14 +824,14 @@ TEST_CASE("EOS EVM codedeposit v3 test oog") {
     InMemoryState db2;
     IntraBlockState state2{db2};
     state2.set_balance(caller, intx::uint256{1e18});
-    EVM evm2{block, state2, test::kIstanbulTrustConfig, gas_params};
+    EVM evm2{block, state2, test::kIstanbulTrustConfig};
 
     Transaction txn2{};
     txn2.from = caller;
     txn2.data = code;
 
     uint64_t gas2 = 122; // not-enough to run initialization (real)
-    CallResult res2 = evm2.execute(txn, gas2);
+    CallResult res2 = evm2.execute(txn, gas2, gas_params);
     CHECK(res2.status == EVMC_OUT_OF_GAS);
     CHECK(res2.gas_left == 0);
     CHECK(res2.storage_gas_consumed == 0);
@@ -854,14 +854,14 @@ TEST_CASE("EOS EVM G_txnewaccount") {
     InMemoryState db;
     IntraBlockState state{db};
     state.set_balance(sender, intx::uint256{1e18});
-    EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+    EVM evm{block, state, test::kIstanbulTrustConfig};
 
     Transaction txn{};
     txn.from = sender;
     txn.to = receiver1;
     txn.value = intx::uint256{1};
 
-    CallResult res = evm.execute(txn, 0);
+    CallResult res = evm.execute(txn, 0, gas_params);
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.gas_left == 0);
     CHECK(res.gas_refund == 0);
@@ -871,9 +871,8 @@ TEST_CASE("EOS EVM G_txnewaccount") {
 
     txn.to = receiver2;
     gas_params.G_txnewaccount = 1;
-    evm.update_gas_params(gas_params);
 
-    res = evm.execute(txn, 0);
+    res = evm.execute(txn, 0, gas_params);
     CHECK(res.status == EVMC_OUT_OF_GAS);
     CHECK(res.gas_refund == 0);
     CHECK(res.gas_left == 0);
@@ -897,14 +896,14 @@ TEST_CASE("EOS EVM G_txnewaccount v3") {
     InMemoryState db;
     IntraBlockState state{db};
     state.set_balance(sender, intx::uint256{1e18});
-    EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+    EVM evm{block, state, test::kIstanbulTrustConfig};
 
     Transaction txn{};
     txn.from = sender;
     txn.to = receiver1;
     txn.value = intx::uint256{1};
 
-    CallResult res = evm.execute(txn, 1000);
+    CallResult res = evm.execute(txn, 1000, gas_params);
     CHECK(res.status == EVMC_SUCCESS);
     CHECK(res.gas_left == 0);
     CHECK(res.gas_refund == 0);
@@ -915,14 +914,14 @@ TEST_CASE("EOS EVM G_txnewaccount v3") {
     InMemoryState db2;
     IntraBlockState state2{db2};
     state2.set_balance(sender, intx::uint256{1e18});
-    EVM evm2{block, state2, test::kIstanbulTrustConfig, gas_params};
+    EVM evm2{block, state2, test::kIstanbulTrustConfig};
 
     Transaction txn2{};
     txn2.from = sender;
     txn2.to = receiver1;
     txn2.value = intx::uint256{1};
 
-    CallResult res2 = evm2.execute(txn2, 999);
+    CallResult res2 = evm2.execute(txn2, 999, gas_params);
     CHECK(res2.status == EVMC_OUT_OF_GAS);
     CHECK(res2.gas_left == 999);
     CHECK(res2.gas_refund == 0);
@@ -946,14 +945,14 @@ TEST_CASE("EOS EVM send value to reserved address (tx)") {
         InMemoryState db;
         IntraBlockState state{db};
         state.set_balance(sender, intx::uint256{1e18});
-        EVM evm{block, state, test::kIstanbulTrustConfig, gas_params};
+        EVM evm{block, state, test::kIstanbulTrustConfig};
 
         Transaction txn{};
         txn.from = sender;
         txn.to = receiver1;
         txn.value = intx::uint256{1};
 
-        CallResult res = evm.execute(txn, gas_limit);
+        CallResult res = evm.execute(txn, gas_limit, gas_params);
         return res;
     };
 

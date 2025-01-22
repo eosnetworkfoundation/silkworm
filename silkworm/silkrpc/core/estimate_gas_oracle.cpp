@@ -78,7 +78,7 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
 
     SILK_DEBUG << "hi: " << hi << ", lo: " << lo << ", cap: " << cap;
 
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(tx_database_, &config_, block);
+    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(tx_database_, &config_, block);
 
     auto this_executor = co_await boost::asio::this_coro::executor;
     auto exec_result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(ExecutionResult)>(
@@ -94,7 +94,7 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
                     auto mid = (hi + lo) / 2;
                     transaction.gas_limit = mid;
 
-                    result = try_execution(executor, block, transaction, eos_evm_version, gas_params);
+                    result = try_execution(executor, block, transaction, eos_evm_version, gas_params, gas_prices);
 
                     if(result.pre_check_error && !result.pre_check_error.value().starts_with("intrinsic gas too low")) {
                         boost::asio::post(this_executor, [result, self = std::move(self)]() mutable {
@@ -112,7 +112,7 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
 
                 if (hi == cap) {
                     transaction.gas_limit = hi;
-                    result = try_execution(executor, block, transaction, eos_evm_version, gas_params);
+                    result = try_execution(executor, block, transaction, eos_evm_version, gas_params, gas_prices);
                     SILK_DEBUG << "HI == cap tested again with " << (result.success() ? "succeed" : "failed");
                 } else {
                     result.pre_check_error = std::nullopt;
@@ -134,9 +134,9 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
     co_return hi;
 }
 
-ExecutionResult EstimateGasOracle::try_execution(EVMExecutor& executor, const silkworm::Block& block, const silkworm::Transaction& transaction, uint64_t eos_evm_version, const evmone::gas_parameters& gas_params) {
+ExecutionResult EstimateGasOracle::try_execution(EVMExecutor& executor, const silkworm::Block& block, const silkworm::Transaction& transaction, uint64_t eos_evm_version, const evmone::gas_parameters& gas_params, const silkworm::gas_prices_t& gas_prices) {
     executor.reset_all();
-    return executor.call(block, transaction, gas_params, eos_evm_version, {}, true, false);
+    return executor.call(block, transaction, gas_params, gas_prices, eos_evm_version, {}, true, false);
 }
 
 void EstimateGasOracle::throw_exception(ExecutionResult& result, uint64_t cap) {

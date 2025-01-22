@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
             processor.evm().state_pool = &state_pool;
 
             // Execute the block and retrieve the receipts
-            if (const auto res{processor.execute_and_write_block(receipts)}; res != ValidationResult::kOk) {
+            if (const auto res{processor.execute_and_write_block(receipts, {})}; res != ValidationResult::kOk) {
                 std::cerr << "Validation error " << static_cast<int>(res) << " at block " << block_num << "\n";
             }
 

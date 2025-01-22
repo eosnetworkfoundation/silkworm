@@ -18,21 +18,24 @@
 
 #include <cassert>
 
+#include <silkworm/core/common/assert.hpp>
 #include <silkworm/core/chain/dao.hpp>
 #include <silkworm/core/protocol/intrinsic_gas.hpp>
 #include <silkworm/core/protocol/param.hpp>
 #include <silkworm/core/trie/vector_root.hpp>
-
+#include <eosevm/refund_v3.hpp>
 namespace silkworm {
 
 ExecutionProcessor::ExecutionProcessor(const Block& block, protocol::IRuleSet& rule_set, State& state,
-                                       const ChainConfig& config, const evmone::gas_parameters& gas_params)
-    : state_{state}, rule_set_{rule_set}, evm_{block, state_, config, gas_params} {
+                                       const ChainConfig& config, const gas_prices_t& gas_prices)
+    : state_{state}, rule_set_{rule_set}, evm_{block, state_, config}, gas_prices_{gas_prices} {
     evm_.beneficiary = rule_set.get_beneficiary(block.header);
 }
 
-void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& receipt) noexcept {
+ExecutionResult ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& receipt, const evmone::gas_parameters& gas_params) noexcept {
     assert(protocol::validate_transaction(txn, state_, available_gas()) == ValidationResult::kOk);
+
+    ExecutionResult res;
 
     // Optimization: since receipt.logs might have some capacity, let's reuse it.
     std::swap(receipt.logs, state_.logs());
@@ -71,45 +74,36 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     state_.subtract_from_balance(*txn.from, txn.total_data_gas() * data_gas_price);
 
     const auto eos_evm_version = evm_.get_eos_evm_version();
-    const auto& gas_params = evm_.get_gas_params();
+    intx::uint256 inclusion_price;
+    evmone::gas_parameters scaled_gas_params;
+    if( eos_evm_version >= 3 ) {
+        inclusion_price = std::min(txn.max_priority_fee_per_gas, txn.max_fee_per_gas - base_fee_per_gas);
+        const intx::uint256 factor_num{gas_prices_.storage_price};
+        const intx::uint256 factor_den{base_fee_per_gas + inclusion_price};
+        SILKWORM_ASSERT(factor_den > 0);
+        scaled_gas_params = evmone::gas_parameters::apply_discount_factor(factor_num, factor_den, gas_params);
+    } else {
+        scaled_gas_params = gas_params;
+    }
 
-    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, eos_evm_version, gas_params)};
+    const intx::uint128 g0{protocol::intrinsic_gas(txn, rev, eos_evm_version, scaled_gas_params)};
     assert(g0 <= UINT64_MAX);  // true due to the precondition (transaction must be valid)
 
-    const CallResult vm_res{evm_.execute(txn, txn.gas_limit - static_cast<uint64_t>(g0))};
+    const CallResult vm_res{evm_.execute(txn, txn.gas_limit - static_cast<uint64_t>(g0), scaled_gas_params)};
+    const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
+
     uint64_t gas_used{0};
     if(eos_evm_version < 3) {
         gas_used = txn.gas_limit - refund_gas(txn, vm_res.gas_left, vm_res.gas_refund);
-
         // award the fee recipient
-        const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
         state_.add_to_balance(evm_.beneficiary, price * gas_used);
     } else {
-        uint64_t storage_gas_consumed{vm_res.storage_gas_consumed};
-        const bool contract_creation{!txn.to};
-        auto gas_left = vm_res.gas_left;
-        if(contract_creation) {
-            if( vm_res.status == EVMC_SUCCESS ) {
-                storage_gas_consumed += gas_params.G_txcreate; //correct storage gas consumed to account for initial G_txcreate storage gas
-            } else {
-                gas_left += gas_params.G_txcreate;
-            }
-        }
-
-        evmone::gas_state_t vm_res_gas_state(eos_evm_version, static_cast<int64_t>(vm_res.gas_refund),
-             static_cast<int64_t>(storage_gas_consumed), static_cast<int64_t>(vm_res.storage_gas_refund), static_cast<int64_t>(vm_res.speculative_cpu_gas_consumed));
-
-        gas_left += static_cast<uint64_t>(vm_res_gas_state.collapse());
-        gas_used = txn.gas_limit - gas_left;
-        assert(vm_res_gas_state.cpu_gas_refund() == 0);
-        const auto total_storage_gas_consumed = vm_res_gas_state.storage_gas_consumed();
-        assert(gas_used > static_cast<uint64_t>(total_storage_gas_consumed));
-        const auto total_cpu_gas_consumed = gas_used - static_cast<uint64_t>(total_storage_gas_consumed);
-        (void)total_cpu_gas_consumed;
-
+        intx::uint256 final_fee{0};
+        uint64_t gas_left{0};
+        std::tie(res, final_fee, gas_used, gas_left) = eosevm::gas_refund_v3(eos_evm_version, vm_res, txn, scaled_gas_params, price, gas_prices_, inclusion_price);
         // award the fee recipient
-        const intx::uint256 price{evm_.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
-        state_.add_to_balance(evm_.beneficiary, price * gas_used);
+
+        state_.add_to_balance(evm_.beneficiary, final_fee);
         state_.add_to_balance(*txn.from, price * gas_left);
     }
 
@@ -127,6 +121,7 @@ void ExecutionProcessor::execute_transaction(const Transaction& txn, Receipt& re
     receipt.cumulative_gas_used = cumulative_gas_used_;
     receipt.bloom = logs_bloom(state_.logs());
     std::swap(receipt.logs, state_.logs());
+    return res;
 }
 
 uint64_t ExecutionProcessor::available_gas() const noexcept {
@@ -157,7 +152,7 @@ uint64_t ExecutionProcessor::refund_gas(const Transaction& txn, uint64_t gas_lef
     return gas_left;
 }
 
-ValidationResult ExecutionProcessor::execute_block_no_post_validation(std::vector<Receipt>& receipts) noexcept {
+ValidationResult ExecutionProcessor::execute_block_no_post_validation(std::vector<Receipt>& receipts, const evmone::gas_parameters& gas_params) noexcept {
     const Block& block{evm_.block()};
 
     // Avoid calling dao_block() when the ruleset is kTrust to prevent triggering an assertion in the dao_block function
@@ -179,7 +174,7 @@ ValidationResult ExecutionProcessor::execute_block_no_post_validation(std::vecto
         if (err != ValidationResult::kOk) {
             return err;
         }
-        execute_transaction(txn, *receipt_it);
+        execute_transaction(txn, *receipt_it, gas_params);
         state_.reset_reserved_objects();
         ++receipt_it;
     }
@@ -193,8 +188,8 @@ ValidationResult ExecutionProcessor::execute_block_no_post_validation(std::vecto
     return ValidationResult::kOk;
 }
 
-ValidationResult ExecutionProcessor::execute_and_write_block(std::vector<Receipt>& receipts) noexcept {
-    if (const ValidationResult res{execute_block_no_post_validation(receipts)}; res != ValidationResult::kOk) {
+ValidationResult ExecutionProcessor::execute_and_write_block(std::vector<Receipt>& receipts, const evmone::gas_parameters& gas_params) noexcept {
+    if (const ValidationResult res{execute_block_no_post_validation(receipts, gas_params)}; res != ValidationResult::kOk) {
         return res;
     }
 

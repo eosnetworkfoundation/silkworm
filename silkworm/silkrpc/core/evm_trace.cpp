@@ -1238,7 +1238,7 @@ awaitable<std::vector<TraceCallResult>> TraceCallExecutor::trace_block_transacti
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     auto chain_config_ptr = lookup_chain_config(chain_id);
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
+    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
 
     auto current_executor = co_await boost::asio::this_coro::executor;
 
@@ -1285,7 +1285,7 @@ awaitable<std::vector<TraceCallResult>> TraceCallExecutor::trace_block_transacti
 
                     tracers.push_back(ibs_tracer);
 
-                    auto execution_result = executor.call(block, transaction, gas_params, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
+                    auto execution_result = executor.call(block, transaction, gas_params, gas_prices, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
                     if (execution_result.pre_check_error) {
                         result.pre_check_error = execution_result.pre_check_error.value();
                     } else {
@@ -1317,7 +1317,7 @@ awaitable<TraceManyCallResult> TraceCallExecutor::trace_calls(const silkworm::Bl
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     const auto chain_config_ptr = lookup_chain_config(chain_id);
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
+    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
 
     auto current_executor = co_await boost::asio::this_coro::executor;
     const auto ret_result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(TraceManyCallResult)>(
@@ -1357,7 +1357,7 @@ awaitable<TraceManyCallResult> TraceCallExecutor::trace_calls(const silkworm::Bl
                     }
                     tracers.push_back(ibs_tracer);
 
-                    auto execution_result = executor.call(block, transaction, gas_params, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
+                    auto execution_result = executor.call(block, transaction, gas_params, gas_prices, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
 
                     if (execution_result.pre_check_error) {
                         result.pre_check_error = "first run for txIndex " + std::to_string(index) + " error: " + execution_result.pre_check_error.value();
@@ -1387,7 +1387,7 @@ boost::asio::awaitable<TraceDeployResult> TraceCallExecutor::trace_deploy_transa
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     const auto chain_config_ptr = lookup_chain_config(chain_id);
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
+    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
 
     auto current_executor = co_await boost::asio::this_coro::executor;
 
@@ -1412,7 +1412,7 @@ boost::asio::awaitable<TraceDeployResult> TraceCallExecutor::trace_deploy_transa
                         transaction.recover_sender();
                     }
 
-                    executor.call(block, transaction, gas_params, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
+                    executor.call(block, transaction, gas_params, gas_prices, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
                     executor.reset();
 
                     if (create_tracer->found()) {
@@ -1461,7 +1461,7 @@ boost::asio::awaitable<TraceEntriesResult> TraceCallExecutor::trace_transaction_
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     const auto chain_config_ptr = lookup_chain_config(chain_id);
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, transaction_with_block.block_with_hash.block);
+    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(database_reader_, chain_config_ptr, transaction_with_block.block_with_hash.block);
 
     auto current_executor = co_await boost::asio::this_coro::executor;
 
@@ -1478,7 +1478,7 @@ boost::asio::awaitable<TraceEntriesResult> TraceCallExecutor::trace_transaction_
 
                 Tracers tracers{entry_tracer};
 
-                executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, gas_params, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
+                executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, gas_params, gas_prices, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
 
                 boost::asio::post(current_executor, [entry_tracer, self = std::move(self)]() mutable {
                     self.complete(entry_tracer);
@@ -1495,7 +1495,7 @@ boost::asio::awaitable<std::string> TraceCallExecutor::trace_transaction_error(c
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     const auto chain_config_ptr = lookup_chain_config(chain_id);
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, transaction_with_block.block_with_hash.block);
+    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(database_reader_, chain_config_ptr, transaction_with_block.block_with_hash.block);
 
     auto current_executor = co_await boost::asio::this_coro::executor;
 
@@ -1509,7 +1509,7 @@ boost::asio::awaitable<std::string> TraceCallExecutor::trace_transaction_error(c
                 EVMExecutor executor{*chain_config_ptr, workers_, curr_state};
                 Tracers tracers{};
 
-                auto execution_result = executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, gas_params, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
+                auto execution_result = executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, gas_params, gas_prices, eos_evm_version, std::move(tracers), /*refund=*/true, /*gas_bailout=*/true);
 
                 std::string result = "0x";
                 if (execution_result.error_code != evmc_status_code::EVMC_SUCCESS) {
@@ -1530,7 +1530,7 @@ boost::asio::awaitable<TraceOperationsResult> TraceCallExecutor::trace_operation
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     const auto chain_config_ptr = lookup_chain_config(chain_id);
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, transaction_with_block.block_with_hash.block);
+    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(database_reader_, chain_config_ptr, transaction_with_block.block_with_hash.block);
 
     auto current_executor = co_await boost::asio::this_coro::executor;
     auto state = tx_.create_state(current_executor, database_reader_, block_number - 1);
@@ -1541,7 +1541,7 @@ boost::asio::awaitable<TraceOperationsResult> TraceCallExecutor::trace_operation
     auto tracer = std::make_shared<trace::OperationTracer>(initial_ibs);
     Tracers tracers{tracer};
 
-    auto execution_result = executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, gas_params, eos_evm_version, tracers, /*refund=*/true, /*gas_bailout=*/true);
+    auto execution_result = executor.call(transaction_with_block.block_with_hash.block, transaction_with_block.transaction, gas_params, gas_prices, eos_evm_version, tracers, /*refund=*/true, /*gas_bailout=*/true);
 
     co_return tracer->result();
 }
@@ -1605,7 +1605,7 @@ awaitable<TraceCallResult> TraceCallExecutor::execute(std::uint64_t block_number
 
     const auto chain_id = co_await core::rawdb::read_chain_id(database_reader_);
     const auto chain_config_ptr = lookup_chain_config(chain_id);
-    const auto [eos_evm_version, gas_params] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
+    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(database_reader_, chain_config_ptr, block);
 
     auto current_executor = co_await boost::asio::this_coro::executor;
 
@@ -1628,7 +1628,7 @@ awaitable<TraceCallResult> TraceCallExecutor::execute(std::uint64_t block_number
                     if (!txn.from) {
                         txn.recover_sender();
                     }
-                    const auto execution_result = executor.call(block, txn, gas_params, eos_evm_version, tracers, /*refund=*/true, /*gas_bailout=*/true);
+                    const auto execution_result = executor.call(block, txn, gas_params, gas_prices, eos_evm_version, tracers, /*refund=*/true, /*gas_bailout=*/true);
                     if (execution_result.pre_check_error) {
                         SILK_ERROR << "execution failed for tx " << idx << " due to pre-check error: " << *execution_result.pre_check_error;
                     }
@@ -1650,7 +1650,7 @@ awaitable<TraceCallResult> TraceCallExecutor::execute(std::uint64_t block_number
 
                     tracers.push_back(std::make_shared<trace::StateDiffTracer>(traces.state_diff.value(), state_addresses));
                 }
-                const auto execution_result = executor.call(block, transaction, gas_params, eos_evm_version, tracers, /*refund=*/true, /*gas_bailout=*/true);
+                const auto execution_result = executor.call(block, transaction, gas_params, gas_prices, eos_evm_version, tracers, /*refund=*/true, /*gas_bailout=*/true);
 
                 if (execution_result.pre_check_error) {
                     result.pre_check_error = execution_result.pre_check_error.value();

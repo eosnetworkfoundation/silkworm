@@ -66,6 +66,21 @@ const evmone::gas_parameters& Stage::get_gas_params(db::ROTxn& txn, const Block&
     return last_gas_params;
 }
 
+const gas_prices_t& Stage::get_gas_prices(db::ROTxn& txn, const Block& block) {
+    auto curr_gas_prices_index = block.get_gas_prices_index();
+    if(curr_gas_prices_index != last_gas_prices_index) {
+        auto gas_prices = silkworm::db::read_gas_prices(txn, block);
+        if(gas_prices.has_value()) {
+            const auto& v = gas_prices.value();
+            last_gas_prices = gas_prices_t(v.overhead_price, v.storage_price);
+        } else {
+            last_gas_prices=gas_prices_t{};
+        }
+        last_gas_prices_index = curr_gas_prices_index;
+    }
+    return last_gas_prices;
+}
+
 StageError::StageError(Stage::Result err)
     : err_{magic_enum::enum_integer<Stage::Result>(err)},
       message_{std::string(magic_enum::enum_name<Stage::Result>(err))} {}

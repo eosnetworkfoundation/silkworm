@@ -25,6 +25,7 @@
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/core/types/receipt.hpp>
 #include <silkworm/core/types/transaction.hpp>
+#include <silkworm/core/types/gas_prices.hpp>
 
 namespace silkworm {
 
@@ -33,18 +34,18 @@ class ExecutionProcessor {
     ExecutionProcessor(const ExecutionProcessor&) = delete;
     ExecutionProcessor& operator=(const ExecutionProcessor&) = delete;
 
-    ExecutionProcessor(const Block& block, protocol::IRuleSet& rule_set, State& state, const ChainConfig& config, const evmone::gas_parameters& gas_params);
+    ExecutionProcessor(const Block& block, protocol::IRuleSet& rule_set, State& state, const ChainConfig& config, const gas_prices_t& gas_prices);
 
     /**
      * Execute a transaction, but do not write to the DB yet.
      * Precondition: transaction must be valid.
      */
-    void execute_transaction(const Transaction& txn, Receipt& receipt) noexcept;
+    ExecutionResult execute_transaction(const Transaction& txn, Receipt& receipt, const evmone::gas_parameters& gas_params) noexcept;
 
     //! \brief Execute the block and write the result to the DB.
     //! \remarks Warning: This method does not verify state root; pre-Byzantium receipt root isn't validated either.
     //! \pre RuleSet's validate_block_header & pre_validate_block_body must return kOk.
-    [[nodiscard]] ValidationResult execute_and_write_block(std::vector<Receipt>& receipts) noexcept;
+    [[nodiscard]] ValidationResult execute_and_write_block(std::vector<Receipt>& receipts, const evmone::gas_parameters& gas_params) noexcept;
 
     EVM& evm() noexcept { return evm_; }
     const EVM& evm() const noexcept { return evm_; }
@@ -63,7 +64,7 @@ class ExecutionProcessor {
      * Does not perform any post-execution validation (for example, receipt root is not checked).
      * Precondition: validate_block_header & pre_validate_block_body must return kOk.
      */
-    [[nodiscard]] ValidationResult execute_block_no_post_validation(std::vector<Receipt>& receipts) noexcept;
+    [[nodiscard]] ValidationResult execute_block_no_post_validation(std::vector<Receipt>& receipts, const evmone::gas_parameters& gas_params) noexcept;
 
     uint64_t refund_gas(const Transaction& txn, uint64_t gas_left, uint64_t refund_gas) noexcept;
 
@@ -71,6 +72,7 @@ class ExecutionProcessor {
     IntraBlockState state_;
     protocol::IRuleSet& rule_set_;
     EVM evm_;
+    gas_prices_t gas_prices_;
 };
 
 }  // namespace silkworm

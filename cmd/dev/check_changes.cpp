@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
             processor.evm().analysis_cache = &analysis_cache;
             processor.evm().state_pool = &state_pool;
 
-            if (const auto res{processor.execute_and_write_block(receipts)}; res != ValidationResult::kOk) {
+            if (const auto res{processor.execute_and_write_block(receipts, {})}; res != ValidationResult::kOk) {
                 log::Error() << "Failed to execute block " << block_num;
                 continue;
             }

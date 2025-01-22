@@ -238,13 +238,14 @@ Stage::Result Execution::execute_batch(db::RWTxn& txn, BlockNum max_block_num, A
                 log_time = now + 5s;
             }
 
-            ExecutionProcessor processor(block, *rule_set_, buffer, node_settings_->chain_config.value(), get_gas_params(txn, block));
+            auto gas_prices = get_gas_prices(txn, block);
+            ExecutionProcessor processor(block, *rule_set_, buffer, node_settings_->chain_config.value(), gas_prices);
             processor.evm().analysis_cache = &analysis_cache;
             processor.evm().state_pool = &state_pool;
 
             // TODO Add Tracer and collect call traces
-
-            if (const auto res{processor.execute_and_write_block(receipts)}; res != ValidationResult::kOk) {
+            auto gas_params = get_gas_params(txn, block);
+            if (const auto res{processor.execute_and_write_block(receipts, gas_params)}; res != ValidationResult::kOk) {
                 // Persist work done so far
                 if (block_num_ >= prune_receipts_threshold) {
                     buffer.insert_receipts(block_num_, receipts);

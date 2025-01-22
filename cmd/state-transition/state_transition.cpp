@@ -344,7 +344,7 @@ void StateTransition::run() {
                 block_validation == ValidationResult::kOk &&
                 pre_txn_validation == ValidationResult::kOk &&
                 txn_validation == ValidationResult::kOk) {
-                processor.execute_transaction(txn, receipt);
+                processor.execute_transaction(txn, receipt, {});
                 processor.evm().state().write_to_db(block.header.number);
             } else {
                 cleanup_error_block(block, processor, rev);

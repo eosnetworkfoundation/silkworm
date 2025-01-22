@@ -25,6 +25,7 @@
 #include <silkworm/core/protocol/rule_set.hpp>
 #include <silkworm/core/state/state.hpp>
 #include <silkworm/core/types/receipt.hpp>
+#include <silkworm/core/execution/processor.hpp>
 
 namespace silkworm::protocol {
 
@@ -40,7 +41,7 @@ class Blockchain {
      * In the beginning the state must have the genesis allocation.
      * Later on the state may only be modified by the created instance of Blockchain.
      */
-    explicit Blockchain(State& state, const ChainConfig& config, const Block& genesis_block, const evmone::gas_parameters& gas_params);
+    explicit Blockchain(State& state, const ChainConfig& config, const Block& genesis_block, const evmone::gas_parameters& gas_params, const gas_prices_t& gas_prices);
 
     // Not copyable nor movable
     Blockchain(const Blockchain&) = delete;
@@ -72,6 +73,7 @@ class Blockchain {
     std::unordered_map<evmc::bytes32, ValidationResult> bad_blocks_;
     std::vector<Receipt> receipts_;
     evmone::gas_parameters gas_params_;
+    gas_prices_t gas_prices_;
 };
 
 }  // namespace silkworm::protocol

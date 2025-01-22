@@ -33,7 +33,6 @@
 #include <silkworm/silkrpc/ethdb/cbor.hpp>
 #include <silkworm/silkrpc/json/types.hpp>
 #include <silkworm/silkrpc/types/receipt.hpp>
-#include <eosevm/consensus_parameters.hpp>
 
 namespace silkworm::rpc::core::rawdb {
 
@@ -446,6 +445,16 @@ boost::asio::awaitable<std::optional<eosevm::ConsensusParameters>> read_consensu
         co_return std::nullopt;
     }
     co_return eosevm::ConsensusParameters::decode(value);
+}
+
+boost::asio::awaitable<std::optional<eosevm::gas_prices>> read_gas_prices(const core::rawdb::DatabaseReader& reader, const std::optional<evmc::bytes32>& index) {
+    if(!index.has_value()) co_return std::nullopt;
+    const auto block_key = silkworm::db::block_key(index.value().bytes);
+    const auto value = co_await reader.get_one(db::table::kGasPricesName, block_key);
+    if (value.empty()) {
+        co_return std::nullopt;
+    }
+    co_return eosevm::gas_prices::decode(value);
 }
 
 boost::asio::awaitable<std::optional<eosevm::block_extra_data>> read_extra_block_data(const core::rawdb::DatabaseReader& reader, const evmc::bytes32& block_hash, uint64_t block_number) {

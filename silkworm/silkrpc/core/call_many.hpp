@@ -40,6 +40,7 @@
 #include <silkworm/silkrpc/types/call.hpp>
 #include <silkworm/silkrpc/types/transaction.hpp>
 #include <silkworm/silkrpc/core/gas_parameters.hpp>
+#include <silkworm/core/types/gas_prices.hpp>
 
 namespace silkworm::rpc::call {
 
@@ -71,6 +72,7 @@ class CallExecutor {
                                         int32_t transaction_index,
                                         boost::asio::any_io_executor& executor,
                                         const evmone::gas_parameters& gas_params,
+                                        const silkworm::gas_prices_t& gas_prices,
                                         uint64_t eos_evm_version);
 
   private:
