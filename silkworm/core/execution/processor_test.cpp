@@ -787,7 +787,6 @@ TEST_CASE("EOS EVM v3 contract creation") {
     intx::uint256 base_fee_per_gas = 80 * kGiga;
 
     auto deploy_contract = [&](const ChainConfig& chain_config, uint64_t gas_limit) -> auto {
-
         Block block{};
         block.header.number = 9'069'000;
         block.header.gas_limit = 0x7fffffff;
@@ -821,8 +820,8 @@ TEST_CASE("EOS EVM v3 contract creation") {
 
         evmone::gas_parameters gas_params;
         gas_params.G_txcreate = 50000;
-
-        ExecutionProcessor processor{block, *rule_set, state, chain_config, {}};
+        silkworm::gas_prices_t gas_prices{.overhead_price = 42500000001, .storage_price = 42500000000 };
+        ExecutionProcessor processor{block, *rule_set, state, chain_config, gas_prices};
 
         Transaction txn{{
                 .type = TransactionType::kDynamicFee,
@@ -850,26 +849,26 @@ TEST_CASE("EOS EVM v3 contract creation") {
         );
     };
 
-    // g_txcreate = 50000
-    // g0 = 29092+g_txcreate = 79092
-    // init = 23156 (real) + 200000 (storage spec) + 28000 (cpu spec) = 251156
-    // code_deposit = 442 * 200 = 88400
+    // g_txcreate = 25000 (50000 original)
+    // g0 = 29092+g_txcreate = 54092
+    // init = 23156 (real) + 100000 (storage spec, 200k original) + 28000 (cpu spec) = 151156
+    // code_deposit = 442 * 100 (200 original) = 44200
 
-    auto [receipt1, _unused1] = deploy_contract(kEOSEVMMainnetConfig, 79092);
+    auto [receipt1, _unused1] = deploy_contract(kEOSEVMMainnetConfig, 54092);
     CHECK(receipt1.success == false);
     CHECK(receipt1.cumulative_gas_used == 29092); // Only the real intrinsic gas (g_txcreate is refunded)
 
-    auto [receipt2, _unused2] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 251156 - 1);
+    auto [receipt2, _unused2] = deploy_contract(kEOSEVMMainnetConfig, 54092 + 151156 - 1);
     CHECK(receipt2.success == false);
     CHECK(receipt2.cumulative_gas_used == 29092+23156-1); // Only the real intrinsic+constructor
 
-    auto [receipt3, _unused3] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 251156 + 88400 - 1);
+    auto [receipt3, _unused3] = deploy_contract(kEOSEVMMainnetConfig, 54092 + 151156 + 44200 - 1);
     CHECK(receipt3.success == false);
     CHECK(receipt3.cumulative_gas_used == 29092+23156); // Only the real intrinsic+constructor (full)
 
-    auto [receipt4, _unused4] = deploy_contract(kEOSEVMMainnetConfig, 79092 + 251156 + 88400);
+    auto [receipt4, _unused4] = deploy_contract(kEOSEVMMainnetConfig, 54092 + 151156 + 44200);
     CHECK(receipt4.success == true);
-    CHECK(receipt4.cumulative_gas_used == 79092+251156+88400);
+    CHECK(receipt4.cumulative_gas_used == 54092+151156+44200);
 }
 
 TEST_CASE("EOS EVM v3 final refund") {

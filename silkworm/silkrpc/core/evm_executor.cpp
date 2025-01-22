@@ -262,11 +262,10 @@ ExecutionResult EVMExecutor::call(
     evmone::gas_parameters scaled_gas_params;
     if( eos_evm_version >= 3 ) {
         inclusion_price = std::min(txn.max_priority_fee_per_gas, txn.max_fee_per_gas - base_fee_per_gas);
-        if(!gas_prices.is_zero()) {
-            scaled_gas_params = evmone::gas_parameters::apply_discount_factor(inclusion_price, static_cast<uint64_t>(base_fee_per_gas), gas_prices.storage_price, gas_params);
-        } else {
-            scaled_gas_params = gas_params;
-        }
+        const intx::uint256 factor_num{gas_prices.storage_price};
+        const intx::uint256 factor_den{base_fee_per_gas + inclusion_price};
+        SILKWORM_ASSERT(factor_den > 0);
+        scaled_gas_params = evmone::gas_parameters::apply_discount_factor(factor_num, factor_den, gas_params);
     } else {
         scaled_gas_params = gas_params;
     }
