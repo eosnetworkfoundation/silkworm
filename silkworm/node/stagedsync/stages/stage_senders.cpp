@@ -29,7 +29,9 @@
 #include <silkworm/core/protocol/validation.hpp>
 #include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/node/db/access_layer.hpp>
+#include <eosevm/version.hpp>
 
+using namespace eosevm;
 namespace silkworm::stagedsync {
 
 using namespace std::chrono_literals;
@@ -380,9 +382,14 @@ Stage::Result Senders::add_to_batch(const BlockHeader& header, BlockNum block_nu
             return Stage::Result::kInvalidTransaction;
         }
         #ifdef DISABLE_EIP2_ENFORCEMENT
+        #pragma message("Disabling EIP2 enforcement")
         const bool enforce_eip2 = false;
-        #else
+        #elif defined(ENABLE_EIP2_ENFORCEMENT)
+        #pragma message("Disabling EIP2 enforcement")
         const bool enforce_eip2 = true;
+        #else
+        const auto evm_version = nonce_to_version(header.nonce);
+        const bool enforce_eip2 = {evm_version >= EVM_VERSION_3};
         #endif
         if (!is_special_signature(transaction.r, transaction.s) && !is_valid_signature(transaction.r, transaction.s, enforce_eip2)) {
             log::Error(log_prefix_) << "Got invalid signature for transaction #" << tx_id << " in block #" << block_num;

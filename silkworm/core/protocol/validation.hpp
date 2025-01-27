@@ -111,9 +111,9 @@ namespace protocol {
     ValidationResult pre_validate_transaction(const Transaction& txn, evmc_revision revision, uint64_t chain_id,
                                               const std::optional<intx::uint256>& base_fee_per_gas,
                                               const std::optional<intx::uint256>& data_gas_price,
-                                              uint64_t eos_evm_version, const evmone::gas_parameters& gas_params);
+                                              uint64_t evm_version, const evmone::gas_parameters& gas_params);
 
-    ValidationResult pre_validate_transactions(const Block& block, const ChainConfig& config, uint64_t eos_evm_version, const evmone::gas_parameters& gas_params);
+    ValidationResult pre_validate_transactions(const Block& block, const ChainConfig& config, uint64_t evm_version, const evmone::gas_parameters& gas_params);
 
     //! \brief Final part of transaction validation that requires access to the state.
     //!

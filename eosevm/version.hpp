@@ -5,7 +5,14 @@
 #include <eosevm/assert.hpp>
 namespace eosevm {
 
-static constexpr uint64_t max_eos_evm_version = 3;
+enum version : uint64_t {
+    EVM_VERSION_0 = 0,
+    EVM_VERSION_1 = 1,
+    EVM_VERSION_2 = 2,
+    EVM_VERSION_3 = 3,
+};
+
+static constexpr uint64_t max_eos_evm_version = EVM_VERSION_3;
 
 using NonceType=silkworm::BlockHeader::NonceType;
 
@@ -22,10 +29,10 @@ inline uint64_t nonce_to_version(const NonceType& nonce) {
 
 inline evmc_revision version_to_evmc_revision(uint64_t version) {
     switch (version) {
-        case 0: return EVMC_ISTANBUL;
-        case 1: return EVMC_SHANGHAI;
-        case 2: return EVMC_SHANGHAI;
-        case 3: return EVMC_SHANGHAI;
+        case EVM_VERSION_0: return EVMC_ISTANBUL;
+        case EVM_VERSION_1: return EVMC_SHANGHAI;
+        case EVM_VERSION_2: return EVMC_SHANGHAI;
+        case EVM_VERSION_3: return EVMC_SHANGHAI;
     }
     auto msg = "Unknown EOSEVM version: " + std::to_string(version);
     EOSEVM_ABORT(msg.c_str());
