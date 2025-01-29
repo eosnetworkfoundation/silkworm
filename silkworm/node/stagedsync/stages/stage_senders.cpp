@@ -377,10 +377,9 @@ Stage::Result Senders::add_to_batch(const BlockHeader& header, BlockNum block_nu
                                     << " for transaction #" << tx_id << " in block #" << block_num << " before it's supported";
             return Stage::Result::kInvalidTransaction;
         }
-        #ifdef DISABLE_EIP2_ENFORCEMENT
-        const bool enforce_eip2 = false;
-        #else
-        const bool enforce_eip2 = true;
+        bool enforce_eip2 = true;
+        #ifndef WITH_SOFT_FORKS
+        enforce_eip2 = false;
         #endif
         if (!is_special_signature(transaction.r, transaction.s) && !is_valid_signature(transaction.r, transaction.s, enforce_eip2)) {
             log::Error(log_prefix_) << "Got invalid signature for transaction #" << tx_id << " in block #" << block_num;
