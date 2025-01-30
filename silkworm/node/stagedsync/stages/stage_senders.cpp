@@ -242,12 +242,6 @@ Stage::Result Senders::prune(db::RWTxn& txn) {
 }
 
 Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
-
-    // secp256k1_context is thread safe and can be reused, but the creation is expensive (~10ms)
-    static secp256k1_context* context = secp256k1_context_create(SILKWORM_SECP256K1_CONTEXT_FLAGS);
-    // release only when the process exits
-    static auto _ = gsl::finally([&]() { if (context) secp256k1_context_destroy(context); });
-
     Stage::Result ret{Stage::Result::kSuccess};
     try {
         db::DataModel data_model{txn};
@@ -271,6 +265,10 @@ Stage::Result Senders::parallel_recover(db::RWTxn& txn) {
         log::Info(log_prefix_, {"op", "parallel_recover",
                                 "num_threads", std::to_string(std::thread::hardware_concurrency()),
                                 "max_batch_size", std::to_string(max_batch_size_)});
+
+        secp256k1_context* context = secp256k1_context_create(SILKWORM_SECP256K1_CONTEXT_FLAGS);
+        if (!context) throw std::runtime_error("Could not create elliptic curve context");
+        auto _ = gsl::finally([&]() { if (context) std::free(context); });
 
         BlockNum start_block_num{previous_progress + 1u};
 
@@ -381,15 +379,9 @@ Stage::Result Senders::add_to_batch(const BlockHeader& header, BlockNum block_nu
                                     << " for transaction #" << tx_id << " in block #" << block_num << " before it's supported";
             return Stage::Result::kInvalidTransaction;
         }
-        #ifdef DISABLE_EIP2_ENFORCEMENT
-        #pragma message("Disabling EIP2 enforcement")
-        const bool enforce_eip2 = false;
-        #elif defined(ENABLE_EIP2_ENFORCEMENT)
-        #pragma message("Disabling EIP2 enforcement")
-        const bool enforce_eip2 = true;
-        #else
-        const auto evm_version = nonce_to_version(header.nonce);
-        const bool enforce_eip2 = {evm_version >= EVM_VERSION_3};
+        bool enforce_eip2 = evm_version >= EVM_VERSION_3;
+        #ifndef WITH_SOFT_FORKS
+        enforce_eip2 = false;
         #endif
         if (!is_special_signature(transaction.r, transaction.s) && !is_valid_signature(transaction.r, transaction.s, enforce_eip2)) {
             log::Error(log_prefix_) << "Got invalid signature for transaction #" << tx_id << " in block #" << block_num;

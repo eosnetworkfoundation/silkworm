@@ -68,14 +68,9 @@ ValidationResult pre_validate_transaction(const Transaction& txn, const evmc_rev
 
     /* Should the sender already be present it means the validation of signature already occurred */
     if (!txn.from.has_value()) {
-        #ifdef DISABLE_EIP2_ENFORCEMENT
-        #pragma message("Disabling EIP2 enforcement")
-        const bool enforce_eip2 = false;
-        #elif defined(ENABLE_EIP2_ENFORCEMENT)
-        #pragma message("Enabling EIP2 enforcement")
-        const bool enforce_eip2 = true;
-        #else
-        const bool enforce_eip2 = {evm_version >= EVM_VERSION_3};
+        bool enforce_eip2 = evm_version >= EVM_VERSION_3;
+        #ifndef WITH_SOFT_FORKS
+        enforce_eip2 = false;
         #endif
         if (!is_special_signature(txn.r, txn.s) && !is_valid_signature(txn.r, txn.s, enforce_eip2)) {
             return ValidationResult::kInvalidSignature;

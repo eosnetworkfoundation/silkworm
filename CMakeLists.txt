@@ -35,7 +35,7 @@ if(NOT SILKWORM_HAS_PARENT)
 endif()
 
 project(silkworm)
-set(PROJECT_VERSION 1.0.8)
+set(PROJECT_VERSION 1.0.9)
 
 # conan must be initiailzed after project definition to properly detect target architecture.
 if(NOT SILKWORM_HAS_PARENT)
@@ -58,6 +58,7 @@ option(SILKWORM_CLANG_COVERAGE "Clang instrumentation for code coverage reports"
 option(SILKWORM_CLANG_TIDY "Clang-Tidy linter" OFF)
 option(SILKWORM_SANITIZE "Build instrumentation for sanitizers" OFF)
 option(SILKWORM_USE_MIMALLOC "Enable using mimalloc for dynamic memory management" ON)
+option(WITH_SOFT_FORKS "Enable soft-forks" OFF)
 
 set_property(
   DIRECTORY

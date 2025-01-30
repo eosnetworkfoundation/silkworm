@@ -58,6 +58,10 @@ if(SILKWORM_CORE_USE_ABSEIL)
   target_compile_definitions(silkworm_core PUBLIC SILKWORM_CORE_USE_ABSEIL)
 endif()
 
+if(WITH_SOFT_FORKS)
+  target_compile_definitions(silkworm_core PRIVATE WITH_SOFT_FORKS)
+endif()
+
 target_link_libraries(
   silkworm_core
   PUBLIC ${SILKWORM_CORE_PUBLIC_LIBS}
