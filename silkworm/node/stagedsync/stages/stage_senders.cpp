@@ -29,7 +29,8 @@
 #include <silkworm/core/protocol/validation.hpp>
 #include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/node/db/access_layer.hpp>
-
+#include <eosevm/version.hpp>
+using namespace eosevm;
 namespace silkworm::stagedsync {
 
 using namespace std::chrono_literals;
@@ -379,7 +380,8 @@ Stage::Result Senders::add_to_batch(const BlockHeader& header, BlockNum block_nu
                                     << " for transaction #" << tx_id << " in block #" << block_num << " before it's supported";
             return Stage::Result::kInvalidTransaction;
         }
-        bool enforce_eip2 = false;
+        auto evm_version = eosevm::nonce_to_version(header.nonce);
+        bool enforce_eip2 = evm_version >= EVM_VERSION_3;
         #ifdef WITH_SOFT_FORKS
         enforce_eip2 = true;
         #endif
