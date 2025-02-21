@@ -256,16 +256,27 @@ ExecutionResult EVMExecutor::call(
     }
 
     const evmc_revision rev{evm.revision()};
-    const intx::uint256 base_fee_per_gas{evm.block().header.base_fee_per_gas.value_or(0)};
+    intx::uint256 base_fee_per_gas{evm.block().header.base_fee_per_gas.value_or(0)};
 
     intx::uint256 inclusion_price;
     evmone::gas_parameters scaled_gas_params;
     if( eos_evm_version >= 3 ) {
-        inclusion_price = std::min(txn.max_priority_fee_per_gas, txn.max_fee_per_gas - base_fee_per_gas);
+        base_fee_per_gas = std::max(gas_prices.storage_price, gas_prices.overhead_price);
+        if (txn.max_fee_per_gas >= base_fee_per_gas) {
+            inclusion_price = std::min(txn.max_priority_fee_per_gas, txn.max_fee_per_gas - base_fee_per_gas);
+        }
+        else {
+            inclusion_price = txn.max_priority_fee_per_gas;
+        }
         const intx::uint256 factor_num{gas_prices.storage_price};
         const intx::uint256 factor_den{base_fee_per_gas + inclusion_price};
-        SILKWORM_ASSERT(factor_den > 0);
-        scaled_gas_params = evmone::gas_parameters::apply_discount_factor(factor_num, factor_den, gas_params);
+
+        if (factor_den > 0) {
+            scaled_gas_params = evmone::gas_parameters::apply_discount_factor(factor_num, factor_den, gas_params);
+        } else {
+            SILK_ERROR << __FILE__ << " factor_den <= 0, continue without discount factor";
+            scaled_gas_params = gas_params;
+        }
     } else {
         scaled_gas_params = gas_params;
     }
@@ -337,7 +348,8 @@ ExecutionResult EVMExecutor::call(
         return {std::nullopt, txn.gas_limit, /* data */ {}, "evm.execute: unknown exception"};
     }
 
-    const intx::uint256 price{evm.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
+    intx::uint256 price{evm.config().protocol_rule_set == protocol::RuleSetType::kTrust ? effective_gas_price : txn.priority_fee_per_gas(base_fee_per_gas)};
+
     uint64_t gas_left{0};
     uint64_t gas_used{0};
     if(eos_evm_version < 3) {
@@ -352,7 +364,15 @@ ExecutionResult EVMExecutor::call(
     } else {
         intx::uint256 final_fee{0};
         silkworm::ExecutionResult res;
-        std::tie(res, final_fee, gas_used, gas_left) = eosevm::gas_refund_v3(eos_evm_version, result, txn, scaled_gas_params, price, gas_prices, inclusion_price);
+
+        price = std::max(price, base_fee_per_gas);
+
+        if (price > intx::uint256{0}) {
+            std::tie(res, final_fee, gas_used, gas_left) = eosevm::gas_refund_v3(eos_evm_version, result, txn, scaled_gas_params, price, gas_prices, inclusion_price);
+        } else {
+            SILK_ERROR << "skip gas_refund_v3() because price is zero";
+            gas_left = result.gas_left;
+        }
 
         // award the fee recipient
         ibs_state_.add_to_balance(evm.beneficiary, final_fee);
