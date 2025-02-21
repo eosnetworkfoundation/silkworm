@@ -9,6 +9,7 @@ awaitable<std::tuple<uint64_t, evmone::gas_parameters, silkworm::gas_prices_t>> 
     silkworm::gas_prices_t gas_prices;
     if(eos_evm_version > 0) {
         auto block_index = block.get_consensus_parameter_index();
+        auto gas_price_index = block.get_gas_prices_index();
         auto consensus_params = co_await silkworm::rpc::core::rawdb::read_consensus_parameters(tx_database, block_index);
         if(consensus_params.has_value() && consensus_params->gas_fee_parameters.has_value()) {
             gas_params=evmone::gas_parameters(
@@ -19,8 +20,8 @@ awaitable<std::tuple<uint64_t, evmone::gas_parameters, silkworm::gas_prices_t>> 
               consensus_params->gas_fee_parameters->gas_sset
             );
         }
-        if(eos_evm_version >= 3) {
-            auto gp = co_await silkworm::rpc::core::rawdb::read_gas_prices(tx_database, block_index);
+        if(eos_evm_version >= 3 && gas_price_index.has_value()) {
+            auto gp = co_await silkworm::rpc::core::rawdb::read_gas_prices(tx_database, *gas_price_index);
             if(gp.has_value()) {
                 gas_prices.overhead_price = gp->overhead_price;
                 gas_prices.storage_price = gp->storage_price;
