@@ -78,7 +78,21 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
 
     SILK_DEBUG << "hi: " << hi << ", lo: " << lo << ", cap: " << cap;
 
-    const auto [eos_evm_version, gas_params, gas_prices] = co_await load_gas_parameters(tx_database_, &config_, block);
+    const auto [eos_evm_version, gas_params, gas_prices_orig] = co_await load_gas_parameters(tx_database_, &config_, block);
+    silkworm::Transaction transaction{call.to_transaction()};
+
+    // If conservative gas estimation is signaled, assert that inclusion_price is zero and adjust gas_prices if neccesary
+    silkworm::gas_prices_t gas_prices = gas_prices_orig;
+    if( call.gas.has_value() && call.gas.value() == 0 ) {
+        auto base_fee_per_gas = gas_prices.get_base_price();
+        auto inclusion_price = std::min(transaction.max_priority_fee_per_gas, transaction.max_fee_per_gas >= base_fee_per_gas ? transaction.max_fee_per_gas - base_fee_per_gas : 0);
+        if( inclusion_price > 0 ) {
+            throw EstimateGasException{-32000, "inclusion_price must be 0"};
+        }
+        if(gas_prices.storage_price < gas_prices.overhead_price) {
+            gas_prices.storage_price = gas_prices.overhead_price;
+        }
+    }
 
     auto this_executor = co_await boost::asio::this_coro::executor;
     auto exec_result = co_await boost::asio::async_compose<decltype(boost::asio::use_awaitable), void(ExecutionResult)>(
@@ -88,7 +102,6 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
                 EVMExecutor executor{config_, workers_, state};
 
                 ExecutionResult result{evmc_status_code::EVMC_SUCCESS};
-                silkworm::Transaction transaction{call.to_transaction()};
                 if(!transaction.from.has_value()) transaction.from = evmc::address{0};
                 while (lo + 1 < hi) {
                     auto mid = (hi + lo) / 2;

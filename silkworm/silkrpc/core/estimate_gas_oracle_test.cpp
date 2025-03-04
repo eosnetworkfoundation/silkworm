@@ -428,4 +428,51 @@ TEST_CASE("estimate gas") {
         }
     }
 }
+
+TEST_CASE("estimate conservative gas") {
+    silkworm::test::SetLogVerbosityGuard log_guard{log::Level::kNone};
+    boost::asio::thread_pool pool{1};
+    boost::asio::thread_pool workers{1};
+
+    intx::uint256 kBalance{1'000'000'000};
+
+    silkworm::BlockHeader kBlockHeader;
+    kBlockHeader.gas_limit = kTxGas * 2;
+
+    silkworm::Account kAccount{0, kBalance};
+
+    BlockHeaderProvider block_header_provider = [&kBlockHeader](uint64_t /*block_number*/) -> boost::asio::awaitable<silkworm::BlockHeader> {
+        co_return kBlockHeader;
+    };
+
+    AccountReader account_reader = [&kAccount](const evmc::address& /*address*/, uint64_t /*block_number*/) -> boost::asio::awaitable<std::optional<silkworm::Account>> {
+        co_return kAccount;
+    };
+
+    Call call;
+    const silkworm::Block block;
+    const silkworm::ChainConfig config;
+    RemoteDatabaseTest remote_db_test;
+    auto tx = std::make_unique<ethdb::kv::RemoteTransaction>(*remote_db_test.stub_, remote_db_test.grpc_context_);
+    ethdb::TransactionDatabase tx_database{*tx};
+    MockEstimateGasOracle estimate_gas_oracle{block_header_provider, account_reader, config, workers, *tx, tx_database};
+
+    SECTION("Check failure when gas=0 and inclusio_price>0") {
+        try {
+            call.gas = 0;
+            call.max_priority_fee_per_gas = 1;
+            call.max_fee_per_gas = 1;
+            auto result = boost::asio::co_spawn(pool, estimate_gas_oracle.estimate_gas(call, block), boost::asio::use_future);
+            result.get();
+            CHECK(false);
+        } catch (const silkworm::rpc::EstimateGasException& e) {
+            CHECK(e.message() == "inclusion_price must be 0");
+        } catch (const std::exception&) {
+            CHECK(false);
+        } catch (...) {
+            CHECK(false);
+        }
+    }
+}
+
 }  // namespace silkworm::rpc
