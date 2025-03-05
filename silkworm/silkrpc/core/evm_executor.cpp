@@ -261,7 +261,7 @@ ExecutionResult EVMExecutor::call(
     intx::uint256 inclusion_price;
     evmone::gas_parameters scaled_gas_params;
     if( eos_evm_version >= 3 ) {
-        inclusion_price = std::min(txn.max_priority_fee_per_gas, txn.max_fee_per_gas - base_fee_per_gas);
+        inclusion_price = std::min(txn.max_priority_fee_per_gas, txn.max_fee_per_gas >= base_fee_per_gas ? txn.max_fee_per_gas - base_fee_per_gas : 0);
         const intx::uint256 factor_num{gas_prices.storage_price};
         const intx::uint256 factor_den{base_fee_per_gas + inclusion_price};
         SILKWORM_ASSERT(factor_den > 0);
