@@ -34,7 +34,7 @@
 #include <silkworm/silkrpc/test/kv_test_base.hpp>
 #include <silkworm/silkrpc/test/mock_estimate_gas_oracle.hpp>
 #include <silkworm/silkrpc/types/block.hpp>
-
+#include <eosevm/version.hpp>
 namespace silkworm::rpc {
 
 struct RemoteDatabaseTest : test::KVTestBase {
@@ -437,7 +437,9 @@ TEST_CASE("estimate conservative gas") {
     intx::uint256 kBalance{1'000'000'000};
 
     silkworm::BlockHeader kBlockHeader;
+    kBlockHeader.number = 1;
     kBlockHeader.gas_limit = kTxGas * 2;
+    kBlockHeader.nonce = eosevm::version_to_nonce(eosevm::EVM_VERSION_3);
 
     silkworm::Account kAccount{0, kBalance};
 
@@ -450,8 +452,8 @@ TEST_CASE("estimate conservative gas") {
     };
 
     Call call;
-    const silkworm::Block block;
-    const silkworm::ChainConfig config;
+    const silkworm::Block block{.header=kBlockHeader};
+    const silkworm::ChainConfig config{.protocol_rule_set = protocol::RuleSetType::kTrust};
     RemoteDatabaseTest remote_db_test;
     auto tx = std::make_unique<ethdb::kv::RemoteTransaction>(*remote_db_test.stub_, remote_db_test.grpc_context_);
     ethdb::TransactionDatabase tx_database{*tx};

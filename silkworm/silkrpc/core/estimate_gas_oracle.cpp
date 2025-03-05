@@ -25,7 +25,7 @@
 
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/core/blocks.hpp>
-
+#include <eosevm/version.hpp>
 namespace silkworm::rpc {
 
 boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call& call, const silkworm::Block& block) {
@@ -83,14 +83,15 @@ boost::asio::awaitable<intx::uint256> EstimateGasOracle::estimate_gas(const Call
 
     // If conservative gas estimation is signaled, assert that inclusion_price is zero and adjust gas_prices if neccesary
     silkworm::gas_prices_t gas_prices = gas_prices_orig;
-    if( call.gas.has_value() && call.gas.value() == 0 ) {
+    if( eos_evm_version >= eosevm::EVM_VERSION_3 && call.gas.has_value() && call.gas.value() == 0 ) {
         auto base_fee_per_gas = gas_prices.get_base_price();
         auto inclusion_price = std::min(transaction.max_priority_fee_per_gas, transaction.max_fee_per_gas >= base_fee_per_gas ? transaction.max_fee_per_gas - base_fee_per_gas : 0);
         if( inclusion_price > 0 ) {
             throw EstimateGasException{-32000, "inclusion_price must be 0"};
         }
-        if(gas_prices.storage_price < gas_prices.overhead_price) {
-            gas_prices.storage_price = gas_prices.overhead_price;
+        if(gas_prices.storage_price != gas_prices.overhead_price) {
+            gas_prices.storage_price = base_fee_per_gas;
+            gas_prices.overhead_price = base_fee_per_gas;
         }
     }
 
