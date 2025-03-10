@@ -36,7 +36,11 @@ std::tuple<silkworm::ExecutionResult, intx::uint256, uint64_t, uint64_t> gas_ref
     if(gas_prices.storage_price >= gas_prices.overhead_price) {
         intx::uint256 gas_refund = intx::uint256(total_cpu_gas_consumed);
         gas_refund *= intx::uint256(gas_prices.storage_price-gas_prices.overhead_price);
-        gas_refund /= price;
+        if(price > 0) {
+            gas_refund /= price;
+        } else {
+            gas_refund = 0;
+        }
 
         SILKWORM_ASSERT(gas_refund <= gas_used);
         gas_left += static_cast<uint64_t>(gas_refund);
