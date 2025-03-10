@@ -20,12 +20,10 @@ awaitable<std::tuple<uint64_t, evmone::gas_parameters, silkworm::gas_prices_t>> 
             );
         }
         if(eos_evm_version >= 3) {
-            auto gas_price_index = block.get_gas_prices_index();
-            auto gp = co_await silkworm::rpc::core::rawdb::read_gas_prices(tx_database, gas_price_index);
-            if(gp.has_value()) {
-                gas_prices.overhead_price = gp->overhead_price;
-                gas_prices.storage_price = gp->storage_price;
-            }
+            auto gp = block.get_gas_prices();
+            SILKWORM_ASSERT(gp.has_value());
+            gas_prices.overhead_price = gp->overhead_price;
+            gas_prices.storage_price = gp->storage_price;
         }
     }
 

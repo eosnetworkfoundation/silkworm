@@ -66,19 +66,12 @@ const evmone::gas_parameters& Stage::get_gas_params(db::ROTxn& txn, const Block&
     return last_gas_params;
 }
 
-const gas_prices_t& Stage::get_gas_prices(db::ROTxn& txn, const Block& block) {
-    auto curr_gas_prices_index = block.get_gas_prices_index();
-    if(curr_gas_prices_index != last_gas_prices_index) {
-        auto gas_prices = silkworm::db::read_gas_prices(txn, block);
-        if(gas_prices.has_value()) {
-            const auto& v = gas_prices.value();
-            last_gas_prices = gas_prices_t(v.overhead_price, v.storage_price);
-        } else {
-            last_gas_prices=gas_prices_t{};
-        }
-        last_gas_prices_index = curr_gas_prices_index;
+gas_prices_t Stage::get_gas_prices(const Block& block) {
+    auto gas_price = block.get_gas_prices();
+    if(!gas_price.has_value()) {
+        return gas_prices_t{};
     }
-    return last_gas_prices;
+    return gas_prices_t{gas_price->overhead_price, gas_price->storage_price};
 }
 
 StageError::StageError(Stage::Result err)
