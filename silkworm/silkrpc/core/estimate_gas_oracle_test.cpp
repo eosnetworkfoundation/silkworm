@@ -452,7 +452,8 @@ TEST_CASE("estimate conservative gas") {
     };
 
     Call call;
-    const silkworm::Block block{.header=kBlockHeader};
+    silkworm::Block block{.header=kBlockHeader};
+    block.set_gas_prices({.overhead_price=1, .storage_price=1});
     const silkworm::ChainConfig config{.protocol_rule_set = protocol::RuleSetType::kTrust};
     RemoteDatabaseTest remote_db_test;
     auto tx = std::make_unique<ethdb::kv::RemoteTransaction>(*remote_db_test.stub_, remote_db_test.grpc_context_);
@@ -463,7 +464,7 @@ TEST_CASE("estimate conservative gas") {
         try {
             call.gas = 0;
             call.max_priority_fee_per_gas = 1;
-            call.max_fee_per_gas = 1;
+            call.max_fee_per_gas = 2;
             auto result = boost::asio::co_spawn(pool, estimate_gas_oracle.estimate_gas(call, block), boost::asio::use_future);
             result.get();
             CHECK(false);
