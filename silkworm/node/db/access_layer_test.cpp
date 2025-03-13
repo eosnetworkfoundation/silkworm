@@ -83,7 +83,8 @@ static BlockBody sample_block_body(bool with_block_extra_data=true) {
 
     if(with_block_extra_data) {
         body.eosevm_extra_data = {
-            .consensus_parameter_index = 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32
+            .consensus_parameter_index = 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32,
+            .gasprices = eosevm::gas_prices{1, 2}
         };
     }
 
@@ -510,6 +511,8 @@ TEST_CASE("Headers and bodies") {
         CHECK(block.eosevm_extra_data.has_value() == true);
         CHECK(block.eosevm_extra_data.value().consensus_parameter_index.has_value() == true);
         CHECK(block.eosevm_extra_data->consensus_parameter_index == 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32);
+        CHECK(block.eosevm_extra_data->gasprices->overhead_price == 1);
+        CHECK(block.eosevm_extra_data->gasprices->storage_price == 2);
 
         CHECK(!block.transactions[0].from);
         CHECK(!block.transactions[1].from);
@@ -563,6 +566,8 @@ TEST_CASE("Headers and bodies") {
                 CHECK(block.eosevm_extra_data.has_value() == true);
                 CHECK(block.eosevm_extra_data.value().consensus_parameter_index.has_value() == true);
                 CHECK(block.eosevm_extra_data->consensus_parameter_index == 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3_bytes32);
+                CHECK(block.eosevm_extra_data->gasprices->overhead_price == 1);
+                CHECK(block.eosevm_extra_data->gasprices->storage_price == 2);
             });
         REQUIRE(processed == 1);
         REQUIRE(processed == count);
@@ -986,48 +991,5 @@ TEST_CASE("ConsensusParameters") {
     update_consensus_parameters(txn, value2.hash(), value2 );
     CHECK(read_consensus_parameters(txn, value2.hash()) == value2);
 }
-
-TEST_CASE("gas_prices") {
-    test::Context context;
-    auto& txn{context.rw_txn()};
-
-    constexpr eosevm::gas_prices value1{
-        .overhead_price = 1,
-        .storage_price  = 1
-    };
-
-    auto tmp = value1.encode();
-
-    ByteView bv{tmp};
-    REQUIRE_NOTHROW(eosevm::gas_prices::decode(bv));
-
-    constexpr eosevm::gas_prices value2{
-        .overhead_price = 2,
-        .storage_price  = 2
-    };
-
-    CHECK(read_gas_prices(txn, evmc::bytes32(0)) == std::nullopt);
-
-    update_gas_prices(txn, evmc::bytes32(0), value1 );
-    CHECK(read_gas_prices(txn, evmc::bytes32(0)) == value1);
-
-    update_gas_prices(txn, evmc::bytes32(0), value2 );
-    CHECK(read_gas_prices(txn, evmc::bytes32(0)) == value2);
-
-    CHECK(read_gas_prices(txn, evmc::bytes32(1)) == std::nullopt);
-
-    update_gas_prices(txn, evmc::bytes32(1), value2 );
-    CHECK(read_gas_prices(txn, evmc::bytes32(1)) == value2);
-
-    update_gas_prices(txn, evmc::bytes32(1), value1 );
-    CHECK(read_gas_prices(txn, evmc::bytes32(1)) == value1);
-
-    update_gas_prices(txn, value1.hash(), value1 );
-    CHECK(read_gas_prices(txn, value1.hash()) == value1);
-
-    update_gas_prices(txn, value2.hash(), value2 );
-    CHECK(read_gas_prices(txn, value2.hash()) == value2);
-}
-
 
 }  // namespace silkworm::db

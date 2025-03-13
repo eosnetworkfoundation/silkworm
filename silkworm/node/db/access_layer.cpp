@@ -1272,31 +1272,4 @@ void update_consensus_parameters(RWTxn& txn, const evmc::bytes32& index, const e
     cursor->upsert(to_slice(key), mdbx::slice(config.encode()));
 }
 
-std::optional<eosevm::gas_prices> read_gas_prices(ROTxn& txn, const evmc::bytes32& index) {
-    auto cursor = txn.ro_cursor(table::kGasPrices);
-    auto key{db::block_key(index.bytes)};
-    auto data{cursor->find(to_slice(key), /*throw_notfound=*/false)};
-    if (!data) {
-        return std::nullopt;
-    }
-    const auto encoded = from_slice(data.value);
-    return eosevm::gas_prices::decode(encoded);
-}
-
-std::optional<eosevm::gas_prices> read_gas_prices(ROTxn& txn, const Block& block) {
-    std::optional<eosevm::gas_prices> prices;
-    auto gpi = block.get_gas_prices_index();
-    if(gpi.has_value()) {
-        prices = read_gas_prices(txn, gpi.value());
-    }
-    return prices;
-}
-
-void update_gas_prices(RWTxn& txn, const evmc::bytes32& index, const eosevm::gas_prices& prices) {
-    auto cursor = txn.rw_cursor(table::kGasPrices);
-    auto key{db::block_key(index.bytes)};
-
-    cursor->upsert(to_slice(key), mdbx::slice(prices.encode()));
-}
-
 }  // namespace silkworm::db

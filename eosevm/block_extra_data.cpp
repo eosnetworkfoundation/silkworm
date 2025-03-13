@@ -1,13 +1,13 @@
 #include <silkworm/core/rlp/encode.hpp>
 #include <silkworm/core/rlp/decode.hpp>
 
-#include "block_extra_data.hpp"
+#include <eosevm/block_extra_data.hpp>
 
 using namespace silkworm;
 
 namespace eosevm {
     bool operator==(const eosevm::block_extra_data& a, const eosevm::block_extra_data& b) {
-        return a.consensus_parameter_index == b.consensus_parameter_index && a.gas_prices_index == b.gas_prices_index;
+        return a.consensus_parameter_index == b.consensus_parameter_index && a.gasprices == b.gasprices;
     }
 }
 
@@ -40,15 +40,16 @@ namespace silkworm { namespace rlp {
     silkworm::Bytes encode(const eosevm::block_extra_data& out) {
         silkworm::Bytes to;
         encode(to, out.consensus_parameter_index);
-        encode(to, out.gas_prices_index);
+        encode(to, out.gasprices);
         return to;
     }
 
     DecodingResult decode(silkworm::ByteView& from, eosevm::block_extra_data& to) noexcept{
+        to.consensus_parameter_index.reset();
         decode(from, to.consensus_parameter_index);
-        to.gas_prices_index.reset();
         if(from.length() > 0) {
-            decode(from, to.gas_prices_index);
+            to.gasprices.reset();
+            decode(from, to.gasprices);
         }
         return {};
     }
