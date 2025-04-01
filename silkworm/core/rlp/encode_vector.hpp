@@ -20,6 +20,8 @@
 #include <vector>
 
 #include <silkworm/core/rlp/encode.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
+#include <silkworm/core/execution/address.hpp>
 
 namespace silkworm::rlp {
 

@@ -21,7 +21,7 @@
 #include <vector>
 
 #include <silkworm/infra/common/terminal.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm::log {
 
 //! \brief Available verbosity levels

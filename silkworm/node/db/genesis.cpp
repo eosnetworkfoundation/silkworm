@@ -165,16 +165,16 @@ bool initialize_genesis(RWTxn& txn, const nlohmann::json& genesis_json, bool all
             for (const auto& [address, account] : state_buffer.accounts()) {
                 // Store account plain state
                 Bytes encoded{account.encode_for_storage()};
-                state_table.upsert(db::to_slice(address), db::to_slice(encoded));
+                state_table.upsert(db::to_slice(address.bytes), db::to_slice(encoded));
 
                 // First pass for state_root_hash
-                ethash::hash256 hash{keccak256(address)};
+                ethash::hash256 hash{keccak256(address.bytes)};
                 account_rlp[to_bytes32(hash.bytes)] = account.rlp(kEmptyRoot);
             }
 
             trie::HashBuilder hb;
             for (const auto& [hash, rlp] : account_rlp) {
-                hb.add_leaf(trie::unpack_nibbles(hash), rlp);
+                hb.add_leaf(trie::unpack_nibbles(hash.bytes), rlp);
             }
             state_root_hash = hb.root_hash();
         }

@@ -22,6 +22,7 @@
 
 #include <silkworm/core/common/as_range.hpp>
 #include <silkworm/core/types/block.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <eosevm/version.hpp>
 
 namespace silkworm {

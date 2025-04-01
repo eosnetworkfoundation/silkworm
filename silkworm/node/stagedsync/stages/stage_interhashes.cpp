@@ -255,7 +255,7 @@ trie::PrefixSet InterHashes::collect_account_changes(db::RWTxn& txn, BlockNum fr
             changeset_value_view.remove_prefix(kAddressLength);
             auto hashed_addresses_it{hashed_addresses.find(address)};
             if (hashed_addresses_it == hashed_addresses.end()) {
-                const auto hashed_address{keccak256(address)};
+                const auto hashed_address{keccak256(address.bytes)};
                 hashed_addresses_it = hashed_addresses.insert_or_assign(address, hashed_address).first;
             }
 
@@ -463,7 +463,7 @@ Stage::Result InterHashes::regenerate_intermediate_hashes(db::RWTxn& txn, const 
             account_collector_.reset();  // Will invoke dtor which causes all flushed files (if any) to be deleted
             storage_collector_.reset();  // Will invoke dtor which causes all flushed files (if any) to be deleted
             log_lck.unlock();
-            const std::string what{"expected " + to_hex(*expected_root, true) + " got " + to_hex(computed_root, true)};
+            const std::string what{"expected " + to_hex(expected_root->bytes, true) + " got " + to_hex(computed_root.bytes, true)};
             throw StageError(Stage::Result::kWrongStateRoot, what);
         }
 
@@ -529,7 +529,7 @@ Stage::Result InterHashes::increment_intermediate_hashes(db::RWTxn& txn, BlockNu
             storage_collector_.reset();  // Will invoke dtor which causes all flushed files (if any) to be deleted
             log_lck.unlock();
             log::Error("Wrong trie root",
-                       {"expected", to_hex(*expected_root, true), "got", to_hex(computed_root, true)});
+                       {"expected", to_hex(expected_root->bytes, true), "got", to_hex(computed_root.bytes, true)});
             return Stage::Result::kWrongStateRoot;
         }
 

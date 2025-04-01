@@ -17,7 +17,7 @@
 #include "util.hpp"
 
 #include <catch2/catch.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm {
 
 TEST_CASE("Hex") {
@@ -91,8 +91,8 @@ TEST_CASE("Integrals to hex") {
 }
 
 TEST_CASE("Zeroless view") {
-    CHECK(to_hex(zeroless_view(0x0000000000000000000000000000000000000000000000000000000000000000_bytes32)).empty());
-    CHECK(to_hex(zeroless_view(0x000000000000000000000000000000000000000000000000000000000004bc00_bytes32)) ==
+    CHECK(to_hex(zeroless_view((0x0000000000000000000000000000000000000000000000000000000000000000_bytes32).bytes)).empty());
+    CHECK(to_hex(zeroless_view((0x000000000000000000000000000000000000000000000000000000000004bc00_bytes32).bytes)) ==
           "04bc00");
 }
 

@@ -20,7 +20,8 @@
 #include <silkworm/core/protocol/param.hpp>
 #include <silkworm/core/rlp/decode_vector.hpp>
 #include <silkworm/core/rlp/encode_vector.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
+#include <silkworm/core/execution/address.hpp>
 namespace silkworm {
 
 bool operator==(const BlockHeader& a, const BlockHeader& b) {
@@ -122,6 +123,12 @@ namespace rlp {
         if (header.excess_data_gas) {
             rlp_head.payload_length += length(*header.excess_data_gas);
         }
+        if (header.parent_beacon_block_root) {
+            rlp_head.payload_length += kHashLength + 1;
+        }
+        if (header.requests_hash) {
+            rlp_head.payload_length += kHashLength + 1;
+        }
 
         return rlp_head;
     }
@@ -166,6 +173,12 @@ namespace rlp {
         }
         if (header.excess_data_gas) {
             encode(to, *header.excess_data_gas);
+        }
+        if (header.parent_beacon_block_root) {
+            encode(to, *header.parent_beacon_block_root);
+        }
+        if (header.requests_hash) {
+            encode(to, *header.requests_hash);
         }
     }
 
@@ -223,12 +236,23 @@ namespace rlp {
         if (from.length() > leftover) {
             to.data_gas_used = 0;
             to.excess_data_gas = 0;
-            if (DecodingResult res{decode_items(from, *to.data_gas_used, *to.excess_data_gas)}; !res) {
+            to.parent_beacon_block_root = evmc::bytes32{};
+            if (DecodingResult res{decode_items(from, *to.data_gas_used, *to.excess_data_gas, *to.parent_beacon_block_root)}; !res) {
                 return res;
             }
         } else {
             to.data_gas_used = std::nullopt;
             to.excess_data_gas = std::nullopt;
+            to.parent_beacon_block_root = std::nullopt;
+        }
+
+        if (from.length() > leftover) {
+            to.requests_hash = evmc::bytes32{};
+            if (DecodingResult res{decode(from, *to.requests_hash, Leftover::kAllow)}; !res) {
+                return res;
+            }
+        } else {
+            to.requests_hash = std::nullopt;
         }
 
         if (from.length() != leftover) {

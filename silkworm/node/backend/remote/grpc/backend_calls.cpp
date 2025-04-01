@@ -22,7 +22,7 @@
 #include <silkworm/infra/grpc/common/util.hpp>
 #include <silkworm/interfaces/types/types.pb.h>
 #include <silkworm/sentry/grpc/interfaces/node_info.hpp>
-
+#include <silkworm/core/execution/address.hpp>
 namespace silkworm::rpc {
 
 using boost::asio::awaitable;
@@ -41,7 +41,7 @@ awaitable<void> EtherbaseCall::operator()(const EthereumBackEnd& /*backend*/) {
     SILK_TRACE << "EtherbaseCall START";
     if (response_.has_address()) {
         co_await agrpc::finish(responder_, response_, grpc::Status::OK);
-        SILK_TRACE << "EtherbaseCall END etherbase: " << to_hex(address_from_H160(response_.address()));
+        SILK_TRACE << "EtherbaseCall END etherbase: " << address_to_hex(address_from_H160(response_.address()));
     } else {
         const grpc::Status error{grpc::StatusCode::INTERNAL, "etherbase must be explicitly specified"};
         co_await agrpc::finish_with_error(responder_, error);

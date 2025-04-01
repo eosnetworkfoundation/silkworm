@@ -97,7 +97,7 @@ static void match_or_throw(const Hash& block_hash, const types::H256& received_h
         const auto msg =
             "Hash mismatch in received header:"
             " got=" +
-            to_hex(received_block_hash) + " expected=" + to_hex(block_hash);
+            to_hex(received_block_hash.bytes) + " expected=" + to_hex(block_hash);
         log::Error() << msg;
         throw std::logic_error{msg};
     }

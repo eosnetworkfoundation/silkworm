@@ -649,7 +649,7 @@ TEST_CASE("Storage") {
     db::PooledCursor table{txn, table::kPlainState};
 
     const auto addr{0xb000000000000000000000000000000000000008_address};
-    const Bytes key{storage_prefix(addr, kDefaultIncarnation)};
+    const Bytes key{storage_prefix(addr.bytes, kDefaultIncarnation)};
 
     const auto loc1{0x000000000000000000000000000000000000a000000000000000000000000037_bytes32};
     const auto loc2{0x0000000000000000000000000000000000000000000000000000000000000000_bytes32};
@@ -660,9 +660,9 @@ TEST_CASE("Storage") {
     const auto val2{0x000000000000000000000000000000000000000000005666856076ebaf477f07_bytes32};
     const auto val3{0x4400000000000000000000000000000000000000000000000000000000000000_bytes32};
 
-    upsert_storage_value(table, key, loc1, val1);
-    upsert_storage_value(table, key, loc2, val2);
-    upsert_storage_value(table, key, loc3, val3);
+    upsert_storage_value(table, key, loc1.bytes, val1.bytes);
+    upsert_storage_value(table, key, loc2.bytes, val2.bytes);
+    upsert_storage_value(table, key, loc3.bytes, val3.bytes);
 
     CHECK(db::read_storage(txn, addr, kDefaultIncarnation, loc1) == val1);
     CHECK(db::read_storage(txn, addr, kDefaultIncarnation, loc2) == val2);
@@ -819,14 +819,14 @@ TEST_CASE("Chain config") {
 
     auto canonical_hashes{db::open_cursor(txn, table::kCanonicalHashes)};
     const Bytes genesis_block_key{block_key(0)};
-    canonical_hashes.upsert(to_slice(genesis_block_key), to_slice(kSepoliaGenesisHash));
+    canonical_hashes.upsert(to_slice(genesis_block_key), to_slice(kSepoliaGenesisHash.bytes));
 
     const auto chain_config2{read_chain_config(txn)};
     CHECK(chain_config2 == std::nullopt);
 
     auto config_table{db::open_cursor(txn, table::kConfig)};
     const std::string sepolia_config_json{kSepoliaConfig.to_json().dump()};
-    config_table.upsert(to_slice(kSepoliaGenesisHash), mdbx::slice{sepolia_config_json.c_str()});
+    config_table.upsert(to_slice(kSepoliaGenesisHash.bytes), mdbx::slice{sepolia_config_json.c_str()});
 
     const auto chain_config3{read_chain_config(txn)};
     CHECK(chain_config3 == kSepoliaConfig);

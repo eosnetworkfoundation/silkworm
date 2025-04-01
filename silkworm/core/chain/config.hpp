@@ -251,6 +251,7 @@ inline constexpr ChainConfig get_kMainnetConfig() {
         ._gray_glacier_block = 15'050'000,
         ._terminal_total_difficulty = intx::from_string<intx::uint256>("58750000000000000000000"),
         ._shanghai_time = 1681338455,
+        ._cancun_time = 1710338135
     };
 }
 #if not defined(ANTELOPE)

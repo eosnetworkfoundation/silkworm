@@ -27,7 +27,8 @@
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
+#include <silkworm/core/execution/address.hpp>
 namespace silkworm::rpc {
 
 using evmc::literals::operator""_address;
@@ -164,7 +165,7 @@ std::string to_quantity(intx::uint256 number) {
 namespace evmc {
 
 void to_json(nlohmann::json& json, const address& addr) {
-    json = "0x" + silkworm::to_hex(addr);
+    json = "0x" + silkworm::address_to_hex(addr);
 }
 
 void from_json(const nlohmann::json& json, address& addr) {
@@ -196,7 +197,7 @@ namespace silkworm {
 void to_json(nlohmann::json& json, const BlockHeader& header) {
     const auto block_number = rpc::to_quantity(header.number);
     json["number"] = block_number;
-    json["hash"] = rpc::to_quantity(header.hash());
+    json["hash"] = rpc::to_quantity(header.hash().bytes);
     json["parentHash"] = header.parent_hash;
     json["nonce"] = "0x" + silkworm::to_hex({header.nonce.data(), header.nonce.size()});
     json["sha3Uncles"] = header.ommers_hash;
@@ -444,7 +445,7 @@ void to_json(nlohmann::json& json, const RevertError& error) {
 void to_json(nlohmann::json& json, const std::set<evmc::address>& addresses) {
     json = nlohmann::json::array();
     for (const auto& address : addresses) {
-        json.push_back("0x" + silkworm::to_hex(address));
+        json.push_back("0x" + silkworm::address_to_hex(address));
     }
 }
 

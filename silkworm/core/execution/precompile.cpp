@@ -17,6 +17,7 @@
 #if defined(ANTELOPE)
 #include <eosio/eosio.hpp>
 #include <eosio/crypto.hpp>
+#include <eosio/crypto_bls_ext.hpp>
 #include <silkworm/core/common/endian.hpp>
 #endif
 
@@ -73,11 +74,10 @@ namespace eosio {
 
 #include <silkworm/core/common/endian.hpp>
 #include <silkworm/core/crypto/blake2b.h>
-#include <silkworm/core/crypto/kzg.hpp>
 #include <silkworm/core/crypto/rmd160.h>
 #include <silkworm/core/crypto/sha256.h>
 #endif
-
+#include <silkworm/core/crypto/kzg.hpp>
 namespace silkworm::precompile {
 
 static void right_pad(Bytes& str, const size_t min_size) noexcept {
@@ -619,7 +619,6 @@ uint64_t point_evaluation_gas(ByteView, evmc_revision) noexcept {
     return 50000;
 }
 
-#ifndef ANTELOPE
 // https://eips.ethereum.org/EIPS/eip-4844#point-evaluation-precompile
 std::optional<Bytes> point_evaluation_run(ByteView input) noexcept {
     if (input.length() != 192) {
@@ -644,7 +643,6 @@ std::optional<Bytes> point_evaluation_run(ByteView input) noexcept {
         "0000000000000000000000000000000000000000000000000000000000001000"
         "73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
 }
-#endif
 
 bool is_precompile(const evmc::address& address, evmc_revision rev) noexcept {
     static_assert(std::size(kContracts) < 256);

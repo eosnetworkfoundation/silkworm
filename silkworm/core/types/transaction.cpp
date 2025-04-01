@@ -82,7 +82,7 @@ namespace rlp {
 
     void encode(Bytes& to, const AccessListEntry& e) {
         encode_header(to, header(e));
-        encode(to, e.account);
+        encode(to, e.account.bytes);
         encode(to, e.storage_keys);
     }
 
@@ -155,7 +155,7 @@ namespace rlp {
         encode(to, txn.max_fee_per_gas);
         encode(to, txn.gas_limit);
         if (txn.to) {
-            encode(to, *txn.to);
+            encode(to, txn.to->bytes);
         } else {
             to.push_back(kEmptyStringCode);
         }
@@ -182,7 +182,7 @@ namespace rlp {
         encode(to, txn.max_fee_per_gas);
         encode(to, txn.gas_limit);
         if (txn.to) {
-            encode(to, *txn.to);
+            encode(to, txn.to->bytes);
         } else {
             to.push_back(kEmptyStringCode);
         }

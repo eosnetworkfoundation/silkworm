@@ -26,8 +26,12 @@
 
 namespace silkworm {
 
+#ifndef ANTELOPE
 // https://eips.ethereum.org/EIPS/eip-4844#helpers
 Hash kzg_to_versioned_hash(ByteView kzg);
+#else
+Bytes kzg_to_versioned_hash(ByteView kzg);
+#endif
 
 /**
  * Verify a KZG proof claiming that `p(z) == y`.

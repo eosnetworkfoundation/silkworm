@@ -41,7 +41,7 @@
 #include <silkworm/silkrpc/json/call.hpp>
 #include <silkworm/silkrpc/json/types.hpp>
 #include <silkworm/silkrpc/core/gas_parameters.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm::rpc::trace {
 
 using boost::asio::awaitable;
@@ -756,6 +756,7 @@ void TraceTracer::on_execution_start(evmc_revision rev, const evmc_message& msg,
                 break;
             case evmc_call_kind::EVMC_CREATE:
             case evmc_call_kind::EVMC_CREATE2:
+            case evmc_call_kind::EVMC_EOFCREATE:
                 break;
         }
     }
@@ -1023,7 +1024,7 @@ void StateDiffTracer::on_reward_granted(const silkworm::CallResult& result, cons
         auto exists = intra_block_state.exists(address);
         auto& diff_storage = diff_storage_[address];
 
-        auto address_key = "0x" + silkworm::to_hex(address);
+        auto address_key = "0x" + silkworm::address_to_hex(address);
         auto& entry = state_diff_[address_key];
         if (initial_exists) {
             auto initial_balance = state_addresses_.get_balance(address);
@@ -1730,6 +1731,7 @@ void EntryTracer::on_execution_start(evmc_revision, const evmc_message& msg, evm
                 break;
             case evmc_call_kind::EVMC_CREATE:
             case evmc_call_kind::EVMC_CREATE2:
+            case evmc_call_kind::EVMC_EOFCREATE:
                 break;
         }
     }

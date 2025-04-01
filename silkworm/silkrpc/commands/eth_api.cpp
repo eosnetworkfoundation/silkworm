@@ -33,6 +33,7 @@
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/types/transaction.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/node/db/stages.hpp>
 #include <silkworm/node/db/tables.hpp>
@@ -61,7 +62,6 @@
 #include <silkworm/silkrpc/types/filter.hpp>
 #include <silkworm/silkrpc/types/syncing_data.hpp>
 #include <silkworm/silkrpc/types/transaction.hpp>
-
 #include <silkworm/silkrpc/core/gas_parameters.hpp>
 
 namespace silkworm::rpc::commands {
@@ -570,12 +570,12 @@ awaitable<void> EthereumRpcApi::handle_eth_get_transaction_by_hash(const nlohman
                     transaction.queued_in_pool = true;
                     reply = make_json_content(request["id"], transaction);
                 } else {
-                    const auto error_msg = "invalid RLP decoding for tx hash: " + silkworm::to_hex(transaction_hash);
+                    const auto error_msg = "invalid RLP decoding for tx hash: " + silkworm::to_hex(transaction_hash.bytes);
                     SILK_ERROR << error_msg;
                     reply = make_json_error(request["id"], 100, error_msg);
                 }
             } else {
-                const auto error_msg = "tx hash: " + silkworm::to_hex(transaction_hash) + " does not exist in pool";
+                const auto error_msg = "tx hash: " + silkworm::to_hex(transaction_hash.bytes) + " does not exist in pool";
                 SILK_ERROR << error_msg;
                 reply = make_json_error(request["id"], 100, error_msg);
             }
@@ -620,7 +620,7 @@ awaitable<void> EthereumRpcApi::handle_eth_get_raw_transaction_by_hash(const nlo
                 Rlp rlp{*tx_rlp_buffer};
                 reply = make_json_content(request["id"], rlp);
             } else {
-                const auto error_msg = "tx hash: " + silkworm::to_hex(transaction_hash) + " does not exist in pool";
+                const auto error_msg = "tx hash: " + silkworm::to_hex(transaction_hash.bytes) + " does not exist in pool";
                 SILK_ERROR << error_msg;
                 reply = make_json_error(request["id"], 100, error_msg);
             }
@@ -960,7 +960,7 @@ awaitable<void> EthereumRpcApi::handle_eth_get_balance(const nlohmann::json& req
     }
     const auto address = params[0].get<evmc::address>();
     const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
-    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_number_or_hash: " << block_number_or_hash;
+    SILK_DEBUG << "address: " << silkworm::to_hex(address.bytes) << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
@@ -998,7 +998,7 @@ awaitable<void> EthereumRpcApi::handle_eth_get_code(const nlohmann::json& reques
     }
     const auto address = params[0].get<evmc::address>();
     const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
-    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_number_or_hash: " << block_number_or_hash;
+    SILK_DEBUG << "address: " << silkworm::to_hex(address.bytes) << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
@@ -1041,7 +1041,7 @@ awaitable<void> EthereumRpcApi::handle_eth_get_transaction_count(const nlohmann:
     }
     const auto address = params[0].get<evmc::address>();
     const auto block_number_or_hash = params[1].get<BlockNumberOrHash>();
-    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_number_or_hash: " << block_number_or_hash;
+    SILK_DEBUG << "address: " << silkworm::to_hex(address.bytes) << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
@@ -1084,7 +1084,7 @@ awaitable<void> EthereumRpcApi::handle_eth_get_storage_at(const nlohmann::json& 
     const auto address = params[0].get<evmc::address>();
     const auto location = params[1].get<evmc::bytes32>();
     const auto block_number_or_hash = params[2].get<BlockNumberOrHash>();
-    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_number_or_hash: " << block_number_or_hash;
+    SILK_DEBUG << "address: " << silkworm::to_hex(address.bytes) << " block_number_or_hash: " << block_number_or_hash;
 
     auto tx = co_await database_->begin();
 
@@ -1099,7 +1099,7 @@ awaitable<void> EthereumRpcApi::handle_eth_get_storage_at(const nlohmann::json& 
 
         if (account) {
             auto storage{co_await state_reader.read_storage(address, account->incarnation, location, block_with_hash->block.header.number + 1)};
-            reply = make_json_content(request["id"], "0x" + silkworm::to_hex(storage));
+            reply = make_json_content(request["id"], "0x" + silkworm::to_hex(storage.bytes));
         } else {
             reply = make_json_content(request["id"], "0x0000000000000000000000000000000000000000000000000000000000000000");
         }
@@ -1982,9 +1982,9 @@ awaitable<void> EthereumRpcApi::handle_eth_get_work(const nlohmann::json& reques
     try {
         const auto work = co_await miner_->get_work();
         const std::vector<std::string> current_work{
-            silkworm::to_hex(work.header_hash),
-            silkworm::to_hex(work.seed_hash),
-            silkworm::to_hex(work.target),
+            silkworm::to_hex(work.header_hash.bytes),
+            silkworm::to_hex(work.seed_hash.bytes),
+            silkworm::to_hex(work.target.bytes),
             silkworm::to_hex(work.block_number)};
         reply = make_json_content(request["id"], current_work);
     } catch (const boost::system::system_error& se) {
@@ -2233,7 +2233,7 @@ void EthereumRpcApi::filter_logs(std::vector<Log>&& logs, FilterAddresses& addre
     for (auto& log : logs) {
         SILK_DEBUG << "log: " << log;
         if (!addresses.empty() && std::find(addresses.begin(), addresses.end(), log.address) == addresses.end()) {
-            SILK_DEBUG << "skipped log for address: 0x" << silkworm::to_hex(log.address);
+            SILK_DEBUG << "skipped log for address: 0x" << silkworm::address_to_hex(log.address);
             continue;
         }
         auto matches = true;

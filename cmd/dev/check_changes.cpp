@@ -20,6 +20,7 @@
 #include <absl/container/flat_hash_set.h>
 
 #include <silkworm/core/execution/processor.hpp>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/infra/common/directories.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/node/db/access_layer.hpp>
@@ -38,7 +39,7 @@ static const absl::flat_hash_set<evmc::address> kPhantomAccounts{
 
 static void print_storage_changes(const db::StorageChanges& s) {
     for (const auto& [address, x] : s) {
-        std::cout << to_hex(address) << "\n";
+        std::cout << address_to_hex(address) << "\n";
         for (const auto& [incarnation, changes] : x) {
             std::cout << "  " << incarnation << "\n";
             for (const auto& [location, value] : changes) {
@@ -111,11 +112,11 @@ int main(int argc, char* argv[]) {
                 for (const auto& e : db_account_changes) {
                     if (!calculated_account_changes.contains(e.first)) {
                         if (!kPhantomAccounts.contains(e.first)) {
-                            log::Error() << to_hex(e.first) << " is missing";
+                            log::Error() << address_to_hex(e.first) << " is missing";
                             mismatch = true;
                         }
                     } else if (Bytes val{calculated_account_changes.at(e.first)}; val != e.second) {
-                        log::Error() << "Value mismatch for " << to_hex(e.first) << ":\n"
+                        log::Error() << "Value mismatch for " << address_to_hex(e.first) << ":\n"
                                      << to_hex(val) << "\n"
                                      << "vs DB\n"
                                      << to_hex(e.second);
@@ -124,7 +125,7 @@ int main(int argc, char* argv[]) {
                 }
                 for (const auto& e : calculated_account_changes) {
                     if (!db_account_changes.contains(e.first)) {
-                        log::Error() << to_hex(e.first) << " is not in DB";
+                        log::Error() << address_to_hex(e.first) << " is not in DB";
                         mismatch = true;
                     }
                 }

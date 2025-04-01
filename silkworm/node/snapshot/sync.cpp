@@ -233,7 +233,7 @@ void SnapshotSync::update_block_headers(db::RWTxn& txn, BlockNum max_block_avail
     intx::uint256 total_difficulty{0};
     uint64_t block_count{0};
     repository_->for_each_header([&](const BlockHeader* header) -> bool {
-        log::Debug() << "[Snapshots] Header number: " << header->number << " hash: " << to_hex(header->hash());
+        log::Debug() << "[Snapshots] Header number: " << header->number << " hash: " << to_hex(header->hash().bytes);
         const auto block_number = header->number;
         const auto block_hash = header->hash();
 

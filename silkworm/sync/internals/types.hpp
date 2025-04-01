@@ -26,7 +26,8 @@
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/core/types/hash.hpp>
 #include <silkworm/core/types/transaction.hpp>
-
+#include <silkworm/core/execution/address.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm {
 
 using BigInt = intx::uint256;  // use intx::to_string, from_string, ...
@@ -47,14 +48,14 @@ inline std::ostream& operator<<(std::ostream& out, const silkworm::ByteView& byt
 }
 
 inline std::ostream& operator<<(std::ostream& out, const evmc::address& addr) {
-    out << silkworm::to_hex(addr);
+    out << silkworm::address_to_hex(addr);
     return out;
 }
 
-/*inline std::ostream& operator<<(std::ostream& out, const evmc::bytes32& b32) {
+inline std::ostream& operator<<(std::ostream& out, const evmc::bytes32& b32) {
     out << silkworm::to_hex(b32);
     return out;
-}*/
+}
 
 // Peers
 using PeerId = Bytes;

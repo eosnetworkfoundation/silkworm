@@ -21,6 +21,7 @@
 #include <silkworm/core/types/bloom.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/silkrpc/common/util.hpp>
+#include <silkworm/core/execution/address.hpp>
 
 namespace silkworm::rpc {
 
@@ -30,7 +31,7 @@ std::ostream& operator<<(std::ostream& out, const Receipt& r) {
     out << " contract_address: " << r.contract_address;
     out << " cumulative_gas_used: " << r.cumulative_gas_used;
     if (r.from) {
-        out << " from: " << silkworm::to_hex(*r.from);
+        out << " from: " << silkworm::address_to_hex(*r.from);
     } else {
         out << " from: null";
     }
@@ -40,7 +41,7 @@ std::ostream& operator<<(std::ostream& out, const Receipt& r) {
     out << " bloom: " << silkworm::to_hex(bloom_view);
     out << " success: " << r.success;
     if (r.to) {
-        out << " to: " << silkworm::to_hex(*r.to);
+        out << " to: " << silkworm::address_to_hex(*r.to);
     } else {
         out << " to: null";
     }

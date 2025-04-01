@@ -301,6 +301,15 @@ evmc::bytes32 IntraBlockState::get_storage(const evmc::address& address, const e
 
 void IntraBlockState::set_storage(const evmc::address& address, const evmc::bytes32& key,
                                   const evmc::bytes32& value) noexcept {
+
+    // eosio::print("set_storage(");
+    // eosio::printhex(address.bytes, 20);
+    // eosio::print("): ");
+    // eosio::printhex(key.bytes, 32);
+    // eosio::print("=");
+    // eosio::printhex(value.bytes, 32);
+    // eosio::print("\n");
+
     evmc::bytes32 prev{get_current_storage(address, key)};
     if (prev == value) {
         return;
@@ -395,9 +404,23 @@ void IntraBlockState::clear_journal_and_substate() {
     // EIP-2929
     accessed_addresses_.clear();
     accessed_storage_keys_.clear();
+
+    transient_storage_.clear();
 }
 
 void IntraBlockState::add_log(const Log& log) noexcept { logs_.push_back(log); }
 void IntraBlockState::add_filtered_message(const FilteredMessage& msg) noexcept { filtered_messages_.push_back(msg); }
+
+evmc::bytes32 IntraBlockState::get_transient_storage(const evmc::address& addr, const evmc::bytes32& key) {
+    return transient_storage_[addr][key];
+}
+
+void IntraBlockState::set_transient_storage(const evmc::address& addr, const evmc::bytes32& key, const evmc::bytes32& value) {
+    auto& v = transient_storage_[addr][key];
+    const auto prev = v;
+    v = value;
+    journal_.emplace_back(std::make_unique<state::TransientStorageChangeDelta>(addr, key, prev));
+}
+
 
 }  // namespace silkworm

@@ -287,7 +287,7 @@ evmc::Result EVM::call(const evmc_message& msg) noexcept {
         }
         // Explicitly notify registered tracers (if any)
         for (auto tracer : tracers_) {
-            const ByteView code{}; // precompile code is empty.
+            const evmone::bytes_view code{}; // precompile code is empty.
             tracer.get().on_execution_start(rev, message, code);
             tracer.get().on_precompiled_run(res.raw(), message.gas, state_);
             tracer.get().on_execution_end(res.raw(),state_);
@@ -318,18 +318,23 @@ evmc::Result EVM::call(const evmc_message& msg) noexcept {
             }
             message.gas = res.gas_left;
         }
-
+        //std::cout << "::CALL 1" << std::endl;
+        //std::cout << "::CALL 1.1 " << to_hex(message.code_address.bytes).c_str() << std::endl;
         const ByteView code{state_.get_code(message.code_address)};
         if (code.empty() && tracers_.empty()) {  // Do not skip execution if there are any tracers
+            //std::cout << "::CALL 2" << std::endl;
             return res;
         }
 
+        //std::cout << "::CALL 3" << std::endl;
         const evmc::bytes32 code_hash{state_.get_code_hash(message.code_address)};
         const auto storage_gas_consumed = res.storage_gas_consumed;
+        //std::cout << "::CALL CODE " << to_hex(code).c_str() << std::endl;
         res = evmc::Result{execute(message, code, &code_hash)};
         if( eos_evm_version_ >= 3 ) {
             res.storage_gas_consumed += storage_gas_consumed;
         }
+        //std::cout << "::CALL 4" << std::endl;
     }
 
     if (res.status_code != EVMC_SUCCESS) {
@@ -388,7 +393,7 @@ evmc_result EVM::execute_with_baseline_interpreter(evmc_revision rev, const evmc
         }
     }
     if (!analysis) {
-        analysis = std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(rev, code));
+        analysis = std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(code, false));
         if (use_cache) {
             analysis_cache->put(*code_hash, analysis);
         }
@@ -400,7 +405,7 @@ evmc_result EVM::execute_with_baseline_interpreter(evmc_revision rev, const evmc
     state->reset(msg, rev, host.get_interface(), host.to_context(), code, gas_params_, eos_evm_version_);
 
     const auto vm{static_cast<evmone::VM*>(evm1_)};
-    evmc_result res{evmone::baseline::execute(*vm, msg.gas, *state, *analysis)};
+    evmc_result res{evmone::baseline::execute(*vm, msg, *state, *analysis)};
 
     release_state(state);
 
@@ -631,6 +636,14 @@ void EvmHost::emit_log(const evmc::address& address, const uint8_t* data, size_t
     std::copy_n(topics, num_topics, std::back_inserter(log.topics));
     std::copy_n(data, data_size, std::back_inserter(log.data));
     evm_.state().add_log(log);
+}
+
+evmc::bytes32 EvmHost::get_transient_storage(const evmc::address& addr, const evmc::bytes32& key) const noexcept {
+    return evm_.state().get_transient_storage(addr, key);
+}
+
+void EvmHost::set_transient_storage(const evmc::address& addr, const evmc::bytes32& key, const evmc::bytes32& value) noexcept {
+    evm_.state().set_transient_storage(addr, key, value);
 }
 
 }  // namespace silkworm

@@ -23,6 +23,7 @@
 
 #include <silkworm/core/chain/config.hpp>
 #include <silkworm/core/common/endian.hpp>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/infra/common/directories.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/infra/common/stopwatch.hpp>

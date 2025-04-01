@@ -25,6 +25,10 @@
 #include <silkworm/node/stagedsync/stages/stage_interhashes/trie_loader.hpp>
 #include <silkworm/node/test/context.hpp>
 
+static ethash::hash256 keccak256(const evmc::address& address) {
+    return silkworm::keccak256(address.bytes);
+}
+
 namespace silkworm::trie {
 
 TEST_CASE("Trie Cursor") {
@@ -307,10 +311,10 @@ static evmc::bytes32 setup_storage(mdbx::txn& txn, ByteView storage_key) {
     Bytes value_rlp{};
 
     for (auto [location, value] : locations) {
-        db::upsert_storage_value(hashed_storage, storage_key, location, value);
+        db::upsert_storage_value(hashed_storage, storage_key, location.bytes, value);
         value_rlp.clear();
         rlp::encode(value_rlp, value);
-        storage_hb.add_leaf(unpack_nibbles(location), value_rlp);
+        storage_hb.add_leaf(unpack_nibbles(location.bytes), value_rlp);
     }
 
     return storage_hb.root_hash();
@@ -377,8 +381,8 @@ TEST_CASE("Account and storage trie") {
 
     const auto key1{0xB000000000000000000000000000000000000000000000000000000000000000_bytes32};
     const Account a1{0, 3 * kEther};
-    hashed_accounts.upsert(db::to_slice(key1), db::to_slice(a1.encode_for_storage()));
-    hb.add_leaf(unpack_nibbles(key1), a1.rlp(/*storage_root=*/kEmptyRoot));
+    hashed_accounts.upsert(db::to_slice(key1.bytes), db::to_slice(a1.encode_for_storage()));
+    hb.add_leaf(unpack_nibbles(key1.bytes), a1.rlp(/*storage_root=*/kEmptyRoot));
 
     // Some address whose hash starts with 0xB040
     const auto address2{0x7db3e81b72d2695e19764583f6d219dbee0f35ca_address};
@@ -404,17 +408,17 @@ TEST_CASE("Account and storage trie") {
     const auto key4a{0xB1A0000000000000000000000000000000000000000000000000000000000000_bytes32};
     const Account a4a{0, 4 * kEther};
     hashed_accounts.upsert(db::to_slice(key4a), db::to_slice(a4a.encode_for_storage()));
-    hb.add_leaf(unpack_nibbles(key4a), a4a.rlp(/*storage_root=*/kEmptyRoot));
+    hb.add_leaf(unpack_nibbles(key4a.bytes), a4a.rlp(/*storage_root=*/kEmptyRoot));
 
     const auto key5{0xB310000000000000000000000000000000000000000000000000000000000000_bytes32};
     const Account a5{0, 8 * kEther};
     hashed_accounts.upsert(db::to_slice(key5), db::to_slice(a5.encode_for_storage()));
-    hb.add_leaf(unpack_nibbles(key5), a5.rlp(/*storage_root=*/kEmptyRoot));
+    hb.add_leaf(unpack_nibbles(key5.bytes), a5.rlp(/*storage_root=*/kEmptyRoot));
 
     const auto key6{0xB340000000000000000000000000000000000000000000000000000000000000_bytes32};
     const Account a6{0, 1 * kEther};
     hashed_accounts.upsert(db::to_slice(key6), db::to_slice(a6.encode_for_storage()));
-    hb.add_leaf(unpack_nibbles(key6), a6.rlp(/*storage_root=*/kEmptyRoot));
+    hb.add_leaf(unpack_nibbles(key6.bytes), a6.rlp(/*storage_root=*/kEmptyRoot));
 
     // ----------------------------------------------------------------
     // Populate account & storage trie DB tables
@@ -603,7 +607,7 @@ TEST_CASE("Account trie around extension node") {
 
     for (const auto& key : keys) {
         hashed_accounts.upsert(db::to_slice(key), db::to_slice(account_one_ether.encode_for_storage()));
-        hb.add_leaf(unpack_nibbles(key), account_one_ether.rlp(/*storage_root=*/kEmptyRoot));
+        hb.add_leaf(unpack_nibbles(key.bytes), account_one_ether.rlp(/*storage_root=*/kEmptyRoot));
     }
 
     const evmc::bytes32 expected_root{hb.root_hash()};
@@ -786,8 +790,8 @@ TEST_CASE("Trie Storage : incremental vs regeneration") {
         const evmc::bytes32 plain_loc1{int_to_bytes32(2 * i)};
         const evmc::bytes32 plain_loc2{int_to_bytes32(2 * i + 1)};
 
-        const auto hashed_loc1{keccak256(plain_loc1)};
-        const auto hashed_loc2{keccak256(plain_loc2)};
+        const auto hashed_loc1{keccak256(plain_loc1.bytes)};
+        const auto hashed_loc2{keccak256(plain_loc2.bytes)};
 
         const auto nibbled_hashed_loc1{unpack_nibbles(hashed_loc1.bytes)};
         const auto nibbled_hashed_loc2{unpack_nibbles(hashed_loc2.bytes)};

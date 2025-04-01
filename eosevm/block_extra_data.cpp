@@ -1,7 +1,7 @@
 #include <silkworm/core/rlp/encode.hpp>
 #include <silkworm/core/rlp/decode.hpp>
-
-#include <eosevm/block_extra_data.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
+#include "block_extra_data.hpp"
 
 using namespace silkworm;
 
@@ -45,8 +45,8 @@ namespace silkworm { namespace rlp {
     }
 
     DecodingResult decode(silkworm::ByteView& from, eosevm::block_extra_data& to) noexcept{
-        to.consensus_parameter_index.reset();
         decode(from, to.consensus_parameter_index);
+        to.gas_prices_index.reset();
         if(from.length() > 0) {
             to.gasprices.reset();
             decode(from, to.gasprices);

@@ -49,11 +49,14 @@ struct CallResult {
     uint64_t storage_gas_refund{0};
     uint64_t speculative_cpu_gas_consumed{0};
     Bytes data;
+    std::string error_message;
 };
 
 class EvmTracer {
   public:
     virtual ~EvmTracer() = default;
+  
+    virtual void on_block_start(const Block& /*block*/) noexcept {}
 
     virtual void on_execution_start(evmc_revision rev, const evmc_message& msg, evmone::bytes_view code) noexcept = 0;
 
@@ -63,12 +66,16 @@ class EvmTracer {
 
     virtual void on_execution_end(const evmc_result& result, const IntraBlockState& intra_block_state) noexcept = 0;
 
+    virtual void on_pre_check_failed(const evmc_result& /*result*/, const evmc_message& /*msg*/) noexcept {};
     virtual void on_creation_completed(const evmc_result& result, const IntraBlockState& intra_block_state) noexcept = 0;
 
-    virtual void on_precompiled_run(const evmc_result& result, int64_t gas,
-                                    const IntraBlockState& intra_block_state) noexcept = 0;
+    virtual void on_precompiled_run(const evmc_result& result, int64_t gas, const IntraBlockState& intra_block_state) noexcept = 0;
 
     virtual void on_reward_granted(const CallResult& result, const IntraBlockState& intra_block_state) noexcept = 0;
+
+    virtual void on_self_destruct(const evmc::address& /*address*/, const evmc::address& /*beneficiary*/) noexcept {}
+
+    virtual void on_block_end(const Block& /*block*/) noexcept {}
 };
 
 using EvmTracers = std::vector<std::reference_wrapper<EvmTracer>>;
@@ -183,6 +190,10 @@ class EvmHost : public evmc::Host {
 
     void emit_log(const evmc::address& address, const uint8_t* data, size_t data_size, const evmc::bytes32 topics[],
                   size_t num_topics) noexcept override;
+
+    evmc::bytes32 get_transient_storage(const evmc::address& addr, const evmc::bytes32& key) const noexcept override;
+
+    void set_transient_storage(const evmc::address& addr, const evmc::bytes32& key, const evmc::bytes32& value) noexcept override;
 
   private:
     EVM& evm_;

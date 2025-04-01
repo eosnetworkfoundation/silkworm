@@ -21,6 +21,7 @@
 #include <silkworm/core/common/base.hpp>
 #include <silkworm/core/common/endian.hpp>
 #include <silkworm/core/common/util.hpp>
+#include <silkworm/core/execution/address.hpp>
 #include <silkworm/infra/common/decoding_exception.hpp>
 #include <silkworm/infra/common/directories.hpp>
 #include <silkworm/infra/common/log.hpp>
@@ -157,8 +158,8 @@ int main(int argc, char* argv[]) {
 
                     // The most important check: i-th stored sender MUST be equal to i-th transaction recomputed sender
                     if (senders[i] != *tx.from) {
-                        log::Error() << "Block " << block_number << " tx " << i << " recovered sender " << to_hex(senders[i])
-                                     << " does not match computed sender " << to_hex(*tx.from);
+                        log::Error() << "Block " << block_number << " tx " << i << " recovered sender " << address_to_hex(senders[i])
+                                     << " does not match computed sender " << address_to_hex(*tx.from);
                     }
                     processed_senders_count++;
 

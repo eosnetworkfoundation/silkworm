@@ -20,7 +20,7 @@
 #include <silkworm/core/types/block.hpp>
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/node/db/stages.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm::chainsync {
 
 ChainForkView::ChainForkView(ChainHead head) : td_cache_{kCacheSize} {

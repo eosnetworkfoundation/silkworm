@@ -25,9 +25,74 @@
 #include <silkworm/core/common/test_util.hpp>
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/core/state/in_memory_state.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include <eosevm/version.hpp>
 
 #include "address.hpp"
+
+// for print_tracer
+#include <evmc/instructions.h>
+#include <silkworm/core/state/intra_block_state.hpp>
+
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+using namespace silkworm;
+struct print_tracer : silkworm::EvmTracer {
+
+    const char* const* opcode_names_ = nullptr;
+
+    void on_block_start(const Block& /*block*/) noexcept {
+
+    }
+
+    void on_execution_start(evmc_revision rev, const evmc_message&, evmone::bytes_view) noexcept {
+        std::cout << "TRACE: start" << std::endl;
+        if (opcode_names_ == nullptr) {
+            opcode_names_ = evmc_get_instruction_names_table(rev);
+        }
+    }
+
+    void on_instruction_start(uint32_t pc, const intx::uint256* stack_top, int stack_height,
+                                      int64_t gas, const evmone::ExecutionState& state,
+                                      const IntraBlockState& intra_block_state) noexcept {
+        const auto opcode = state.original_code[pc];
+        auto opcode_name = get_opcode_name(opcode_names_, opcode);
+        std::cout << opcode_name.c_str() << std::endl;
+    };
+
+    void on_execution_end(const evmc_result& result, const IntraBlockState& intra_block_state) noexcept {
+        std::cout << "TRACE: end" << std::endl;
+    };
+
+    void on_pre_check_failed(const evmc_result& /*result*/, const evmc_message& /*msg*/) noexcept {
+
+    };
+
+    void on_creation_completed(const evmc_result& result, const IntraBlockState& intra_block_state) noexcept {
+
+    };
+
+    void on_precompiled_run(const evmc_result& result, int64_t gas, const IntraBlockState& intra_block_state) noexcept {
+    };
+
+    void on_reward_granted(const CallResult& result, const IntraBlockState& intra_block_state) noexcept {
+
+    };
+
+    void on_self_destruct(const evmc::address& /*address*/, const evmc::address& /*beneficiary*/) noexcept {
+
+    };
+
+    void on_block_end(const Block& /*block*/) noexcept {
+
+    };
+
+    std::string get_opcode_name(const char* const* names, std::uint8_t opcode) {
+        const auto name = names[opcode];
+        return (name != nullptr) ?name : "opcode 0x" + evmc::hex(opcode) + " not defined";
+    }
+
+};
+#pragma GCC diagnostic warning "-Wunused-parameter"
 
 namespace silkworm {
 
@@ -115,7 +180,7 @@ TEST_CASE("Smart contract with storage") {
 
     evmc::address contract_address{create_address(caller, /*nonce=*/1)};
     evmc::bytes32 key0{};
-    CHECK(to_hex(zeroless_view(state.get_current_storage(contract_address, key0))) == "2a");
+    CHECK(to_hex(zeroless_view(state.get_current_storage(contract_address, key0).bytes)) == "2a");
 
     evmc::bytes32 new_val{to_bytes32(*from_hex("f5"))};
     txn.to = contract_address;
@@ -202,6 +267,8 @@ TEST_CASE("DELEGATECALL") {
     evmc::address caller_address{0x8e4d1ea201b908ab5e1f5a1c3f9f1b4f6c1e9cf1_address};
     evmc::address callee_address{0x3589d05a1ec4af9f65b0e5554e645707775ee43c_address};
 
+    // std::cout << "PREPRE: " << to_hex(callee_address) << std::endl;
+
     // The callee writes the ADDRESS to storage.
     Bytes callee_code{*from_hex("30600055")};
     /* https://github.com/CoinCulture/evm-tools
@@ -230,10 +297,15 @@ TEST_CASE("DELEGATECALL") {
 
     EVM evm{block, state, kMainnetConfig};
 
+    print_tracer pt{};
+    evm.add_tracer(pt);
+
     Transaction txn{};
     txn.from = caller_address;
     txn.to = caller_address;
-    txn.data = ByteView{to_bytes32(callee_address)};
+    txn.data = ByteView{to_bytes32(callee_address.bytes)};
+
+    std::cout << "DATA:" << to_hex(txn.data) << std::endl;
 
     uint64_t gas{1'000'000};
     CallResult res{evm.execute(txn, gas, {})};
@@ -241,7 +313,11 @@ TEST_CASE("DELEGATECALL") {
     CHECK(res.data.empty());
 
     evmc::bytes32 key0{};
-    CHECK(to_hex(zeroless_view(state.get_current_storage(caller_address, key0))) == to_hex(caller_address));
+    auto xx = state.get_current_storage(caller_address, key0);
+    std::cout << "state.get_current_storage:" << to_hex(xx) << std::endl;
+
+
+    CHECK(to_hex(zeroless_view(xx.bytes)) == to_hex(caller_address.bytes));
 }
 
 // https://eips.ethereum.org/EIPS/eip-211#specification
@@ -544,7 +620,7 @@ TEST_CASE("Tracing smart contract with storage") {
     evm.add_tracer(tracer3);
     CHECK(evm.tracers().size() == 3);
 
-    CHECK(to_hex(zeroless_view(state.get_current_storage(contract_address, key0))) == "2a");
+    CHECK(to_hex(zeroless_view(state.get_current_storage(contract_address, key0).bytes)) == "2a");
     evmc::bytes32 new_val{to_bytes32(*from_hex("f5"))};
     txn.to = contract_address;
     txn.data = ByteView{new_val};

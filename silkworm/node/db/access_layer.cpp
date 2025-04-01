@@ -26,7 +26,6 @@
 #include <silkworm/node/db/bitmap.hpp>
 #include <silkworm/node/db/tables.hpp>
 #include <eosevm/block_extra_data.hpp>
-
 namespace silkworm::db {
 
 std::optional<VersionBase> read_schema_version(ROTxn& txn) {
@@ -411,7 +410,7 @@ size_t process_blocks_at_height(ROTxn& txn, BlockNum height, std::function<void(
             // ...header
             auto [block_num, hash] = split_block_key(key);
             bool present = read_header(txn, hash, block_num, block.header);
-            if (!present) throw std::logic_error("header not found for body number= " + std::to_string(block_num) + ", hash= " + to_hex(hash));
+            if (!present) throw std::logic_error("header not found for body number= " + std::to_string(block_num) + ", hash= " + to_hex(hash.bytes));
             // ...extra data
             const Bytes ekey{block_key(block_num, hash.bytes)};
             read_extra_block_data(txn, ekey, block);
@@ -580,7 +579,7 @@ void parse_senders(ROTxn& txn, const Bytes& key, std::vector<Transaction>& out) 
 
 std::optional<ByteView> read_code(ROTxn& txn, const evmc::bytes32& code_hash) {
     auto cursor = txn.ro_cursor(table::kCode);
-    auto key{to_slice(code_hash)};
+    auto key{to_slice(code_hash.bytes)};
     auto data{cursor->find(key, /*throw_notfound=*/false)};
     if (!data) {
         return std::nullopt;
@@ -593,7 +592,7 @@ static std::optional<ByteView> historical_account(ROTxn& txn, const evmc::addres
     auto cursor = txn.ro_cursor_dup_sort(table::kAccountHistory);
     const Bytes history_key{account_history_key(address, block_number)};
     const auto data{cursor->lower_bound(to_slice(history_key), /*throw_notfound=*/false)};
-    if (!data || !data.key.starts_with(to_slice(address))) {
+    if (!data || !data.key.starts_with(to_slice(address.bytes))) {
         return std::nullopt;
     }
 
@@ -605,7 +604,7 @@ static std::optional<ByteView> historical_account(ROTxn& txn, const evmc::addres
 
     cursor->bind(txn, table::kAccountChangeSet);
     const Bytes change_set_key{block_key(*change_block)};
-    return find_value_suffix(*cursor, change_set_key, address);
+    return find_value_suffix(*cursor, change_set_key, address.bytes);
 }
 
 // Erigon FindByHistory for storage
@@ -634,7 +633,7 @@ static std::optional<ByteView> historical_storage(ROTxn& txn, const evmc::addres
 
     cursor->bind(txn, table::kStorageChangeSet);
     const Bytes change_set_key{storage_change_key(*change_block, address, incarnation)};
-    return find_value_suffix(*cursor, change_set_key, location);
+    return find_value_suffix(*cursor, change_set_key, location.bytes);
 }
 
 std::optional<Account> read_account(ROTxn& txn, const evmc::address& address, std::optional<BlockNum> block_num) {
@@ -658,7 +657,7 @@ std::optional<Account> read_account(ROTxn& txn, const evmc::address& address, st
     if (acc.incarnation > 0 && acc.code_hash == kEmptyHash) {
         // restore code hash
         auto code_cursor = txn.ro_cursor(table::kPlainCodeHash);
-        auto key{storage_prefix(address, acc.incarnation)};
+        auto key{storage_prefix(address.bytes, acc.incarnation)};
         if (auto data{code_cursor->find(to_slice(key), /*throw_notfound*/ false)};
             data.done && data.value.length() == kHashLength) {
             std::memcpy(acc.code_hash.bytes, data.value.data(), kHashLength);
@@ -675,8 +674,8 @@ evmc::bytes32 read_storage(ROTxn& txn, const evmc::address& address, uint64_t in
                                     : std::nullopt};
     if (!val.has_value()) {
         auto cursor = txn.ro_cursor_dup_sort(table::kPlainState);
-        auto key{storage_prefix(address, incarnation)};
-        val = find_value_suffix(*cursor, key, location);
+        auto key{storage_prefix(address.bytes, incarnation)};
+        val = find_value_suffix(*cursor, key, location.bytes);
     }
 
     if (!val.has_value()) {
@@ -701,7 +700,7 @@ std::optional<uint64_t> read_previous_incarnation(ROTxn& txn, const evmc::addres
     }
 
     auto cursor = txn.ro_cursor(table::kIncarnationMap);
-    if (auto data{cursor->find(to_slice(address), /*throw_notfound=*/false)}; data.done) {
+    if (auto data{cursor->find(to_slice(address.bytes), /*throw_notfound=*/false)}; data.done) {
         SILKWORM_ASSERT(data.value.length() == 8);
         return endian::load_big_u64(static_cast<uint8_t*>(data.value.data()));
     }
@@ -830,7 +829,7 @@ std::optional<evmc::bytes32> read_canonical_hash(ROTxn& txn, BlockNum b) {  // t
 void write_canonical_hash(RWTxn& txn, BlockNum b, const evmc::bytes32& hash) {
     Bytes key = db::block_key(b);
     auto skey = db::to_slice(key);
-    auto svalue = db::to_slice(hash);
+    auto svalue = db::to_slice(hash.bytes);
 
     auto hashes_cursor = txn.rw_cursor(db::table::kCanonicalHashes);
     hashes_cursor->upsert(skey, svalue);
@@ -904,7 +903,7 @@ void write_last_fcu_field(RWTxn& txn, const std::string& field, const evmc::byte
     Bytes key{field.begin(), field.end()};
     auto skey = db::to_slice(key);
 
-    cursor->upsert(skey, to_slice(hash));
+    cursor->upsert(skey, to_slice(hash.bytes));
 }
 
 std::optional<evmc::bytes32> read_last_head_block(ROTxn& txn) {

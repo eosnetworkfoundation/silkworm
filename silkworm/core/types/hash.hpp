@@ -47,6 +47,10 @@ class Hash : public evmc::bytes32 {
     // conversion to ByteView is handled in ByteView class,
     // conversion operator Byte() { return {bytes, length()}; } is handled elsewhere
 
+    // conversion to ByteView
+    // NOLINTNEXTLINE(google-explicit-constructor, hicpp-explicit-conversions)
+    operator ByteView() const { return ByteView{bytes}; }
+
     static_assert(sizeof(evmc::bytes32) == 32);
 };
 

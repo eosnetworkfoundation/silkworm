@@ -32,7 +32,7 @@ static Header header(const Withdrawal& w) {
     Header h{.list = true};
     h.payload_length += length(w.index);
     h.payload_length += length(w.validator_index);
-    h.payload_length += length(w.address);
+    h.payload_length += length(w.address.bytes);
     h.payload_length += length(w.amount);
     return h;
 }
@@ -46,7 +46,7 @@ void encode(Bytes& to, const Withdrawal& w) {
     encode_header(to, header(w));
     encode(to, w.index);
     encode(to, w.validator_index);
-    encode(to, w.address);
+    encode(to, w.address.bytes);
     encode(to, w.amount);
 }
 

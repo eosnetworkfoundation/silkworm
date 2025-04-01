@@ -61,7 +61,7 @@ boost::asio::awaitable<void> OtsRpcApi::handle_ots_has_code(const nlohmann::json
     const auto address = params[0].get<evmc::address>();
     const auto block_id = params[1].get<std::string>();
 
-    SILK_DEBUG << "address: " << silkworm::to_hex(address) << " block_id: " << block_id;
+    SILK_DEBUG << "address: " << silkworm::address_to_hex(address) << " block_id: " << block_id;
 
     auto tx = co_await database_->begin();
 

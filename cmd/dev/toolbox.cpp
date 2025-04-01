@@ -49,7 +49,7 @@
 #include <silkworm/node/db/prune_mode.hpp>
 #include <silkworm/node/db/stages.hpp>
 #include <silkworm/node/stagedsync/stages/stage_interhashes/trie_cursor.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
 #include "jsonfile/types.hpp"
 
 namespace fs = std::filesystem;
@@ -1446,7 +1446,7 @@ void do_trie_root(db::EnvConfig& config) {
     for (auto trie_data{trie_cursor.to_prefix({})}; trie_data.key.has_value(); trie_data = trie_cursor.to_next()) {
         SILKWORM_ASSERT(!trie_data.first_uncovered.has_value());  // Means skip state
         log::Info("Trie", {"key", to_hex(trie_data.key.value(), true), "hash", to_hex(trie_data.hash.value(), true)});
-        auto hash{to_bytes32(trie_data.hash.value())};
+        auto hash{to_bytes32(trie_data.hash.value().bytes)};
         hash_builder.add_branch_node(trie_data.key.value(), hash, false);
         if (SignalHandler::signalled()) {
             throw std::runtime_error("Interrupted");
@@ -1658,10 +1658,10 @@ void do_reset_to_download(db::EnvConfig& config, bool keep_senders) {
         }
         for (const auto& [address, account] : unique_addresses) {
             if (!account) {
-                plain_state.erase(db::to_slice(address), true);
+                plain_state.erase(db::to_slice(address.bytes), true);
             } else {
                 auto new_encoded_account{account->encode_for_storage(false)};
-                plain_state.upsert(db::to_slice(address), db::to_slice(new_encoded_account));
+                plain_state.upsert(db::to_slice(address.bytes), db::to_slice(new_encoded_account));
             }
         }
         log::Info(db::stages::kExecutionKey, {"table", db::table::kAccountChangeSet.name}) << " truncating ...";

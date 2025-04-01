@@ -21,7 +21,7 @@
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/core/types/receipt.hpp>
 #include <silkworm/core/types/transaction.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm::trie {
 
 TEST_CASE("Empty root hash") {

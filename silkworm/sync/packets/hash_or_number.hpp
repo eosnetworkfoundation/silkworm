@@ -78,7 +78,7 @@ namespace rlp {
 
 inline std::ostream& operator<<(std::ostream& os, const HashOrNumber& packet) {
     if (std::holds_alternative<Hash>(packet))
-        os << std::get<Hash>(packet);
+        os << std::get<Hash>(packet).to_hex();
     else
         os << std::get<BlockNum>(packet);
     return os;

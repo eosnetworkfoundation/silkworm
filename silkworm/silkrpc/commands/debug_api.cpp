@@ -73,7 +73,7 @@ awaitable<void> DebugRpcApi::handle_debug_account_range(const nlohmann::json& re
     }
 
     SILK_INFO << "block_number_or_hash: " << block_number_or_hash
-              << " start_address: 0x" << silkworm::to_hex(start_address)
+              << " start_address: 0x" << silkworm::to_hex(start_address.bytes)
               << " max_result: " << max_result
               << " exclude_code: " << exclude_code
               << " exclude_storage: " << exclude_storage;
@@ -199,10 +199,10 @@ awaitable<void> DebugRpcApi::handle_debug_storage_range_at(const nlohmann::json&
     auto start_key = params[3].get<evmc::bytes32>();
     auto max_result = params[4].get<std::uint64_t>();
 
-    SILK_DEBUG << "block_hash: 0x" << silkworm::to_hex(block_hash)
+    SILK_DEBUG << "block_hash: 0x" << silkworm::to_hex(block_hash.bytes)
                << " tx_index: " << tx_index
-               << " address: 0x" << silkworm::to_hex(address)
-               << " start_key: 0x" << silkworm::to_hex(start_key)
+               << " address: 0x" << silkworm::to_hex(address.bytes)
+               << " start_key: 0x" << silkworm::to_hex(start_key.bytes)
                << " max_result: " << max_result;
 
     auto tx = co_await database_->begin();
@@ -538,7 +538,7 @@ awaitable<std::set<evmc::address>> get_modified_accounts(ethdb::TransactionDatab
             if (block_number <= end_block_number) {
                 auto address = silkworm::to_evmc_address(value.substr(0, silkworm::kAddressLength));
 
-                SILK_TRACE << "Walker: processing block " << block_number << " address 0x" << silkworm::to_hex(address);
+                SILK_TRACE << "Walker: processing block " << block_number << " address 0x" << silkworm::to_hex(address.bytes);
                 addresses.insert(address);
             }
             return block_number <= end_block_number;

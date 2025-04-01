@@ -28,7 +28,7 @@
 #include <silkworm/node/db/tables.hpp>
 #include <silkworm/node/types/log_cbor.hpp>
 #include <silkworm/node/types/receipt_cbor.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm::db {
 
 void Buffer::begin_block(uint64_t block_number) {
@@ -91,7 +91,7 @@ void Buffer::update_account_code(const evmc::address& address, uint64_t incarnat
         batch_state_size_ += kHashLength + code.length();
     }
 
-    if (storage_prefix_to_code_hash_.insert_or_assign(storage_prefix(address, incarnation), code_hash).second) {
+    if (storage_prefix_to_code_hash_.insert_or_assign(storage_prefix(address.bytes, incarnation), code_hash).second) {
         batch_state_size_ += kPlainStoragePrefixLength + kHashLength;
     }
 }
@@ -103,7 +103,7 @@ void Buffer::update_storage(const evmc::address& address, uint64_t incarnation, 
     }
     if (block_number_ >= prune_history_threshold_) {
         changed_storage_.insert(address);
-        ByteView initial_val{zeroless_view(initial)};
+        ByteView initial_val{zeroless_view(initial.bytes)};
         if (block_storage_changes_[block_number_][address][incarnation]
                 .insert_or_assign(location, initial_val)
                 .second) {
@@ -244,7 +244,7 @@ void Buffer::write_state_to_db() {
         Bytes data(kIncarnationLength, '\0');
         for (const auto& [address, incarnation] : incarnations_) {
             endian::store_big_u64(&data[0], incarnation);
-            incarnation_table.upsert(to_slice(address), to_slice(data));
+            incarnation_table.upsert(to_slice(address.bytes), to_slice(data));
             written_size += kAddressLength + kIncarnationLength;
         }
         incarnations_.clear();
@@ -259,7 +259,7 @@ void Buffer::write_state_to_db() {
     if (!hash_to_code_.empty()) {
         auto code_table{db::open_cursor(txn_, table::kCode)};
         for (const auto& entry : hash_to_code_) {
-            code_table.upsert(to_slice(entry.first), to_slice(entry.second));
+            code_table.upsert(to_slice(entry.first.bytes), to_slice(entry.second));
             written_size += kHashLength + entry.second.length();
         }
         hash_to_code_.clear();
@@ -274,7 +274,7 @@ void Buffer::write_state_to_db() {
     if (!storage_prefix_to_code_hash_.empty()) {
         auto code_hash_table{db::open_cursor(txn_, table::kPlainCodeHash)};
         for (const auto& entry : storage_prefix_to_code_hash_) {
-            code_hash_table.upsert(to_slice(entry.first), to_slice(entry.second));
+            code_hash_table.upsert(to_slice(entry.first), to_slice(entry.second.bytes));
             written_size += kAddressLength + kIncarnationLength + kHashLength;
         }
         storage_prefix_to_code_hash_.clear();
@@ -303,7 +303,7 @@ void Buffer::write_state_to_db() {
     auto state_table = txn_.rw_cursor_dup_sort(table::kPlainState);
     for (const auto& address : addresses) {
         if (auto it{accounts_.find(address)}; it != accounts_.end()) {
-            auto key{to_slice(address)};
+            auto key{to_slice(address.bytes)};
             state_table->erase(key, /*whole_multivalue=*/true);  // PlainState is multivalue
             if (it->second.has_value()) {
                 Bytes encoded{it->second->encode_for_storage()};
@@ -315,9 +315,10 @@ void Buffer::write_state_to_db() {
 
         if (auto it{storage_.find(address)}; it != storage_.end()) {
             for (const auto& [incarnation, contract_storage] : it->second) {
-                Bytes prefix{storage_prefix(address, incarnation)};
+                Bytes prefix{storage_prefix(address.bytes, incarnation)};
                 for (const auto& [location, value] : contract_storage) {
-                    upsert_storage_value(*state_table, prefix, location, value);
+                    //TODO: try removing ByteView{...}
+                    upsert_storage_value(*state_table, prefix, ByteView{location}, ByteView{value});
                     written_size += prefix.length() + kLocationLength + kHashLength;
                 }
             }

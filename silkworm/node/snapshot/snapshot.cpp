@@ -168,7 +168,7 @@ bool HeaderSnapshot::decode_header(const Snapshot::WordItem& item, BlockHeader& 
     SILK_TRACE << "decode_header header number: " << header.number << " offset:" << std::to_string(item.offset);
     ensure(header.number >= block_from_,
            "HeaderSnapshot: number=" + std::to_string(header.number) + " < block_from=" + std::to_string(block_from_));
-    SILK_TRACE << "decode_header header number: " << header.number << " hash:" << to_hex(header.hash());
+    SILK_TRACE << "decode_header header number: " << header.number << " hash:" << to_hex(header.hash().bytes);
     return true;
 }
 

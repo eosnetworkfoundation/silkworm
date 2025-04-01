@@ -59,10 +59,14 @@ add_library(
   evmone/lib/evmone/advanced_execution.cpp
   evmone/lib/evmone/advanced_execution.hpp
   evmone/lib/evmone/advanced_instructions.cpp
+  evmone/lib/evmone/baseline_analysis.cpp
+  evmone/lib/evmone/baseline_execution.cpp
   evmone/lib/evmone/baseline_instruction_table.cpp
   evmone/lib/evmone/baseline_instruction_table.hpp
-  evmone/lib/evmone/baseline.cpp
   evmone/lib/evmone/baseline.hpp
+  evmone/lib/evmone/constants.hpp
+  evmone/lib/evmone/delegation.cpp
+  evmone/lib/evmone/delegation.hpp
   evmone/lib/evmone/eof.cpp
   evmone/lib/evmone/eof.hpp
   evmone/lib/evmone/execution_state.hpp
@@ -72,12 +76,22 @@ add_library(
   evmone/lib/evmone/instructions_traits.hpp
   evmone/lib/evmone/instructions_xmacro.hpp
   evmone/lib/evmone/instructions.hpp
-  evmone/lib/evmone/opcodes_helpers.h
   evmone/lib/evmone/tracing.cpp
   evmone/lib/evmone/tracing.hpp
   evmone/lib/evmone/vm.cpp
   evmone/lib/evmone/vm.hpp
+  evmone/lib/evmone_precompiles/blake2b.cpp
+  evmone/lib/evmone_precompiles/ripemd160.cpp
+  evmone/lib/evmone_precompiles/sha256.cpp
+  # evmone/lib/evmone_precompiles/kzg.cpp
+  # evmone/lib/evmone_precompiles/bn254.cpp
+  # evmone/lib/evmone_precompiles/secp256k1.cpp
+  # evmone/lib/evmone_precompiles/bls.cpp
+  # evmone/test/state/host.cpp
+  # evmone/test/state/precompiles.cpp
+  # evmone/test/state/state.cpp
 )
+
 set_source_files_properties(evmone/lib/evmone/vm.cpp PROPERTIES COMPILE_DEFINITIONS PROJECT_VERSION="0.10.0")
 target_include_directories(evmone PUBLIC evmone/include evmone/lib)
 target_link_libraries(

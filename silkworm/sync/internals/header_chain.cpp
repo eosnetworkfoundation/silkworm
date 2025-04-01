@@ -25,6 +25,7 @@
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/node/db/db_utils.hpp>
 #include <silkworm/sync/sentry_client.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 
 #include "algorithm.hpp"
 

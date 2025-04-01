@@ -559,13 +559,13 @@ Stage::Result HashState::hash_from_storage_changeset(db::RWTxn& txn, BlockNum pr
                 storage_changes[address].insert_or_assign(incarnation, absl::btree_map<evmc::bytes32, Bytes>());
             }
 
-            Bytes plain_storage_prefix{db::storage_prefix(address, incarnation)};
+            Bytes plain_storage_prefix{db::storage_prefix(address.bytes, incarnation)};
 
             while (changeset_data.done) {
                 auto changeset_value_view{db::from_slice(changeset_data.value)};
                 auto location{to_bytes32(changeset_value_view)};
                 if (!storage_changes[address][incarnation].contains(location)) {
-                    auto plain_state_value{db::find_value_suffix(*source_plainstate, plain_storage_prefix, location)};
+                    auto plain_state_value{db::find_value_suffix(*source_plainstate, plain_storage_prefix, location.bytes)};
                     storage_changes[address][incarnation].insert_or_assign(location,
                                                                            plain_state_value.value_or(Bytes()));
                 }
@@ -804,7 +804,7 @@ Stage::Result HashState::write_changes_from_changed_addresses(db::RWTxn& txn, co
             throw_if_stopping();
             last_address = address;
             log_lck.lock();
-            current_key_ = to_hex(address, true);
+            current_key_ = to_hex(address.bytes, true);
             log_lck.unlock();
         }
 
@@ -857,7 +857,7 @@ Stage::Result HashState::write_changes_from_changed_storage(
             std::memcpy(&hashed_storage_prefix[0], hashed_addresses.at(last_address).bytes, kHashLength);
 
             log_lck.lock();
-            current_key_ = to_hex(address, true);
+            current_key_ = to_hex(address.bytes, true);
             log_lck.unlock();
         }
 

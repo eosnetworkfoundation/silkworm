@@ -36,7 +36,7 @@ size_t length(const Log& l) {
 
 void encode(Bytes& to, const Log& l) {
     encode_header(to, header(l));
-    encode(to, l.address);
+    encode(to, l.address.bytes);
     encode(to, l.topics);
     encode(to, l.data);
 }

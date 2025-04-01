@@ -51,36 +51,37 @@ template <typename T>
 constexpr bool UnsignedIntegral = (std::is_integral_v<T> && !std::is_signed_v<T> ) || std::is_same_v<T, intx::uint128>
           || std::is_same_v<T, intx::uint256> || std::is_same_v<T, intx::uint512>;
 
-using Bytes = std::basic_string<uint8_t>;
+using Bytes = evmc::bytes;
 
-class ByteView : public std::basic_string_view<uint8_t> {
+class ByteView : public evmc::bytes_view {
   public:
     constexpr ByteView() noexcept = default;
+    
+    // NOLINTNEXTLINE(google-explicit-constructor, hicpp-explicit-conversions)
+    constexpr ByteView(const evmc::bytes_view& other) noexcept
+        : evmc::bytes_view{other.data(), other.length()} {}
 
-    constexpr ByteView(const std::basic_string_view<uint8_t>& other) noexcept
-        : std::basic_string_view<uint8_t>{other.data(), other.length()} {}
-
-    ByteView(const Bytes& str) noexcept : std::basic_string_view<uint8_t>{str.data(), str.length()} {}
+    // NOLINTNEXTLINE(google-explicit-constructor, hicpp-explicit-conversions)
+    ByteView(const Bytes& str) noexcept : evmc::bytes_view{str.data(), str.length()} {}
 
     constexpr ByteView(const uint8_t* data, size_type length) noexcept
-        : std::basic_string_view<uint8_t>{data, length} {}
+        : evmc::bytes_view{data, length} {}
 
-    template <std::size_t N>
-    constexpr ByteView(const uint8_t (&array)[N]) noexcept : std::basic_string_view<uint8_t>{array, N} {}
+    template <size_t N>
+    // NOLINTNEXTLINE(google-explicit-constructor, hicpp-explicit-conversions)
+    constexpr ByteView(const uint8_t (&array)[N]) noexcept : evmc::bytes_view{array, N} {}
 
-    template <std::size_t N>
+    template <size_t N>
+    // NOLINTNEXTLINE(google-explicit-constructor, hicpp-explicit-conversions)
     constexpr ByteView(const std::array<uint8_t, N>& array) noexcept
-        : std::basic_string_view<uint8_t>{array.data(), N} {}
+        : evmc::bytes_view{array.data(), N} {}
 
-    constexpr ByteView(const evmc::address& address) noexcept : ByteView{address.bytes} {}
-
-    constexpr ByteView(const evmc::bytes32& hash) noexcept : ByteView{hash.bytes} {}
-
-    template <std::size_t Extent>
+    template <size_t Extent>
+    // NOLINTNEXTLINE(google-explicit-constructor, hicpp-explicit-conversions)
     constexpr ByteView(std::span<const uint8_t, Extent> span) noexcept
-        : std::basic_string_view<uint8_t>{span.data(), span.size()} {}
+        : evmc::bytes_view{span.data(), span.size()} {}
 
-    [[nodiscard]] bool is_null() const noexcept { return data() == nullptr; }
+    bool is_null() const noexcept { return data() == nullptr; }
 };
 
 using BlockNum = uint64_t;

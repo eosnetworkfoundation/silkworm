@@ -22,7 +22,7 @@
 #include <silkworm/core/common/endian.hpp>
 #include <silkworm/core/common/util.hpp>
 #include <silkworm/core/state/in_memory_state.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm {
 
 TEST_CASE("genesis config") {

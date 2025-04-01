@@ -39,7 +39,8 @@
 #include <silkworm/infra/common/stopwatch.hpp>
 #include <silkworm/infra/common/terminal.hpp>
 #include <silkworm/infra/concurrency/thread_pool.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
+#include <silkworm/core/execution/address.hpp>
 // See https://ethereum-tests.readthedocs.io
 
 using namespace silkworm;
@@ -400,7 +401,7 @@ RunResults transaction_test(const nlohmann::json& j) {
         const std::string expected_sender{test["sender"].get<std::string>()};
         if (txn.from != to_evmc_address(*from_hex(expected_sender))) {
             std::cout << "Sender mismatch for " << entry.key() << ":\n"
-                      << to_hex(*txn.from) << " != " << expected_sender << std::endl;
+                      << address_to_hex(*txn.from) << " != " << expected_sender << std::endl;
             return Status::kFailed;
         }
 

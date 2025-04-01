@@ -42,6 +42,7 @@ target_include_directories(silkworm_core PUBLIC ${SILKWORM_MAIN_DIR})
 set(SILKWORM_CORE_PUBLIC_LIBS
     ethash::ethash
     evmc
+    evmc::instructions
     evmone
     intx::intx
     Microsoft.GSL::GSL

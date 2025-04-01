@@ -26,7 +26,7 @@
 
 #include <silkworm/infra/common/log.hpp>
 #include <silkworm/node/db/bitmap.hpp>
-
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm::rpc::ethdb::bitmap {
 
 using roaring_bitmap_t = roaring::api::roaring_bitmap_t;

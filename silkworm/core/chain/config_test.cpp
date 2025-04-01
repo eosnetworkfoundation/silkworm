@@ -103,7 +103,9 @@ TEST_CASE("Config revision") {
     CHECK(kMainnetConfig.revision(build_header(17'034'869, 1681338443)) == EVMC_LONDON);
     CHECK(kMainnetConfig.revision(build_header(17'034'870, 1681338479)) == EVMC_SHANGHAI);
     CHECK(kMainnetConfig.revision(build_header(17'034'871, 1681338503)) == EVMC_SHANGHAI);
-    CHECK(kMainnetConfig.revision(build_header(100'000'000, 3000000000)) == EVMC_SHANGHAI);
+    CHECK(kMainnetConfig.revision(build_header(19'428'734, 1710338123)) == EVMC_SHANGHAI);
+    CHECK(kMainnetConfig.revision(build_header(19'428'735, 1710338135)) == EVMC_CANCUN);
+    CHECK(kMainnetConfig.revision(build_header(20'000'000, 1800000000)) == EVMC_CANCUN);
 
     CHECK(test::kLondonConfig.revision(build_header(0, 0)) == EVMC_LONDON);
     CHECK(test::kShanghaiConfig.revision(build_header(0, 0)) == EVMC_SHANGHAI);
@@ -126,6 +128,7 @@ TEST_CASE("distinct_fork_points") {
     };
     const std::vector<BlockNum> kExpectedMainnetForkTimes{
         1'681'338'455,
+        1'710'338'135
     };
     std::vector<uint64_t> kExpectedMainnetForkPoints{kExpectedMainnetForkNumbers};
     kExpectedMainnetForkPoints.insert(kExpectedMainnetForkPoints.end(),
@@ -179,6 +182,7 @@ TEST_CASE("JSON serialization") {
             "grayGlacierBlock":15050000,
             "terminalTotalDifficulty":"58750000000000000000000",
             "shanghaiTime":1681338455,
+            "cancunTime":1710338135,
             "ethash":{}
         })");
 
@@ -230,6 +234,7 @@ TEST_CASE("terminalTotalDifficulty as JSON number (Erigon compatibility)") {
             "grayGlacierBlock":15050000,
             "terminalTotalDifficulty":58750000000000000000000,
             "shanghaiTime":1681338455,
+            "cancunTime":1710338135,
             "ethash":{}
         })");
 

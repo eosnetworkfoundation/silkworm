@@ -36,6 +36,7 @@
 #include <silkworm/silkrpc/ethdb/transaction_database.hpp>
 #include <silkworm/silkrpc/json/types.hpp>
 #include <silkworm/silkrpc/core/gas_parameters.hpp>
+#include <silkworm/core/types/evmc_bytes32.hpp>
 namespace silkworm::rpc::debug {
 
 using boost::asio::awaitable;

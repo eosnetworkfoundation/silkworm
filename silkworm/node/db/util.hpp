@@ -112,6 +112,14 @@ std::pair<Bytes, Bytes> changeset_to_plainstate_format(ByteView key, ByteView va
 
 inline mdbx::slice to_slice(ByteView value) { return {value.data(), value.length()}; }
 
+inline mdbx::slice to_slice(const evmc::bytes32& value) {
+    return to_slice(ByteView{value.bytes});
+}
+
+inline mdbx::slice to_slice(const evmc::address& address) {
+    return to_slice(ByteView{address.bytes});
+}
+
 inline ByteView from_slice(const mdbx::slice slice) {
     return {static_cast<const uint8_t*>(slice.data()), slice.length()};
 }

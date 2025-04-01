@@ -121,16 +121,16 @@ void make_glaze_json_content(std::string& reply, const nlohmann::json& id, const
 
     for (const auto& l : logs) {
         GlazeJsonLogItem item{};
-        to_hex(std::span(item.address), l.address);
-        to_hex(std::span(item.tx_hash), l.tx_hash);
-        to_hex(std::span(item.block_hash), l.block_hash);
+        to_hex(std::span(item.address), l.address.bytes);
+        to_hex(std::span(item.tx_hash), l.tx_hash.bytes);
+        to_hex(std::span(item.block_hash), l.block_hash.bytes);
         to_quantity(std::span(item.block_number), l.block_number);
         to_quantity(std::span(item.tx_index), l.tx_index);
         to_quantity(std::span(item.index), l.index);
         item.removed = l.removed;
         to_hex(item.data, l.data);
         for (const auto& t : l.topics) {
-            item.topics.push_back("0x" + silkworm::to_hex(t));
+            item.topics.push_back("0x" + silkworm::to_hex(t.bytes));
         }
         log_json_data.log_json_list.push_back(item);
     }
